@@ -1,0 +1,6 @@
+Robust and parameter free plant image segmentation  and trait extraction tool
+
+1. Process with plant image top view, inclduing whole tray plant image, this tool with segment it into individual images.
+2. Robust segmention based on parameter free color clustering method
+3. Extract individual plant gemetrical traits, and write output into excel file.
+
