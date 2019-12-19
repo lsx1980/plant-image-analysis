@@ -13,7 +13,7 @@ Created: 2018-09-29
 
 USAGE:
 
-time python trait_extract_parallel.py -p /home/suxingliu/plant-image-analysis/data/ -ft JPG
+time python3 trait_extract_parallel.py -p /home/suxingliu/plant-image-analysis/data/16C-tray1-2018-07-11/ -ft JPG
 
 
 '''
@@ -47,6 +47,7 @@ from openpyxl import Workbook
 import warnings
 warnings.filterwarnings("ignore")
 
+import concurrent.futures
 import multiprocessing
 from multiprocessing import Pool
 from contextlib import closing
@@ -189,7 +190,31 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    return thresh
+    #return thresh
+    
+    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh, connectivity=8)
+    
+    sizes = stats[1:, -1]
+    
+    nb_components = nb_components - 1
+    
+    min_size = 150 
+    
+    img_thresh = np.zeros([width, height], dtype=np.uint8)
+    
+    #for every component in the image, you keep it only if it's above min_size
+    for i in range(0, nb_components):
+        if sizes[i] >= min_size:
+            img_thresh[output == i + 1] = 255
+    
+    #from skimage import img_as_ubyte
+    
+    #img_thresh = img_as_ubyte(img_thresh)
+    
+    #print("img_thresh.dtype")
+    #print(img_thresh.dtype)
+    
+    return img_thresh
     
 
 def medial_axis_image(thresh):
@@ -228,10 +253,8 @@ def watershed_seg(orig, thresh, min_distance_value):
 def comp_external_contour(orig,thresh):
     
     #find contours and get the external one
-    #image, contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
     contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
+   
     img_height, img_width, img_channels = orig.shape
    
     index = 1
@@ -350,9 +373,7 @@ def compute_curv(orig, labels):
      
         # detect contours in the mask and grab the largest one
         #cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
-        #img, contours, hierarchy = cv2.findContours(mask.copy(),cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours, hierarchy = cv2.findContours(mask.copy(),cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        
         c = max(contours, key = cv2.contourArea)
         
         # draw a circle enclosing the object
@@ -381,7 +402,7 @@ def compute_curv(orig, labels):
         else:
             # optional to "delete" the small contours
             label_trait = cv2.drawContours(orig, [c], -1, (0, 0, 255), 2)
-            #print("lack of enough points to fit ellipse")
+            print("lack of enough points to fit ellipse")
     
     
     print('average curvature = {0:.2f}\n'.format(curv_sum/count))
@@ -391,33 +412,34 @@ def compute_curv(orig, labels):
 
 def extract_traits(image_file):
     
+    #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
     abs_path = os.path.abspath(image_file)
     
-    filename, file_extension = os.path.splitext(image_file)
-    
+    filename, file_extension = os.path.splitext(abs_path)
+
     file_size = os.path.getsize(image_file)/MBFACTOR
     
-    print("Exacting traits for image : {0} \n".format(str(filename)))
+   
     
     # make the folder to store the results
     #current_path = abs_path + '/'
     base_name = os.path.splitext(os.path.basename(filename))[0]
+    print("Exacting traits for image : {0}\n".format(str(base_name)))
+     
     # save folder construction
-    mkpath = os.path.dirname(abs_path) +'/results/' + base_name
+    mkpath = os.path.dirname(abs_path) +'/' + base_name
     mkdir(mkpath)
     save_path = mkpath + '/'
-    #print "results_folder: " + save_path  
+    print ("results_folder: " + save_path)
+    
     
     if (file_size > 5.0):
-        print("It will take some time due to larger file size {0} MB\n".format(str(int(file_size))))
+        print("It will take some time due to larger file size {0} MB".format(str(int(file_size))))
     else:
-        print("Segmentaing plant object using automatic color clustering method...\n")
+        print("Segmentaing plant object using automatic color clustering method... ")
     
-    
-     # load original image
     image = cv2.imread(image_file)
-    
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
     #make backup image
     orig = image.copy()
@@ -434,13 +456,8 @@ def extract_traits(image_file):
     #print(filename)
     cv2.imwrite(result_file, thresh)
     
+    #print(result_file)
     
-    #find external contour 
-    (trait_img, area, solidity, max_width, max_height) = comp_external_contour(image.copy(),thresh)
-    # save segmentation result
-    result_file = (save_path + base_name + '_excontour' + file_extension)
-    #print(filename)
-    cv2.imwrite(result_file, trait_img)   
     
     #accquire medial axis of segmentation mask
     image_medial_axis = medial_axis_image(thresh)
@@ -450,22 +467,42 @@ def extract_traits(image_file):
     cv2.imwrite(result_file, img_as_ubyte(image_medial_axis))
     
     
-    min_distance_value = 10
+    min_distance_value = 5
     #watershed based leaf area segmentaiton 
     labels = watershed_seg(orig, thresh, min_distance_value)
 
     #save watershed result label image
+     #Map component labels to hue val
+    label_hue = np.uint8(128*labels/np.max(labels))
+    #label_hue[labels == largest_label] = np.uint8(15)
+    blank_ch = 255*np.ones_like(label_hue)
+    labeled_img = cv2.merge([label_hue, blank_ch, blank_ch])
+
+    # cvt to BGR for display
+    labeled_img = cv2.cvtColor(labeled_img, cv2.COLOR_HSV2BGR)
+
+    # set background label to black
+    labeled_img[label_hue==0] = 0
     result_file = (save_path + base_name + '_label' + file_extension)
-    plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
+    #plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
+    cv2.imwrite(result_file, labeled_img)
     
     (avg_curv, label_trait) = compute_curv(orig, labels)
     
-    
-    #save watershed result label image
+     #save watershed result label image
     result_file = (save_path + base_name + '_curv' + file_extension)
     cv2.imwrite(result_file, label_trait)
     
-    return base_name, area, solidity, max_width, max_height, avg_curv
+    
+    #find external contour 
+    (trait_img, area, solidity, max_width, max_height) = comp_external_contour(image.copy(),thresh)
+    # save segmentation result
+    result_file = (save_path + base_name + '_excontour' + file_extension)
+    #print(filename)
+    cv2.imwrite(result_file, trait_img)   
+    
+    
+    return filename,area, solidity, max_width, max_height, avg_curv
     
 
 
@@ -474,7 +511,6 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-p", "--path", required = True,    help="path to image file")
     ap.add_argument("-ft", "--filetype", required=True,    help="Image filetype")
-    
     ap.add_argument('-s', '--color-space', type = str, default ='lab', help='Color space to use: BGR (default), HSV, Lab, YCrCb (YCC)')
     ap.add_argument('-c', '--channels', type = str, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
@@ -496,15 +532,19 @@ if __name__ == '__main__':
 
     #print((imgList))
     
-    #c_f = imgList[1]
 
+    '''
+    for image in imgList:
+        
+        extract_traits(image)
+    '''
     #(base_name, area, solidity, max_width, max_height, avg_curv) = extract_traits(c_f)
-
+     
     # get cpu number for parallel processing
     #agents = psutil.cpu_count()   
     agents = multiprocessing.cpu_count()
     
-
+    
     print("Using {0} cores to perfrom parallel processing... \n".format(int(agents)))
     
     # Create a pool of processes. By default, one is created for each CPU in the machine.
@@ -513,10 +553,11 @@ if __name__ == '__main__':
         result = pool.map(extract_traits, imgList)
         pool.terminate()
     
-    #return base_name, area, solidity, max_width, max_height, avg_curv
     
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
+    
     trait_file = (file_path + 'trait.xlsx')
+    
     
     if os.path.isfile(trait_file):
         # update values
@@ -540,14 +581,7 @@ if __name__ == '__main__':
     
     for row in result:
         sheet.append(row)
-    '''
-    sheet.cell(row = int(base_name) + 1, column = 1).value = base_name 
-    sheet.cell(row = int(base_name) + 1, column = 2).value = area 
-    sheet.cell(row = int(base_name) + 1, column = 3).value = solidity 
-    sheet.cell(row = int(base_name) + 1, column = 4).value = max_width 
-    sheet.cell(row = int(base_name) + 1, column = 5).value = max_height 
-    sheet.cell(row = int(base_name) + 1, column = 6).value = avg_curv 
-    '''
+   
     #save the csv file
     wb.save(trait_file)
     

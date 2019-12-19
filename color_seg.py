@@ -17,7 +17,7 @@ Created: 2018-09-29
 
 USAGE:
 
-python color_seg.py -p /home/suxingliu/plant-image-analysis/test/ -ft JPG
+python3 color_seg.py -p /home/suxingliu/plant-image-analysis/test/ -ft JPG
 
 
 '''
@@ -164,8 +164,8 @@ def comp_external_contour(orig, thresh, save_path):
     
     #find contours and get the external one
     #image, contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
     contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    #trait_img = cv2.drawContours(orig, contours, -1, (255, 255, 0), 1)
     
     index = 1
     
@@ -174,10 +174,10 @@ def comp_external_contour(orig, thresh, save_path):
         #get the bounding rect
         x, y, w, h = cv2.boundingRect(c)
         
-        if w>60 and h>60:
+        if w>120 and h>120:
             
-            offset_w = int(w*0.15)
-            offset_h = int(h*0.15)
+            offset_w = int(w*0.05)
+            offset_h = int(h*0.05)
             # draw a green rectangle to visualize the bounding rect
             roi = orig[y-offset_h : y+h+offset_h, x-offset_w : x+w+offset_w]
             
@@ -254,7 +254,7 @@ if __name__ == '__main__':
     ap.add_argument("-p", "--path", required = True,    help="path to image file")
     ap.add_argument("-ft", "--filetype", required=True,    help="Image filetype")
     
-    ap.add_argument('-s', '--color-space', type =str, default ='lab', help='Color space to use: BGR, HSV, Lab, YCrCb (YCC)')
+    ap.add_argument('-s', '--color-space', type =str, default ='lab', help='Color space to use: BGR (default), HSV, Lab, YCrCb (YCC)')
     ap.add_argument('-c', '--channels', type = str, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')

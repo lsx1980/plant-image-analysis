@@ -13,7 +13,7 @@ Created: 2018-09-29
 
 USAGE:
 
-time python trait_extract.py -i 38.png
+time python3 trait_extract.py -i 38.png
 
 
 '''
@@ -113,13 +113,13 @@ def mkdir(path):
     # process
     if not isExists:
         # construct the path and folder
-        print path + ' folder constructed!'
+        print (path + ' folder constructed!')
         # make dir
         os.makedirs(path)
         return True
     else:
         # if exists, return 
-        print path+' path exists!'
+        print (path+' path exists!')
         return False
         
 
@@ -260,7 +260,7 @@ def comp_external_contour(orig,thresh):
     #find contours and get the external one
     #image_result, contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-    contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
    
     #print("len(contours)")
     #print(len(contours))
@@ -382,8 +382,9 @@ def compute_curv(orig, labels):
         mask[labels == label] = 255
      
         # detect contours in the mask and grab the largest one
-        #cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
-        contours, hierarchy = cv2.findContours(mask.copy(),cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+        #img, contours, hierarchy = cv2.findContours(mask.copy(),cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        
         c = max(contours, key = cv2.contourArea)
         
         # draw a circle enclosing the object
@@ -438,7 +439,7 @@ def extract_traits(image):
     mkpath = os.path.dirname(abs_path) +'/' + base_name
     mkdir(mkpath)
     save_path = mkpath + '/'
-    print "results_folder: " + save_path  
+    print ("results_folder: " + save_path)
     
     if (file_size > 5.0):
         print("It will take some time due to larger file size {0} MB".format(str(int(file_size))))
@@ -473,8 +474,20 @@ def extract_traits(image):
     labels = watershed_seg(orig, thresh, min_distance_value)
 
     #save watershed result label image
+     #Map component labels to hue val
+    label_hue = np.uint8(128*labels/np.max(labels))
+
+    blank_ch = 255*np.ones_like(label_hue)
+    labeled_img = cv2.merge([label_hue, blank_ch, blank_ch])
+
+    # cvt to BGR for display
+    labeled_img = cv2.cvtColor(labeled_img, cv2.COLOR_HSV2BGR)
+
+    # set background label to black
+    labeled_img[label_hue==0] = 0
     result_file = (save_path + filename + '_label' + file_extension)
-    plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
+    #plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
+    cv2.imwrite(result_file, labeled_img)
     
     (avg_curv, label_trait) = compute_curv(orig, labels)
     
@@ -491,7 +504,7 @@ def extract_traits(image):
     cv2.imwrite(result_file, trait_img)   
     
     
-    #return filename,area, solidity, max_width, max_height, avg_curv
+    return filename,area, solidity, max_width, max_height, avg_curv
 
 
 if __name__ == '__main__':
@@ -510,7 +523,7 @@ if __name__ == '__main__':
     image = cv2.imread(args['image'])
     
     print(image.shape)
-    print image.dtype
+    print(image.dtype)
     
     if args['color_space'] == 'gray':
         

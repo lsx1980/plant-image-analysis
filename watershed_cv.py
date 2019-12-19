@@ -9,7 +9,7 @@ Author-email: suxingliu@gmail.com
 
 USAGE:
 
-python watershed_cv.py -p /home/suxingliu/plant-image-analysis/  -ft jpg
+python3 watershed_cv.py -p /home/suxingliu/plant-image-analysis/  -ft jpg
 
 
 argument:

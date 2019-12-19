@@ -1,5 +1,5 @@
 BootStrap: docker
-From: ubuntu:16.04
+From: ubuntu:18.04
 
 %labels
   Maintainer: Suxing Liu
@@ -23,32 +23,26 @@ From: ubuntu:16.04
   apt update
   apt install -y \
     build-essential \
-    python3 \
-    python-setuptools \
-    python-numpy \
-    python-matplotlib \
-    ipython \
-    ipython-notebook \
-    python-pandas \
-    python-sympy \
-    python-nose \
-    python-scipy \
-    python-sklearn \
-    python-numexpr \
-    python-pip 
+    python3-setuptools \
+    python3-pip \
+    python3-numexpr \
+    libgl1-mesa-glx \
+    libsm6 \
+    libxext6 \
+    libfontconfig1 \
+    libxrender1
 
-  #apt-get install --reinstall unity-gtk-module
-  
-  pip install --upgrade pip
-  
-  /usr/local/bin/pip install -U numpy 
-  
-  /usr/local/bin/pip install scikit-image \
-                                scikit-learn \
-                                opencv-python \
-                                openpyxl \
-                                xvfbwrapper
+    
+  pip3 install numpy \
+                Pillow \
+                scipy \
+                scikit-image \
+                matplotlib \
+                opencv-python \
+                openpyxl
 
+  pip3 install -U scikit-learn
+  
 
   mkdir /lscratch /db /work /scratch
   
@@ -75,6 +69,6 @@ From: ubuntu:16.04
   #----------------------------------------------------------
   # commands to be executed within container at close of bootstrap process
   #----------------------------------------------------------
-   python --version
-   #python requirement.py 
+   python3 --version
+   #python3 requirement.py 
    
