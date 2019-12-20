@@ -13,16 +13,18 @@ Created: 2018-09-29
 
 USAGE:
 
-time python3 trait_extract.py -i 38.png
+time python3 trait_extract.py -i 01.jpg
 
 
 '''
 
 # import the necessary packages
 import os
+import utils
 
 import argparse
 from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans
 
 from skimage.feature import peak_local_max
 from skimage.morphology import watershed, medial_axis
@@ -421,6 +423,68 @@ def compute_curv(orig, labels):
     return curv_sum/count, label_trait
 
 
+def color_quantization(image, mask, save_path, num_clusters):
+    
+    #grab image width and height
+    (h, w) = image.shape[:2]
+    
+    #change the color storage order
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    #apply the mask to get the segmentation of plant
+    masked_image = cv2.bitwise_and(image, image, mask = mask)
+       
+    # reshape the image to be a list of pixels
+    pixels = masked_image.reshape((masked_image.shape[0] * masked_image.shape[1], 3))
+        
+    ############################################################
+    #Clustering process
+    ###############################################################
+    # cluster the pixel intensities
+    clt = MiniBatchKMeans(n_clusters = num_clusters)
+    #clt = KMeans(n_clusters = args["clusters"])
+    clt.fit(pixels)
+
+    #assign labels to each cluster 
+    labels = clt.fit_predict(pixels)
+
+    #obtain the quantized clusters using each label
+    quant = clt.cluster_centers_.astype("uint8")[labels]
+
+    # reshape the feature vectors to images
+    quant = quant.reshape((h, w, 3))
+    image_rec = pixels.reshape((h, w, 3))
+    
+    # convert from L*a*b* to RGB
+    quant = cv2.cvtColor(quant, cv2.COLOR_RGB2BGR)
+    image_rec = cv2.cvtColor(image_rec, cv2.COLOR_RGB2BGR)
+    
+    # display the images and wait for a keypress
+    #cv2.imshow("image", np.hstack([image_rec, quant]))
+    #cv2.waitKey(0)
+    
+    #define result path for labeled images
+    result_img_path = save_path + 'cluster_out.png'
+    
+    # save color_quantization results
+    cv2.imwrite(result_img_path,quant)
+
+    # build a histogram of clusters and then create a figure representing the number of pixels labeled to each color
+    hist = utils.centroid_histogram(clt)
+
+    # remove the background color cluster
+    clt.cluster_centers_ = clt.cluster_centers_[1: len(clt.cluster_centers_)]
+
+    #build a histogram of clusters using center lables
+    numLabels = utils.plot_centroid_histogram(save_path,clt)
+
+    #create a figure representing the distribution of each color
+    bar = utils.plot_colors(hist, clt.cluster_centers_)
+
+    #save a figure of color bar 
+    utils.plot_color_bar(save_path, bar)
+
+
 def extract_traits(image):
     
     #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -460,6 +524,11 @@ def extract_traits(image):
     result_file = (save_path + filename + '_seg' + file_extension)
     #print(filename)
     cv2.imwrite(result_file, thresh)
+    
+    num_clusters = 5
+    #save color quantization result
+    color_quantization(image, thresh, save_path, num_clusters)
+    
     
     #accquire medial axis of segmentation mask
     image_medial_axis = medial_axis_image(thresh)
