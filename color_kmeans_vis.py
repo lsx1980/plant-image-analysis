@@ -55,86 +55,21 @@ def mkdir(path):
         print (path+'path exists!')
         return False
         
-        
-if __name__ == '__main__':
-        
-        
-    # construct the argument parser and parse the arguments
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-p", "--path", required=True, help="Current directory for image files.")
-    ap.add_argument("-i", "--image", required = True, help = "Path to the image")
-    ap.add_argument("-m", "--mask", required = False, help = "Path to the mask image", default = "None")
-    ap.add_argument("-c", "--clusters", required = True, type = int, help = "# of clusters")
-    args = vars(ap.parse_args())
 
-    # setting path for results storage 
-    current_path = args["path"]
-    filename = args["image"]
-    image_path = current_path + filename
-
-    # construct result folder
-
-
-    # save folder construction
-    mkpath = current_path + str(filename[0:-4])
-
-    #if (args["mask"] == "None"):
-        # call the function
-    mkdir(mkpath)
-            
-    save_path = mkpath + '/'
-    print ("results_folder: " + save_path)
-
-
-
-    # load the image and convert it from BGR to RGB so that we can display it with matplotlib
-    image = cv2.imread(image_path)
-
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    #obtain the dimension parameters of the image
+def color_quantization(image, mask):
+    
+    #grab image width and height
     (h, w) = image.shape[:2]
-
-
-    """
-    # show our image for debugging
-    plt.figure(1)
-    plt.axis("off")
-    plt.imshow(image)
-    """
-    # determine whether a mask image was inputed 
-    if (args["mask"] == "None"):
-        # reshape the image to be a list of pixels
-        pixels = image.reshape((image.shape[0] * image.shape[1], 3))
-
-    else:
-        # set path
-        mask_path = current_path + args["mask"]
+    
+    #change the color storage order
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    #apply the mask to get the segmentation of plant
+    masked_image = cv2.bitwise_and(image, image, mask = mask)
+       
+    # reshape the image to be a list of pixels
+    pixels = masked_image.reshape((masked_image.shape[0] * masked_image.shape[1], 3))
         
-        # load mask image as grayscale
-        im_gray = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-        #im_gray = cv2.resize(im_gray,(0,0),fx=0.1,fy=0.1)
-        
-        #extract the binary mask
-        (thresh, im_bw) = cv2.threshold(im_gray, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-        mask =im_bw
-        
-        #masked_image_ori = cv2.bitwise_and(image,image,mask = im_bw)
-        #masked_image = cv2.resize(masked_image_ori,(0,0),fx=0.1,fy=0.1)
-        
-        #apply the mask to get the segmentation of plant
-        masked_image = cv2.bitwise_and(image,image,mask = im_bw)
-        
-        #set the black region into white for display
-        #masked_image[np.where((masked_image == [0,0,0]).all(axis = 2))] = [71,89,40]
-        #masked_image[np.where((masked_image == [0,0,0]).all(axis = 2))] = [255,255,255]
-
-        #masked_image_path = save_path + 'masked.png'  
-        #cv2.imwrite(masked_image_path,masked_image)
-        
-        # reshape the image to be a list of pixels
-        pixels = masked_image.reshape((masked_image.shape[0] * masked_image.shape[1], 3))
-
     ############################################################
     #Clustering process
     ###############################################################
@@ -152,11 +87,23 @@ if __name__ == '__main__':
     # reshape the feature vectors to images
     quant = quant.reshape((h, w, 3))
     image_rec = pixels.reshape((h, w, 3))
-
+    
+    # convert from L*a*b* to RGB
+    quant = cv2.cvtColor(quant, cv2.COLOR_RGB2BGR)
+    image_rec = cv2.cvtColor(image_rec, cv2.COLOR_RGB2BGR)
+    
+    # display the images and wait for a keypress
+    #cv2.imshow("image", np.hstack([image_rec, quant]))
+    #cv2.waitKey(0)
+    
+    #define result path for labeled images
+    result_img_path = save_path + 'cluster_out.png'
+    
+    # save color_quantization results
+    cv2.imwrite(result_img_path,quant)
 
     # build a histogram of clusters and then create a figure representing the number of pixels labeled to each color
     hist = utils.centroid_histogram(clt)
-
 
     # remove the background color cluster
     if (args["mask"] == "None"):
@@ -165,51 +112,54 @@ if __name__ == '__main__':
         clt.cluster_centers_ = clt.cluster_centers_[1: len(clt.cluster_centers_)]
 
     #build a histogram of clusters using center lables
-    numLabels = utils.plot_centroid_histogram(clt)
+    numLabels = utils.plot_centroid_histogram(save_path,clt)
 
     #create a figure representing the distribution of each color
     bar = utils.plot_colors(hist, clt.cluster_centers_)
 
+    #save a figure of color bar 
+    utils.plot_color_bar(save_path, bar)
 
 
-    #set the path
-    #source = '/home/suxingliu/plantcv/' + 'Color_Distribution.png'
-    #destination = save_path + (str(filename[0:-4]) + '_' +'Color_Distribution.png')
-    #os.rename(source, destination)
+if __name__ == '__main__':
+        
+        
+    # construct the argument parser and parse the arguments
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-p", "--path", required=True, help="Current directory for image files.")
+    ap.add_argument("-i", "--image", required = True, help = "Path to the image")
+    ap.add_argument("-m", "--mask", required = True, help = "Path to the mask image", default = "None")
+    ap.add_argument("-c", "--clusters", required = True, type = int, help = "# of clusters")
+    args = vars(ap.parse_args())
 
-
-    # show our color bart and save bar figure
-    fig = plt.figure(3)
-    plt.title("Color Distributation Histogram")
-    plt.imshow(bar)
-    plt.xlabel("Percentage")
-    plt.ylabel("Color category")
-    frame = plt.gca()
-    #frame.axes.get_xaxis().set_visible(False)
-    frame.axes.get_yaxis().set_visible(False)
-
-    #save bar image
-    name_of_file = (str(filename[0:-4]) + '_' +'bar.png')
-    complete_path = save_path + name_of_file       
-    plt.savefig(complete_path)
-
-    #plt.show()
-    plt.close(fig)
-
-    fig = plt.figure(5)
-    #clustered = np.hstack([image, quant])
-    clustered = quant
-    plt.imshow(clustered)
-    #plt.show()
-
-
-    #save clustered image
+    # setting path for results storage 
+    current_path = args["path"]
     filename = args["image"]
-    fig_name = (str(filename[0:-4]) + '_' +'cluster_out.png')
-    fig_path_save = save_path + fig_name
-    mpimg.imsave(fig_path_save, clustered)
-    plt.close(fig)
+    image_path = current_path + filename
 
+    # construct result folder
+    mkpath = current_path + str(filename[0:-4])
+    mkdir(mkpath)
+    
+    global save_path
+    save_path = mkpath + '/'
+    print ("results_folder: " + save_path)
+    
+    # load the image
+    image = cv2.imread(image_path)
+
+    # set mask path
+    mask_path = current_path + args["mask"]
+    
+    # load mask image as grayscale
+    im_gray = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+    
+    #extract the binary mask
+    (thresh, mask) = cv2.threshold(im_gray, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+   
+    color_quantization(image,mask)
+    
+    '''
     #save mask image
     if (args["mask"] == "None"):
         
@@ -247,5 +197,5 @@ if __name__ == '__main__':
         
         fig_path_mask = save_path + fig_name
         cv2.imwrite(fig_path_mask, img_cleaned)
-            
+    '''
 

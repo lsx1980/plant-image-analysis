@@ -42,7 +42,7 @@ def centroid_histogram(clt):
     return hist
     
 # Function for plotting the histogram using centered labels    
-def plot_centroid_histogram(clt):
+def plot_centroid_histogram(path, clt):
     # grab the number of different clusters and create a histogram
     # based on the number of pixels assigned to each cluster
     numLabels = np.arange(0, len(np.unique(clt.labels_)) + 1)
@@ -91,6 +91,18 @@ def plot_centroid_histogram(clt):
     # Give more room at the bottom of the plot
     plt.subplots_adjust(bottom=0.15)
     
+    #set the clutser distributation figure name
+    #define result path for labeled images
+    fig_name = path + 'color_distribution.png'
+    #fig_name = 'Color_Distribution.png'
+    
+    #save plot as an image
+    plt.savefig(fig_name)
+    
+    plt.close(fig)
+    
+        
+    '''
     # Save the cluster results into text file
     file_name = 'color_data.txt'
     
@@ -106,13 +118,22 @@ def plot_centroid_histogram(clt):
             #f.write('%s\n' % ((bin_color_val) + '   ' + str(percent)))
             f.write('%s\t' % (str(percent)))
         f.write('\n')
+    '''
     
-    #set the clutser distributation figure name
-    fig_name = 'Color_Distribution.png'
-    
-    #save plot as an image
-    plt.savefig(fig_name)
+    '''
+    fig = plt.figure(5)
+    #clustered = np.hstack([image, quant])
+    clustered = quant
+    plt.imshow(clustered)
+    #plt.show()
 
+    
+    #save clustered image
+    filename = args["image"]
+    fig_name = (str(filename[0:-4]) + '_' +'cluster_out.png')
+    fig_path_save = save_path + fig_name
+    mpimg.imsave(fig_path_save, clustered)
+    '''
     #plt.show()
             
     return numLabels
@@ -167,7 +188,6 @@ def plot_labeled_histogram(pixels,bins_num):
     
     # add legend to a plot
     plt.legend()
-
         
     # Label the raw counts and the percentages below the x-axis...
     bin_centers = 0.5 * np.diff(bins) + bins[:-1]
@@ -183,9 +203,28 @@ def plot_labeled_histogram(pixels,bins_num):
     plt.subplots_adjust(bottom=0.15)
     
     # save plot as an image
-    plt.savefig("Color_Distribution.png")
+    #plt.savefig("Color_Distribution.png")
 
     #plt.show()
             
     return numLabels
+    
+
+def plot_color_bar(path, bar):
+    
+    #show color bart and save bar figure
+    fig = plt.figure(0)
+    plt.title("Color Distributation Histogram")
+    plt.imshow(bar)
+    plt.xlabel("Percentage")
+    plt.ylabel("Color category")
+    frame = plt.gca()
+    #frame.axes.get_xaxis().set_visible(False)
+    frame.axes.get_yaxis().set_visible(False)
+
+    #save bar image
+    complete_path = path + 'color_bar.png'       
+    plt.savefig(complete_path)
+    plt.close(fig)
+
     
