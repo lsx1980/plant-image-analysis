@@ -23,6 +23,8 @@ import os
 import glob
 import utils
 
+from collections import Counter
+
 import argparse
 from sklearn.cluster import KMeans
 from sklearn.cluster import MiniBatchKMeans
@@ -31,6 +33,7 @@ from skimage.feature import peak_local_max
 from skimage.morphology import watershed, medial_axis
 from skimage import img_as_float, img_as_ubyte, img_as_bool, img_as_int
 from skimage import measure
+from skimage.color import rgb2lab, deltaE_cie76
 
 from scipy.spatial import distance as dist
 from scipy import optimize
@@ -412,6 +415,10 @@ def compute_curv(orig, labels):
     return curv_sum/count, label_trait
 
 
+def RGB2HEX(color):
+    return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
+
+
 def color_quantization(image, mask, save_path, num_clusters):
     
     #grab image width and height
@@ -458,12 +465,51 @@ def color_quantization(image, mask, save_path, num_clusters):
     # save color_quantization results
     cv2.imwrite(result_img_path,quant)
 
+    #Get colors and analze them from masked image
+    counts = Counter(labels)
+    # sort to ensure correct color percentage
+    counts = dict(sorted(counts.items()))
+    
+    center_colors = clt.cluster_centers_
+    
+    #print(type(center_colors))
+
+    # We get ordered colors by iterating through the keys
+    ordered_colors = [center_colors[i] for i in counts.keys()]
+    hex_colors = [RGB2HEX(ordered_colors[i]) for i in counts.keys()]
+    rgb_colors = [ordered_colors[i] for i in counts.keys()]
+
+    #print(hex_colors)
+    
+    index_bkg = [index for index in range(len(hex_colors)) if hex_colors[index] == '#000000']
+    
+    #print(index_bkg[0])
+
+    #print(counts)
+    #remove background color 
+    del hex_colors[index_bkg[0]]
+    del rgb_colors[index_bkg[0]]
+    
+    # Using dictionary comprehension to find list 
+    # keys having value . 
+    delete = [key for key in counts if key == index_bkg[0]] 
+  
+    # delete the key 
+    for key in delete: del counts[key] 
+   
+    fig = plt.figure(figsize = (6, 6))
+    plt.pie(counts.values(), labels = hex_colors, colors = hex_colors)
+
+    #define result path for labeled images
+    result_img_path = save_path + 'pie_color.png'
+    plt.savefig(result_img_path)
+        
     # build a histogram of clusters and then create a figure representing the number of pixels labeled to each color
     hist = utils.centroid_histogram(clt)
 
     # remove the background color cluster
-    clt.cluster_centers_ = clt.cluster_centers_[1: len(clt.cluster_centers_)]
-
+    clt.cluster_centers_ = np.delete(clt.cluster_centers_, index_bkg[0], axis=0)
+    
     #build a histogram of clusters using center lables
     numLabels = utils.plot_centroid_histogram(save_path,clt)
 
@@ -472,6 +518,10 @@ def color_quantization(image, mask, save_path, num_clusters):
 
     #save a figure of color bar 
     utils.plot_color_bar(save_path, bar)
+
+    
+    
+    return rgb_colors
 
 
 def extract_traits(image_file):
@@ -522,7 +572,17 @@ def extract_traits(image_file):
     
     num_clusters = 5
     #save color quantization result
-    color_quantization(image, thresh, save_path, num_clusters)
+    rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
+    
+    print ("Color difference are : ") 
+    
+    selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
+    
+    for index, value in enumerate(rgb_colors): 
+        #print(index, value) 
+        curr_color = rgb2lab(np.uint8(np.asarray([[value]])))
+        diff = deltaE_cie76(selected_color, curr_color)
+        print(index, value, diff) 
     
     
     #accquire medial axis of segmentation mask

@@ -72,7 +72,7 @@ def plot_centroid_histogram(path, clt):
         bin_color_val = rgb_to_hex(bin_color)
         patch.set_facecolor(bin_color_val)
         patch.set_label(bin_color)
-        print (bin_color_val)
+        #print (bin_color_val)
         #print len(centroids)
         #print len(counts)
     
