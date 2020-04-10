@@ -6,17 +6,19 @@ from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
 from skimage.util import img_as_float
 from skimage import io
+
+from skimage import data, segmentation, measure, color, img_as_float
+
 import matplotlib.pyplot as plt
 import argparse
 
 import numpy as np
 import cv2
-from skimage import segmentation
-from skimage.data import astronaut
+
 
 import imutils
 
-
+'''
 def mean_image(image,label):
 
     im_rp = image.reshape((image.shape[0]*image.shape[1], image.shape[2]))
@@ -54,7 +56,7 @@ def mean_image(image,label):
     return output
 
 
-'''
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--image", required = True, help = "Path to the image")
@@ -82,6 +84,7 @@ from skimage.segmentation import slic
 from scipy.spatial import Delaunay
 from skimage.segmentation import mark_boundaries
 from matplotlib.lines import Line2D
+from skimage import measure, color, img_as_float
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--image", required = True, help = "Path to the image")
@@ -93,6 +96,23 @@ img = img_as_float(io.imread(args["image"]))
 # SLIC
 segments = slic(img, n_segments=100, compactness=20)
 segments_ids = np.unique(segments)
+
+
+# loop over the unique segment values, Accessing Individual Superpixel Segmentations
+for (i, segVal) in enumerate(np.unique(segments)):
+    # construct a mask for the segment
+ 
+    print("inspecting segment : {0}\n".format(i))
+    
+    mask = np.zeros(img.shape[:2], dtype = "uint8")
+    mask[segments == segVal] = 255
+    
+    # show the masked region
+    #cv2.imshow("Mask", mask)
+    #cv2.imshow("Applied", cv2.bitwise_and(img, img, mask = mask))
+    #cv2.waitKey(0)
+
+
 
 # centers
 centers = np.array([np.mean(np.nonzero(segments==i),axis=1) for i in segments_ids])
@@ -106,6 +126,7 @@ ax = fig.add_subplot(111)
 plt.imshow(mark_boundaries(img, segments))
 plt.scatter(centers[:,1],centers[:,0], c='y')
 
+
 for i in range(bneighbors.shape[1]):
     y0,x0 = centers[bneighbors[0,i]]
     y1,x1 = centers[bneighbors[1,i]]
@@ -114,4 +135,7 @@ for i in range(bneighbors.shape[1]):
     ax.add_line(l)
 
 plt.show()
+
+
+
 
