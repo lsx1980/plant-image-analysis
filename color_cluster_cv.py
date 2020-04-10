@@ -37,6 +37,8 @@ import seaborn as sns
 import imutils
 from scipy.interpolate import interp1d
 
+from mpl_toolkits.mplot3d import Axes3D
+
 '''
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
@@ -328,6 +330,15 @@ def color_region(image, mask, save_path, num_clusters):
     cv2.imwrite(result_img_path, segmented_image_BRG)
 
 
+    '''
+    fig = plt.figure()
+    ax = Axes3D(fig)        
+    for label, pix in zip(labels, segmented_image):
+        ax.scatter(pix[0], pix[1], pix[2], color = (centers))
+            
+    result_file = (save_path + base_name + 'color_cluster_distributation.png')
+    plt.savefig(result_file)
+    '''
     #Show only one chosen cluster 
     #masked_image = np.copy(image)
     masked_image = np.zeros_like(image_RGB)
@@ -499,7 +510,20 @@ if __name__ == '__main__':
     
     #make backup image
     orig = image.copy()
-     
+    
+    ################################
+    r, g, b = cv2.split(orig)
+    r = r.flatten()
+    g = g.flatten()
+    b = b.flatten()
+    
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    ax.scatter(r, g, b)
+    result_file = (save_path + base_name + 'color_distributation.png')
+    plt.savefig(result_file)
+    ################################################
+    
     args_colorspace = 'lab'
     args_channels = '1'
     args_num_clusters = 2

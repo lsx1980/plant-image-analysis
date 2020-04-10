@@ -38,6 +38,9 @@ from skimage.color import rgb2lab, deltaE_cie76
 from scipy.spatial import distance as dist
 from scipy import optimize
 from scipy import ndimage
+from scipy.interpolate import interp1d
+
+import imutils
 
 import numpy as np
 import argparse
@@ -519,9 +522,184 @@ def color_quantization(image, mask, save_path, num_clusters):
     #save a figure of color bar 
     utils.plot_color_bar(save_path, bar)
 
-    
-    
     return rgb_colors
+    
+
+def get_cmap(n, name='hsv'):
+    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
+    RGB color; the keyword argument name must be a standard mpl colormap name.'''
+    return plt.cm.get_cmap(name, n)
+    
+    
+
+def color_region(image, mask, save_path, num_clusters):
+    
+    # read the image
+     #grab image width and height
+    (h, w) = image.shape[:2]
+
+    #apply the mask to get the segmentation of plant
+    masked_image_ori = cv2.bitwise_and(image, image, mask = mask)
+    
+    #define result path for labeled images
+    result_img_path = save_path + 'masked.png'
+    cv2.imwrite(result_img_path, masked_image_ori)
+    
+    # convert to RGB
+    image_RGB = cv2.cvtColor(masked_image_ori, cv2.COLOR_BGR2RGB)
+
+    # reshape the image to a 2D array of pixels and 3 color values (RGB)
+    pixel_values = image_RGB.reshape((-1, 3))
+    
+    # convert to float
+    pixel_values = np.float32(pixel_values)
+
+    # define stopping criteria
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.2)
+
+    # number of clusters (K)
+    #num_clusters = 5
+    compactness, labels, (centers) = cv2.kmeans(pixel_values, num_clusters, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+
+    # convert back to 8 bit values
+    centers = np.uint8(centers)
+
+    # flatten the labels array
+    labels_flat = labels.flatten()
+
+    # convert all pixels to the color of the centroids
+    segmented_image = centers[labels_flat]
+
+    # reshape back to the original image dimension
+    segmented_image = segmented_image.reshape(image_RGB.shape)
+
+
+    segmented_image_BRG = cv2.cvtColor(segmented_image, cv2.COLOR_RGB2BGR)
+    #define result path for labeled images
+    result_img_path = save_path + 'clustered.png'
+    cv2.imwrite(result_img_path, segmented_image_BRG)
+
+
+    '''
+    fig = plt.figure()
+    ax = Axes3D(fig)        
+    for label, pix in zip(labels, segmented_image):
+        ax.scatter(pix[0], pix[1], pix[2], color = (centers))
+            
+    result_file = (save_path + base_name + 'color_cluster_distributation.png')
+    plt.savefig(result_file)
+    '''
+    #Show only one chosen cluster 
+    #masked_image = np.copy(image)
+    masked_image = np.zeros_like(image_RGB)
+
+    # convert to the shape of a vector of pixel values
+    masked_image = masked_image.reshape((-1, 3))
+    # color (i.e cluster) to render
+    #cluster = 2
+
+    cmap = get_cmap(num_clusters+1)
+    
+    #clrs = sns.color_palette('husl', n_colors = num_clusters)  # a list of RGB tuples
+
+    color_conversion = interp1d([0,1],[0,255])
+
+
+    for cluster in range(num_clusters):
+
+        print("Processing Cluster{0} ...\n".format(cluster))
+        #print(clrs[cluster])
+        #print(color_conversion(clrs[cluster]))
+
+        masked_image[labels_flat == cluster] = centers[cluster]
+
+        #print(centers[cluster])
+
+        #convert back to original shape
+        masked_image_rp = masked_image.reshape(image_RGB.shape)
+
+        #masked_image_BRG = cv2.cvtColor(masked_image, cv2.COLOR_RGB2BGR)
+        #cv2.imwrite('maksed.png', masked_image_BRG)
+
+        gray = cv2.cvtColor(masked_image_rp, cv2.COLOR_BGR2GRAY)
+
+        # threshold the image, then perform a series of erosions +
+        # dilations to remove any small regions of noise
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)[1]
+
+        cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts = imutils.grab_contours(cnts)
+        #c = max(cnts, key=cv2.contourArea)
+
+        '''
+        # compute the center of the contour area and draw a circle representing the center
+        M = cv2.moments(c)
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+        # draw the countour number on the image
+        result = cv2.putText(masked_image_rp, "#{}".format(cluster + 1), (cX - 20, cY), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+        '''
+        
+        
+        if not cnts:
+            print("findContours is empty")
+        else:
+            
+            # loop over the (unsorted) contours and draw them
+            for (i, c) in enumerate(cnts):
+
+                result = cv2.drawContours(masked_image_rp, c, -1, color_conversion(np.random.random(3)), 2)
+                #result = cv2.drawContours(masked_image_rp, c, -1, color_conversion(clrs[cluster]), 2)
+
+            #result = result(np.where(result == 0)== 255)
+            result[result == 0] = 255
+
+
+            result_BRG = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
+            result_img_path = save_path + 'result_' + str(cluster) + '.png'
+            cv2.imwrite(result_img_path, result_BRG)
+
+
+    
+    counts = Counter(labels_flat)
+    # sort to ensure correct color percentage
+    counts = dict(sorted(counts.items()))
+    
+    center_colors = centers
+
+    # We get ordered colors by iterating through the keys
+    ordered_colors = [center_colors[i] for i in counts.keys()]
+    hex_colors = [RGB2HEX(ordered_colors[i]) for i in counts.keys()]
+    rgb_colors = [ordered_colors[i] for i in counts.keys()]
+
+    #print(hex_colors)
+    
+    index_bkg = [index for index in range(len(hex_colors)) if hex_colors[index] == '#000000']
+    
+    #print(index_bkg[0])
+
+    #print(counts)
+    #remove background color 
+    del hex_colors[index_bkg[0]]
+    del rgb_colors[index_bkg[0]]
+    
+    # Using dictionary comprehension to find list 
+    # keys having value . 
+    delete = [key for key in counts if key == index_bkg[0]] 
+  
+    # delete the key 
+    for key in delete: del counts[key] 
+   
+    fig = plt.figure(figsize = (6, 6))
+    plt.pie(counts.values(), labels = hex_colors, colors = hex_colors)
+
+    #define result path for labeled images
+    result_img_path = save_path + 'pie_color.png'
+    plt.savefig(result_img_path)
+
+   
+    return rgb_colors
+
 
 
 def extract_traits(image_file):
@@ -572,7 +750,9 @@ def extract_traits(image_file):
     
     num_clusters = 5
     #save color quantization result
-    rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
+    #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
+    
+    rgb_colors = color_region(orig, thresh, save_path, num_clusters)
     
     print ("Color difference are : ") 
     
