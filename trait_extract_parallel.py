@@ -39,6 +39,8 @@ from scipy.spatial import distance as dist
 from scipy import optimize
 from scipy import ndimage
 from scipy.interpolate import interp1d
+from skimage.segmentation import clear_border
+
 
 import imutils
 
@@ -151,6 +153,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         
     else:
         colorSpace = 'bgr'  # set for file naming purposes
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     # Keep only the selected channels for K-means clustering.
     if args_channels != 'all':
@@ -196,24 +199,61 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     for i, label in enumerate(sortedLabels):
         kmeansImage[clustering == label] = int(255 / (numClusters - 1)) * i
     
-    ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    ret, thresh = cv2.threshold(kmeansImage, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    #return thresh
+    #return thresh =
     
-    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh, connectivity=8)
+    #num_of_non_zeros = np.count_nonzero(thresh)
     
-    sizes = stats[1:, -1]
+    thresh_cleaned = clear_border(thresh)
+    
+    if np.count_nonzero(thresh) > 0:
+        
+        thresh_cleaned_bw = clear_border(thresh)
+    else:
+        thresh_cleaned_bw = thresh
+        
+    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned_bw, connectivity = 8)
+    
+    # stats[0], centroids[0] are for the background label. ignore
+    # cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT
+    sizes = stats[1:, cv2.CC_STAT_AREA]
+    
+    Coord_left = stats[1:, cv2.CC_STAT_LEFT]
+    
+    Coord_top = stats[1:, cv2.CC_STAT_TOP]
+    
+    Coord_width = stats[1:, cv2.CC_STAT_WIDTH]
+    
+    Coord_height = stats[1:, cv2.CC_STAT_HEIGHT]
+    
+    Coord_centroids = centroids
+    
+    #print("Coord_centroids {}\n".format(centroids[1][1]))
+    
+    #print("[width, height] {} {}\n".format(width, height))
     
     nb_components = nb_components - 1
     
-    min_size = 150 
+    min_size = 1550 
+    
+    max_size = width*height*0.1
     
     img_thresh = np.zeros([width, height], dtype=np.uint8)
     
-    #for every component in the image, you keep it only if it's above min_size
+    #for every component in the image, keep it only if it's above min_size
     for i in range(0, nb_components):
-        if sizes[i] >= min_size:
+        
+        if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
             img_thresh[output == i + 1] = 255
+            
+            print("Foreground center found ")
+            
+        elif ((Coord_width[i] - Coord_left[i])*0.5 - width < 15) and (centroids[i][0] - width*0.5 < 15) and (centroids[i][1] - height*0.5 < 15) and ((sizes[i] <= max_size)):
+            imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
+            img_thresh[output == imax] = 255
+            print("Foreground max found ")
+       
     
     #from skimage import img_as_ubyte
     
@@ -412,8 +452,10 @@ def compute_curv(orig, labels):
             label_trait = cv2.drawContours(orig, [c], -1, (0, 0, 255), 2)
             print("lack of enough points to fit ellipse")
     
-    
-    print('average curvature = {0:.2f}\n'.format(curv_sum/count))
+    if count > 0:
+        print('average curvature = {0:.2f}\n'.format(curv_sum/count))
+    else:
+        count = 1.0
     
     return curv_sum/count, label_trait
 
@@ -627,6 +669,8 @@ def color_region(image, mask, save_path, num_clusters):
         # dilations to remove any small regions of noise
         thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)[1]
 
+        #thresh_cleaned = clear_border(thresh)
+
         cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         #c = max(cnts, key=cv2.contourArea)
@@ -807,8 +851,11 @@ def extract_traits(image_file):
     #print(filename)
     cv2.imwrite(result_file, trait_img)   
     
+    n_leaves = int(len(np.unique(labels))/8 - 1)
     
-    return filename,area, solidity, max_width, max_height, avg_curv
+    print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
+    
+    return filename,area, solidity, max_width, max_height, avg_curv, n_leaves
     
 
 
@@ -821,7 +868,7 @@ if __name__ == '__main__':
     ap.add_argument('-c', '--channels', type = str, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
-    ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 3, min 2).')
+    ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     args = vars(ap.parse_args())
     
     
@@ -884,6 +931,7 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 4).value = 'max_width'
         sheet.cell(row = 1, column = 5).value = 'max_height'
         sheet.cell(row = 1, column = 6).value = 'curvature'
+        sheet.cell(row = 1, column = 7).value = 'number_leaf'
     
     for row in result:
         sheet.append(row)

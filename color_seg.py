@@ -32,10 +32,12 @@ from skimage.feature import peak_local_max
 from skimage.morphology import watershed, medial_axis
 from skimage import img_as_float, img_as_ubyte, img_as_bool, img_as_int
 from skimage import measure
+from skimage.segmentation import clear_border
 
 from scipy.spatial import distance as dist
 from scipy import optimize
 from scipy import ndimage
+
 
 import numpy as np
 import argparse
@@ -145,7 +147,64 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    return thresh
+        thresh_cleaned = clear_border(thresh)
+    
+    if np.count_nonzero(thresh) > 0:
+        
+        thresh_cleaned_bw = clear_border(thresh)
+    else:
+        thresh_cleaned_bw = thresh
+        
+    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned_bw, connectivity = 8)
+    
+    # stats[0], centroids[0] are for the background label. ignore
+    # cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT
+    sizes = stats[1:, cv2.CC_STAT_AREA]
+    
+    Coord_left = stats[1:, cv2.CC_STAT_LEFT]
+    
+    Coord_top = stats[1:, cv2.CC_STAT_TOP]
+    
+    Coord_width = stats[1:, cv2.CC_STAT_WIDTH]
+    
+    Coord_height = stats[1:, cv2.CC_STAT_HEIGHT]
+    
+    Coord_centroids = centroids
+    
+    #print("Coord_centroids {}\n".format(centroids[1][1]))
+    
+    #print("[width, height] {} {}\n".format(width, height))
+    
+    nb_components = nb_components - 1
+    
+    min_size = 850 
+    
+    max_size = width*height*0.1
+    
+    img_thresh = np.zeros([width, height], dtype=np.uint8)
+    
+    #for every component in the image, keep it only if it's above min_size
+    for i in range(0, nb_components):
+        
+        if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
+            img_thresh[output == i + 1] = 255
+            
+            print("Foreground center found ")
+            
+        elif ((Coord_width[i] - Coord_left[i])*0.5 - width < 15) and (centroids[i][0] - width*0.5 < 15) and (centroids[i][1] - height*0.5 < 15) and ((sizes[i] <= max_size)):
+            imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
+            img_thresh[output == imax] = 255
+            print("Foreground max found ")
+       
+    
+    #from skimage import img_as_ubyte
+    
+    #img_thresh = img_as_ubyte(img_thresh)
+    
+    #print("img_thresh.dtype")
+    #print(img_thresh.dtype)
+    
+    return img_thresh
     
 '''
 def medial_axis_image(thresh):
@@ -163,9 +222,10 @@ def medial_axis_image(thresh):
 def comp_external_contour(orig, thresh, save_path):
     
     #find contours and get the external one
-    #image, contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    #find contours and get the external one
     contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    #trait_img = cv2.drawContours(orig, contours, -1, (255, 255, 0), 1)
+   
+    img_height, img_width, img_channels = orig.shape
     
     index = 1
     
@@ -174,7 +234,7 @@ def comp_external_contour(orig, thresh, save_path):
         #get the bounding rect
         x, y, w, h = cv2.boundingRect(c)
         
-        if w>120 and h>120:
+        if w>img_width*0.1 and h>img_height*0.1:
             
             offset_w = int(w*0.05)
             offset_h = int(h*0.05)
