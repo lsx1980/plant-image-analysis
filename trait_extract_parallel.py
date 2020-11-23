@@ -13,8 +13,9 @@ Created: 2018-09-29
 
 USAGE:
 
-time python3 trait_extract_parallel.py -p /home/suxingliu/plant-image-analysis/test/ -ft jpg
+time python3 trait_extract_parallel.py -p /home/suxingliu/plant-image-analysis/test/ -ft jpg 
 
+time python3 trait_extract_parallel.py -p /home/suxingliu/plant-image-analysis/test/ -ft jpg -r /home/suxingliu/plant-image-analysis/test/results/
 
 '''
 
@@ -235,12 +236,13 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 1550 
+    min_size = 50 
     
     max_size = width*height*0.1
     
     img_thresh = np.zeros([width, height], dtype=np.uint8)
     
+    '''
     #for every component in the image, keep it only if it's above min_size
     for i in range(0, nb_components):
         
@@ -253,7 +255,23 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
             imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
             img_thresh[output == imax] = 255
             print("Foreground max found ")
-       
+    '''
+    
+    for i in range(0, nb_components):
+        
+        if (sizes[i] >= min_size):
+            
+            if (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and (centroids[i][1] - height*0.5 < 10):
+                img_thresh[output == i + 1] = 255
+                print("Foreground center found ")
+            
+            elif ((Coord_width[i] - Coord_left[i])*0.5 - width < 15) and (centroids[i][0] - width*0.5 < 15) and (centroids[i][1] - height*0.5 < 15) and ((sizes[i] <= max_size)):
+                imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
+                img_thresh[output == imax] = 255
+                print("Foreground max found ")
+            
+            else:
+                img_thresh[output == i + 1] = 255
     
     #from skimage import img_as_ubyte
     
@@ -764,9 +782,13 @@ def extract_traits(image_file):
     print("Exacting traits for image : {0}\n".format(str(base_name)))
      
     # save folder construction
-    mkpath = os.path.dirname(abs_path) +'/' + base_name
-    mkdir(mkpath)
-    save_path = mkpath + '/'
+    if (args['result']):
+        save_path = args['result']
+    else:
+        mkpath = os.path.dirname(abs_path) +'/' + base_name
+        mkdir(mkpath)
+        save_path = mkpath + '/'
+
     print ("results_folder: " + save_path)
     
     
@@ -855,7 +877,7 @@ def extract_traits(image_file):
     
     print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
     
-    return filename,area, solidity, max_width, max_height, avg_curv, n_leaves
+    return filename,area, solidity, max_width, max_height, avg_curv #n_leaves
     
 
 
@@ -864,6 +886,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-p", "--path", required = True,    help="path to image file")
     ap.add_argument("-ft", "--filetype", required=True,    help="Image filetype")
+    ap.add_argument("-r", "--result", required = False,    help="result path")
     ap.add_argument('-s', '--color-space', type = str, default ='lab', help='Color space to use: BGR (default), HSV, Lab, YCrCb (YCC)')
     ap.add_argument('-c', '--channels', type = str, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
@@ -884,7 +907,9 @@ if __name__ == '__main__':
     imgList = sorted(glob.glob(image_file_path))
 
     #print((imgList))
+    #global save_path
     
+
 
     '''
     for image in imgList:
@@ -909,7 +934,11 @@ if __name__ == '__main__':
     
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
     
-    trait_file = (file_path + 'trait.xlsx')
+    if (args['result']):
+
+        trait_file = (args['result'] + 'trait.xlsx')
+    else:
+        trait_file = (file_path + 'trait.xlsx')
     
     
     if os.path.isfile(trait_file):
@@ -931,7 +960,7 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 4).value = 'max_width'
         sheet.cell(row = 1, column = 5).value = 'max_height'
         sheet.cell(row = 1, column = 6).value = 'curvature'
-        sheet.cell(row = 1, column = 7).value = 'number_leaf'
+        #sheet.cell(row = 1, column = 7).value = 'number_leaf'
     
     for row in result:
         sheet.append(row)

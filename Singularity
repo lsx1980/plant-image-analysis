@@ -39,7 +39,8 @@ From: ubuntu:18.04
                 scikit-image \
                 matplotlib \
                 opencv-python \
-                openpyxl
+                openpyxl \
+                python-magic
 
   pip3 install -U scikit-learn
   
