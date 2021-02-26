@@ -40,7 +40,9 @@ From: ubuntu:18.04
                 matplotlib \
                 opencv-python \
                 openpyxl \
-                python-magic
+                python-magic \
+                imutils \
+                tabulate
 
   pip3 install -U scikit-learn
   

@@ -147,7 +147,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-        thresh_cleaned = clear_border(thresh)
+    thresh_cleaned = clear_border(thresh)
     
     if np.count_nonzero(thresh) > 0:
         

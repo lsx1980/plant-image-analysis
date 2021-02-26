@@ -13,7 +13,7 @@ Created: 2019-09-29
 
 USAGE:
 
-python3 color_cluster_cv.py -p /home/suxingliu/plant-image-analysis/test/ -ft jpg
+python3 color_cluster_cv.py -p ~/plant-image-analysis/test/ -ft jpg
 
 
 '''

@@ -3,7 +3,7 @@ Name: trait_extract_parallel.py
 
 Version: 1.0
 
-Summary: Extract plant traits (leaf area, width, height, ) by paralell processing 
+Summary: Extract plant shoot traits (larea, solidity, max_width, max_height, avg_curv, color_cluster) by paralell processing 
     
 Author: suxing liu
 
@@ -13,9 +13,9 @@ Created: 2018-09-29
 
 USAGE:
 
-time python3 trait_extract_parallel.py -p /home/suxingliu/plant-image-analysis/test/ -ft jpg 
+time python3 trait_extract_parallel.py -p ~/plant-image-analysis/test/ -ft jpg 
 
-time python3 trait_extract_parallel.py -p /home/suxingliu/plant-image-analysis/test/ -ft jpg -r /home/suxingliu/plant-image-analysis/test/results/
+time python3 trait_extract_parallel.py -p ~/plant-image-analysis/test/ -ft jpg -r /home/suxingliu/plant-image-analysis/test/results/
 
 '''
 
@@ -52,9 +52,11 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-from openpyxl import load_workbook
-from openpyxl import Workbook
-
+import openpyxl
+import csv
+    
+from tabulate import tabulate
+'''
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -62,7 +64,8 @@ import concurrent.futures
 import multiprocessing
 from multiprocessing import Pool
 from contextlib import closing
-
+'''
+from pathlib import Path 
 
 MBFACTOR = float(1<<20)
 
@@ -236,7 +239,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 50 
+    min_size = 80 
     
     max_size = width*height*0.1
     
@@ -481,7 +484,7 @@ def compute_curv(orig, labels):
 def RGB2HEX(color):
     return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
 
-
+'''
 def color_quantization(image, mask, save_path, num_clusters):
     
     #grab image width and height
@@ -518,7 +521,7 @@ def color_quantization(image, mask, save_path, num_clusters):
     quant = cv2.cvtColor(quant, cv2.COLOR_RGB2BGR)
     image_rec = cv2.cvtColor(image_rec, cv2.COLOR_RGB2BGR)
     
-    # display the images and wait for a keypress
+    # display the images 
     #cv2.imshow("image", np.hstack([image_rec, quant]))
     #cv2.waitKey(0)
     
@@ -541,7 +544,19 @@ def color_quantization(image, mask, save_path, num_clusters):
     ordered_colors = [center_colors[i] for i in counts.keys()]
     hex_colors = [RGB2HEX(ordered_colors[i]) for i in counts.keys()]
     rgb_colors = [ordered_colors[i] for i in counts.keys()]
+    
+    
+    #######################################################################################
+    threshold = 60
+    
+    selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
 
+    for i in range(num_clusters):
+        curr_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[i]]]))) 
+        diff = deltaE_cie76(selected_color, curr_color)
+        if (diff < threshold):
+            print("Color difference value is : {0} \n".format(str(diff)))
+    ###########################################################################################
     #print(hex_colors)
     
     index_bkg = [index for index in range(len(hex_colors)) if hex_colors[index] == '#000000']
@@ -583,7 +598,7 @@ def color_quantization(image, mask, save_path, num_clusters):
     utils.plot_color_bar(save_path, bar)
 
     return rgb_colors
-    
+'''
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
@@ -771,15 +786,17 @@ def extract_traits(image_file):
     abs_path = os.path.abspath(image_file)
     
     filename, file_extension = os.path.splitext(abs_path)
+    base_name = os.path.splitext(os.path.basename(filename))[0]
 
     file_size = os.path.getsize(image_file)/MBFACTOR
     
+    image_file_name = Path(image_file).name
    
     
     # make the folder to store the results
     #current_path = abs_path + '/'
-    base_name = os.path.splitext(os.path.basename(filename))[0]
-    print("Exacting traits for image : {0}\n".format(str(base_name)))
+    
+    print("Exacting traits for image : {0}\n".format(str(image_file_name)))
      
     # save folder construction
     if (args['result']):
@@ -814,20 +831,31 @@ def extract_traits(image_file):
     #print(filename)
     cv2.imwrite(result_file, thresh)
     
+    
+    
+    
+    
     num_clusters = 5
     #save color quantization result
     #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
-    
     rgb_colors = color_region(orig, thresh, save_path, num_clusters)
     
-    print ("Color difference are : ") 
-    
+
     selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
+    
+    print("Color difference are : ") 
+    
+    print(selected_color)
+    
+    color_diff = []
     
     for index, value in enumerate(rgb_colors): 
         #print(index, value) 
         curr_color = rgb2lab(np.uint8(np.asarray([[value]])))
         diff = deltaE_cie76(selected_color, curr_color)
+        
+        color_diff.append(diff)
+        
         print(index, value, diff) 
     
     
@@ -839,7 +867,7 @@ def extract_traits(image_file):
     cv2.imwrite(result_file, img_as_ubyte(image_medial_axis))
     
     
-    min_distance_value = 5
+    min_distance_value = 20
     #watershed based leaf area segmentaiton 
     labels = watershed_seg(orig, thresh, min_distance_value)
 
@@ -877,7 +905,9 @@ def extract_traits(image_file):
     
     print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
     
-    return filename,area, solidity, max_width, max_height, avg_curv #n_leaves
+    Path("/tmp/d/a.dat").name
+    
+    return image_file_name, area, solidity, max_width, max_height, avg_curv #n_leaves
     
 
 
@@ -909,19 +939,37 @@ if __name__ == '__main__':
     #print((imgList))
     #global save_path
     
-
-
-    '''
+    n_images = len(imgList)
+    
+    result_list = []
+    
+    #loop execute
     for image in imgList:
         
-        extract_traits(image)
-    '''
-    #(base_name, area, solidity, max_width, max_height, avg_curv) = extract_traits(c_f)
-     
-    # get cpu number for parallel processing
-    #agents = psutil.cpu_count()   
-    agents = multiprocessing.cpu_count()
+        (filename, area, solidity, max_width, max_height, avg_curv) = extract_traits(image)
+        
+        result_list.append([filename, area, solidity, max_width, max_height, avg_curv])
     
+    
+    #print(result_list)
+    
+    
+    
+
+    print("Summary: {0} plant images were processed...\n".format(n_images))
+    
+    #output in command window in a sum table
+ 
+    table = tabulate(result_list, headers = ['filename', 'area', 'solidity', 'max_width', 'max_height' ,'avg_curv'], tablefmt = 'orgtbl')
+
+    print(table + "\n")
+    
+
+    '''
+    # get cpu number for parallel processing
+    agents = psutil.cpu_count()   
+    #agents = multiprocessing.cpu_count() 
+    #agents = 8
     
     print("Using {0} cores to perfrom parallel processing... \n".format(int(agents)))
     
@@ -934,24 +982,27 @@ if __name__ == '__main__':
     
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
     
+    '''
     if (args['result']):
 
         trait_file = (args['result'] + 'trait.xlsx')
+        trait_file_csv = (args['result'] + 'trait.csv')
     else:
         trait_file = (file_path + 'trait.xlsx')
+        trait_file_csv = (file_path + 'trait.csv')
     
     
     if os.path.isfile(trait_file):
         # update values
         #Open an xlsx for reading
-        wb = load_workbook(trait_file)
+        wb = openpyxl.load_workbook(trait_file)
 
         #Get the current Active Sheet
-        sheet = wb.get_active_sheet()
+        sheet = wb.active
 
     else:
         # Keep presets
-        wb = Workbook()
+        wb = openpyxl.Workbook()
         sheet = wb.active
 
         sheet.cell(row = 1, column = 1).value = 'filename'
@@ -962,16 +1013,18 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 6).value = 'curvature'
         #sheet.cell(row = 1, column = 7).value = 'number_leaf'
     
-    for row in result:
+    for row in result_list:
         sheet.append(row)
    
     #save the csv file
     wb.save(trait_file)
     
-    
-    
-
-    
+    wb = openpyxl.load_workbook(trait_file)
+    sh = wb.active # was .get_active_sheet()
+    with open(trait_file_csv, 'w', newline = "") as f:
+        c = csv.writer(f)
+        for r in sh.rows: # generator; was sh.rows
+            c.writerow([cell.value for cell in r])
     
 
     
