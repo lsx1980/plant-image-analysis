@@ -42,7 +42,8 @@ From: ubuntu:18.04
                 openpyxl \
                 python-magic \
                 imutils \
-                tabulate
+                tabulate \
+                skan
 
   pip3 install -U scikit-learn
   

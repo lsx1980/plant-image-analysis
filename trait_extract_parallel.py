@@ -27,6 +27,7 @@ import utils
 from collections import Counter
 
 import argparse
+
 from sklearn.cluster import KMeans
 from sklearn.cluster import MiniBatchKMeans
 
@@ -35,13 +36,16 @@ from skimage.morphology import watershed, medial_axis
 from skimage import img_as_float, img_as_ubyte, img_as_bool, img_as_int
 from skimage import measure
 from skimage.color import rgb2lab, deltaE_cie76
+from skimage import morphology
+from skimage.segmentation import clear_border
 
 from scipy.spatial import distance as dist
 from scipy import optimize
 from scipy import ndimage
 from scipy.interpolate import interp1d
-from skimage.segmentation import clear_border
 
+
+from skan import Skeleton, summarize, draw
 
 import imutils
 
@@ -56,15 +60,16 @@ import openpyxl
 import csv
     
 from tabulate import tabulate
-'''
+
 import warnings
 warnings.filterwarnings("ignore")
 
+import psutil
 import concurrent.futures
 import multiprocessing
 from multiprocessing import Pool
 from contextlib import closing
-'''
+
 from pathlib import Path 
 
 MBFACTOR = float(1<<20)
@@ -239,7 +244,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 80 
+    min_size = 50 
     
     max_size = width*height*0.1
     
@@ -296,6 +301,27 @@ def medial_axis_image(thresh):
     image_medial_axis = medial_axis(image_bw)
     
     return image_medial_axis
+
+
+def skeleton_bw(thresh):
+
+    # Convert mask to boolean image, rather than 0 and 255 for skimage to use it
+    
+    #convert an image from OpenCV to skimage
+    thresh_sk = img_as_float(thresh)
+
+    image_bw = img_as_bool((thresh_sk))
+    
+    #image_medial_axis = medial_axis(image_bw)
+    
+    skeleton = morphology.skeletonize(image_bw)
+    
+    #skeleton = morphology.skeletonize(mask.astype(bool))
+        
+    skeleton = skeleton.astype(np.uint8) * 255
+
+  
+    return skeleton
 
 
 
@@ -860,12 +886,31 @@ def extract_traits(image_file):
     
     
     #accquire medial axis of segmentation mask
-    image_medial_axis = medial_axis_image(thresh)
+    #image_medial_axis = medial_axis_image(thresh)
+    
+    image_skeleton = skeleton_bw(thresh)
 
     # save medial axis result
-    result_file = (save_path + base_name + '_medial_axis' + file_extension)
-    cv2.imwrite(result_file, img_as_ubyte(image_medial_axis))
+    result_file = (save_path + base_name + '_skeleton' + file_extension)
+    cv2.imwrite(result_file, img_as_ubyte(image_skeleton))
     
+    
+    #fig = plt.plot()
+    branch_data = summarize(Skeleton(image_skeleton))
+    print(branch_data.head())
+    #img_hist = branch_data.hist(column = 'branch-distance', by = 'branch-type', bins = 100)
+    #result_file = (save_path + base_name + '_hist' + file_extension)
+    #plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
+    #plt.close()
+
+    
+    fig = plt.plot()
+    source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
+    img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-distance', skeleton_colormap = 'hsv')
+    result_file = (save_path + base_name + '_euclidean_overlay' + file_extension)
+    plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
+    plt.close()
+  
     
     min_distance_value = 20
     #watershed based leaf area segmentaiton 
@@ -956,13 +1001,6 @@ if __name__ == '__main__':
     
     
 
-    print("Summary: {0} plant images were processed...\n".format(n_images))
-    
-    #output in command window in a sum table
- 
-    table = tabulate(result_list, headers = ['filename', 'area', 'solidity', 'max_width', 'max_height' ,'avg_curv'], tablefmt = 'orgtbl')
-
-    print(table + "\n")
     
 
     '''
@@ -976,13 +1014,24 @@ if __name__ == '__main__':
     # Create a pool of processes. By default, one is created for each CPU in the machine.
     # extract the bouding box for each image in file list
     with closing(Pool(processes = agents)) as pool:
-        result = pool.map(extract_traits, imgList)
+        result_list = pool.map(extract_traits, imgList)
         pool.terminate()
-    
+    '''
     
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
     
-    '''
+    print("Summary: {0} plant images were processed...\n".format(n_images))
+    
+    #output in command window in a sum table
+ 
+    table = tabulate(result_list, headers = ['filename', 'area', 'solidity', 'max_width', 'max_height' ,'avg_curv'], tablefmt = 'orgtbl')
+
+    print(table + "\n")
+    
+    
+    
+    
+    
     if (args['result']):
 
         trait_file = (args['result'] + 'trait.xlsx')
