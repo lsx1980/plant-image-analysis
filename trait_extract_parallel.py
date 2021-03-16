@@ -32,20 +32,22 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import MiniBatchKMeans
 
 from skimage.feature import peak_local_max
-from skimage.morphology import watershed, medial_axis
+from skimage.morphology import medial_axis
 from skimage import img_as_float, img_as_ubyte, img_as_bool, img_as_int
 from skimage import measure
 from skimage.color import rgb2lab, deltaE_cie76
 from skimage import morphology
-from skimage.segmentation import clear_border
+from skimage.segmentation import clear_border, watershed
+#skimage.segmentation.watershed
 
 from scipy.spatial import distance as dist
 from scipy import optimize
 from scipy import ndimage
 from scipy.interpolate import interp1d
 
+from skan import skeleton_to_csgraph, Skeleton, summarize, draw
 
-from skan import Skeleton, summarize, draw
+import networkx as nx
 
 import imutils
 
@@ -71,6 +73,9 @@ from multiprocessing import Pool
 from contextlib import closing
 
 from pathlib import Path 
+
+import math
+
 
 MBFACTOR = float(1<<20)
 
@@ -290,7 +295,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     return img_thresh
     
-
+'''
 def medial_axis_image(thresh):
     
     #convert an image from OpenCV to skimage
@@ -301,7 +306,7 @@ def medial_axis_image(thresh):
     image_medial_axis = medial_axis(image_bw)
     
     return image_medial_axis
-
+'''
 
 def skeleton_bw(thresh):
 
@@ -323,7 +328,249 @@ def skeleton_bw(thresh):
   
     return skeleton
 
+'''
+def get_avg_curve_len(img):
+    """
+    This algorithm gets the normalized curve length
+    
+    Branches from one intersection point to another intersection point is not considered
+    because it is definitely important to the reconstruction of the binary image.
+    
+    i.e. Only end point to intersection point is considered. 
+    
+    Arguments:
+    img - Skeletonized image
+    
+    Return
+    all_branches - A list of lists of coordinates (x,y) of the branches
+    """
+       
+    all_branch_len = []
+    s = img.copy()*1
+    i = 0
+    
+    while True:
 
+        all_branch = get_branches(s)
+        for branch in all_branch:
+            all_branch_len.append(len(branch))
+            r = [i[1] for i in branch]
+            c = [i[0] for i in branch]
+
+            s[r,c] = 0
+        if i != 0:
+            all_branch_len.append(np.sum(s))
+                
+        if len(all_branch) == 0:
+            break
+        
+        i += 1
+    try:
+        avg_len = np.mean(all_branch_len)
+    except:
+        return 0
+    return avg_len
+
+
+
+def get_imp_points(img):
+
+    end_points = []
+    inter_points = []
+    #img = np.pad(img,((1,1),(1,1)),"constant")
+    (rows,cols) = np.nonzero(img)
+    
+    for (r,c) in zip(rows,cols):
+
+        if np.sum(img[r-1:r+2,c-1:c+2]) == 2:
+            end_points.append((c,r))
+        elif np.sum(img[r-1:r+2,c-1:c+2]) > 3:
+            inter_points.append((c,r))
+     
+    #     for point1 in t_inter_points:
+    #         temp_x = [point1[0]]
+    #         temp_y = [point1[1]]
+    #         for point2 in t_inter_points:
+    #             if ((point1[0]-point2[0])**2 + (point1[1]-point2[1])**2 < 9**2) and (point1 != point2):
+    #                 temp_x.append(point2[0])
+    #                 temp_y.append(point2[1])
+
+    #         x_avg = int(math.floor(sum(temp_x)/len(temp_x)))
+    #         y_avg = int(math.floor(sum(temp_y)/len(temp_y)))
+
+    #         inter_points.append((x_avg,y_avg))  
+
+    #     #all_branch = get_branches(img)
+    #     end_points = list(set(end_points))
+    #     inter_points = list(set(inter_points))
+    #     #num_branch = get_num_branch(all_branch,inter_points)
+    
+    return end_points, inter_points
+
+
+def get_branches(img):
+    """
+    This algorithm gets the branches of the skeleton image from end points to
+    intersection point. The determined branches are used for DSE pruning method.
+    
+    Branches from one intersection point to another intersection point is not considered
+    because it is definitely important to the reconstruction of the binary image.
+    
+    i.e. Only end point to intersection point is considered. 
+    
+    Arguments:
+    img - Skeletonized image
+    
+    Return
+    all_branches - A list of lists of coordinates (x,y) of the branches
+    """
+   
+    E,_ = get_imp_points(img)  
+    all_branches = []
+    
+    #print(f"The end points: {E}")
+    for e in E:
+        branch = []
+        r_g, c_g = e[1], e[0]
+        branch.append((c_g,r_g))
+
+        while np.sum(img[r_g-1:r_g+2,c_g-1:c_g+2]) <= 3:
+            (r_t,c_t) = np.nonzero(img[r_g-1:r_g+2,c_g-1:c_g+2])
+            r_t = r_t-1+r_g
+            c_t = c_t-1+c_g
+            for point in zip(c_t,r_t):
+                if point not in branch:
+                    branch.append(point)
+
+            r_g = branch[-1][1]
+            c_g = branch[-1][0]
+            if (c_g,r_g) in E:
+                branch.append((c_g,r_g))
+                break
+        all_branches.append(branch)
+    
+    
+    # Fit a Gaussian distribution for the list of branch
+#     len_branches = [len(branch) for branch in all_branches]
+#     print(f"Length of all branches: {len_branches}")
+#     avg_len = np.ceil(np.mean(len_branches))
+#     print(f"The average length: {avg_len}")
+#     std_len = np.std(len_branches)
+#     print(f"The s.deviation: {std_len}")
+    
+#     g = lambda x:np.exp(-(x-avg_len)**2/(2*std_len**2))
+    
+#     plt.hist(len_branches)
+#     w_avg_len = np.mean(([g(i)*i for i in len_branches]))
+#     print(f"The weighted avg len: {w_avg_len}")
+#     all_branches = [branch for branch in all_branches if len(branch) <= avg_len] 
+    
+    return all_branches
+
+
+def get_num_branch(all_branches,inter_points):
+    
+    list_num_branch = []
+    for point in inter_points:
+        num_branch = 0
+        for branch in all_branches:
+            if point in branch:
+                all_branches.remove(branch)
+                num_branch += 1
+        list_num_branch.append(num_branch)
+        
+    return list_num_branch
+
+def reconstruct(skel_img,dist_tr):
+    """
+    Attempt to reconstruct the binary image from the skeleton
+    
+    Arguments:
+    img - Skeleton image using thinning algorithm
+    dist_tr - Distance transform matrix
+    
+    Return:
+    bn_img - Binary image
+    """
+    row, col = np.nonzero(skel_img)
+    bn_img = skel_img.copy()*1
+    for (r,c) in zip(row,col):
+        radius = math.ceil(dist_tr[r,c]-1)
+        if radius >= 1:
+            stel = morphology.disk(radius)
+            bn_img[r-radius:r+radius+1,c-radius:c+radius+1] += stel
+    
+    return bn_img >= 1
+
+def DSE_v3(img,beta):
+    """
+    Discrete Skeletonization Evolution algorithm which finds the trade 
+    off between skeleton simplicity and reconstruction error.
+    
+    Arguments:
+    img - Binary image
+    
+    Returns:
+    pruned_img - Pruned binary image using DSE
+    """    
+    
+    img = img_as_bool(img_as_float(img))
+    
+    M,dist = medial_axis(img,return_distance = True)
+    #M = morphology.skeletonize(img)
+    S_all = [M]
+    norm_dist = lambda s: np.log(np.sum(s)+1)
+    norm_area = lambda s,d: (np.sum(d)-np.sum(reconstruct(s,dist)))/(np.sum(d)+1)
+    
+    all_branches = get_branches(M)
+    avg_curve_len = get_avg_curve_len(M)
+    all_branches = [branch for branch in all_branches if len(branch) < np.ceil(avg_curve_len)]
+
+    M_len = norm_dist(get_avg_curve_len(M))
+    avg_branch_len = np.mean([len(branch) for branch in all_branches]) # Average length of all branches
+    alpha = beta * np.log(avg_branch_len/M_len+1)
+    scores = [alpha*norm_area(M,reconstruct(M,dist))+norm_dist(M)]
+    
+    while len(all_branches) > 2:
+        weights = []
+        for branch in all_branches:
+            S = M.copy()                  # S_(i) 
+            r = [i[1] for i in branch]
+            c = [i[0] for i in branch]
+
+            S[r,c] = 0                    # Initialize the weights
+            AR = norm_area(img,reconstruct(S,dist))
+            LR = norm_dist(get_avg_curve_len(S))
+            weights.append(alpha*AR + LR)
+
+        min_idx = np.argmin(weights)
+        E = all_branches[min_idx]         # The minimum branch to be removed 
+        r = [i[1] for i in E]             # Get the rows of minimum weight branch
+        c = [i[0] for i in E]             # Get the columns of minimum weight branch
+        M[r,c] = 0                        # Remove the minimum branch from the medial axis, S_(i+1)
+        AR = norm_area(img,reconstruct(M,dist))
+        LR = norm_dist(get_avg_curve_len(M))
+
+        S_all.append(M)
+        del all_branches[min_idx]    
+    
+    if len(S_all) >= 2:
+        print(f"Length of S_all: {len(S_all)}")
+        for S in S_all:
+            AR = norm_area(img,reconstruct(S,dist))
+            LR = norm_dist(get_avg_curve_len(S))
+            scores.append(alpha*AR + LR)
+            S_best = S_all[np.argmin(scores)]
+            S_best = morphology.binary_dilation(S_best,morphology.disk(2))
+            S_best = morphology.thin(S_best)
+
+            return S_best, reconstruct(S_best,dist)
+    
+    else:
+        print(f"Defaulting to DSE_v2")
+        return DSE_v2(img,0.9)
+
+'''
 
 def watershed_seg(orig, thresh, min_distance_value):
     
@@ -885,19 +1132,49 @@ def extract_traits(image_file):
         print(index, value, diff) 
     
     
+    
+    ###############################################
+    #beta = 20
+    #threshold = 0.9 
+    #thin_img_f,_ = DSE_v3(thresh,beta)
+    
+    
+    
+    
     #accquire medial axis of segmentation mask
     #image_medial_axis = medial_axis_image(thresh)
     
     image_skeleton = skeleton_bw(thresh)
 
-    # save medial axis result
+    # save _skeleton result
     result_file = (save_path + base_name + '_skeleton' + file_extension)
     cv2.imwrite(result_file, img_as_ubyte(image_skeleton))
-    
-    
+
     #fig = plt.plot()
     branch_data = summarize(Skeleton(image_skeleton))
-    print(branch_data.head())
+    #print(branch_data)
+        
+    from statistics import mean
+    
+    sub_branch = branch_data.loc[branch_data['branch-type'] == 1]
+    
+    sub_branch_branch_distance = branch_data["branch-distance"].tolist()
+    
+    
+    print(sub_branch)
+    
+    print(sub_branch_branch_distance)
+    
+    print(mean(sub_branch_branch_distance))
+    #print(branch_data[["skeleton-id","branch-type","branch-distance", "euclidean-distance"]])
+    #print((type(branch_data["branch-type"])))
+    
+    branch_type_list = branch_data["branch-type"].tolist()
+    
+    #print(branch_type_list.count(1))
+    
+    print("[INFO] {} n_leaves found\n".format(branch_type_list.count(1)))
+    
     #img_hist = branch_data.hist(column = 'branch-distance', by = 'branch-type', bins = 100)
     #result_file = (save_path + base_name + '_hist' + file_extension)
     #plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
@@ -906,12 +1183,14 @@ def extract_traits(image_file):
     
     fig = plt.plot()
     source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
-    img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-distance', skeleton_colormap = 'hsv')
-    result_file = (save_path + base_name + '_euclidean_overlay' + file_extension)
+    #img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-distance', skeleton_colormap = 'hsv')
+    img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-type', skeleton_colormap = 'hsv')
+    result_file = (save_path + base_name + '_euclidean_graph_overlay' + file_extension)
     plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
     plt.close()
   
-    
+     
+    ############################################## leaf number computation
     min_distance_value = 20
     #watershed based leaf area segmentaiton 
     labels = watershed_seg(orig, thresh, min_distance_value)
@@ -948,7 +1227,7 @@ def extract_traits(image_file):
     
     n_leaves = int(len(np.unique(labels))/8 - 1)
     
-    print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
+    #print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
     
     Path("/tmp/d/a.dat").name
     

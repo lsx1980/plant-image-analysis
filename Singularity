@@ -30,8 +30,8 @@ From: ubuntu:18.04
     libsm6 \
     libxext6 \
     libfontconfig1 \
-    libxrender1
-
+    libxrender1 \
+    python3-pandas
     
   pip3 install numpy \
                 Pillow \
@@ -43,7 +43,11 @@ From: ubuntu:18.04
                 python-magic \
                 imutils \
                 tabulate \
-                skan
+                skan \
+                networkx \
+                pandas \
+                numba \
+                psutil
 
   pip3 install -U scikit-learn
   
