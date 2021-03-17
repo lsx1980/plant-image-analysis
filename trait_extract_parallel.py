@@ -38,7 +38,7 @@ from skimage import measure
 from skimage.color import rgb2lab, deltaE_cie76
 from skimage import morphology
 from skimage.segmentation import clear_border, watershed
-#skimage.segmentation.watershed
+from skimage.measure import regionprops
 
 from scipy.spatial import distance as dist
 from scipy import optimize
@@ -74,8 +74,9 @@ from contextlib import closing
 
 from pathlib import Path 
 
-import math
+from matplotlib import collections
 
+import numpy as np
 
 MBFACTOR = float(1<<20)
 
@@ -316,261 +317,13 @@ def skeleton_bw(thresh):
     thresh_sk = img_as_float(thresh)
 
     image_bw = img_as_bool((thresh_sk))
-    
-    #image_medial_axis = medial_axis(image_bw)
-    
+
     skeleton = morphology.skeletonize(image_bw)
-    
-    #skeleton = morphology.skeletonize(mask.astype(bool))
-        
-    skeleton = skeleton.astype(np.uint8) * 255
 
-  
-    return skeleton
+    skeleton_img = skeleton.astype(np.uint8) * 255
 
-'''
-def get_avg_curve_len(img):
-    """
-    This algorithm gets the normalized curve length
-    
-    Branches from one intersection point to another intersection point is not considered
-    because it is definitely important to the reconstruction of the binary image.
-    
-    i.e. Only end point to intersection point is considered. 
-    
-    Arguments:
-    img - Skeletonized image
-    
-    Return
-    all_branches - A list of lists of coordinates (x,y) of the branches
-    """
-       
-    all_branch_len = []
-    s = img.copy()*1
-    i = 0
-    
-    while True:
+    return skeleton_img, skeleton
 
-        all_branch = get_branches(s)
-        for branch in all_branch:
-            all_branch_len.append(len(branch))
-            r = [i[1] for i in branch]
-            c = [i[0] for i in branch]
-
-            s[r,c] = 0
-        if i != 0:
-            all_branch_len.append(np.sum(s))
-                
-        if len(all_branch) == 0:
-            break
-        
-        i += 1
-    try:
-        avg_len = np.mean(all_branch_len)
-    except:
-        return 0
-    return avg_len
-
-
-
-def get_imp_points(img):
-
-    end_points = []
-    inter_points = []
-    #img = np.pad(img,((1,1),(1,1)),"constant")
-    (rows,cols) = np.nonzero(img)
-    
-    for (r,c) in zip(rows,cols):
-
-        if np.sum(img[r-1:r+2,c-1:c+2]) == 2:
-            end_points.append((c,r))
-        elif np.sum(img[r-1:r+2,c-1:c+2]) > 3:
-            inter_points.append((c,r))
-     
-    #     for point1 in t_inter_points:
-    #         temp_x = [point1[0]]
-    #         temp_y = [point1[1]]
-    #         for point2 in t_inter_points:
-    #             if ((point1[0]-point2[0])**2 + (point1[1]-point2[1])**2 < 9**2) and (point1 != point2):
-    #                 temp_x.append(point2[0])
-    #                 temp_y.append(point2[1])
-
-    #         x_avg = int(math.floor(sum(temp_x)/len(temp_x)))
-    #         y_avg = int(math.floor(sum(temp_y)/len(temp_y)))
-
-    #         inter_points.append((x_avg,y_avg))  
-
-    #     #all_branch = get_branches(img)
-    #     end_points = list(set(end_points))
-    #     inter_points = list(set(inter_points))
-    #     #num_branch = get_num_branch(all_branch,inter_points)
-    
-    return end_points, inter_points
-
-
-def get_branches(img):
-    """
-    This algorithm gets the branches of the skeleton image from end points to
-    intersection point. The determined branches are used for DSE pruning method.
-    
-    Branches from one intersection point to another intersection point is not considered
-    because it is definitely important to the reconstruction of the binary image.
-    
-    i.e. Only end point to intersection point is considered. 
-    
-    Arguments:
-    img - Skeletonized image
-    
-    Return
-    all_branches - A list of lists of coordinates (x,y) of the branches
-    """
-   
-    E,_ = get_imp_points(img)  
-    all_branches = []
-    
-    #print(f"The end points: {E}")
-    for e in E:
-        branch = []
-        r_g, c_g = e[1], e[0]
-        branch.append((c_g,r_g))
-
-        while np.sum(img[r_g-1:r_g+2,c_g-1:c_g+2]) <= 3:
-            (r_t,c_t) = np.nonzero(img[r_g-1:r_g+2,c_g-1:c_g+2])
-            r_t = r_t-1+r_g
-            c_t = c_t-1+c_g
-            for point in zip(c_t,r_t):
-                if point not in branch:
-                    branch.append(point)
-
-            r_g = branch[-1][1]
-            c_g = branch[-1][0]
-            if (c_g,r_g) in E:
-                branch.append((c_g,r_g))
-                break
-        all_branches.append(branch)
-    
-    
-    # Fit a Gaussian distribution for the list of branch
-#     len_branches = [len(branch) for branch in all_branches]
-#     print(f"Length of all branches: {len_branches}")
-#     avg_len = np.ceil(np.mean(len_branches))
-#     print(f"The average length: {avg_len}")
-#     std_len = np.std(len_branches)
-#     print(f"The s.deviation: {std_len}")
-    
-#     g = lambda x:np.exp(-(x-avg_len)**2/(2*std_len**2))
-    
-#     plt.hist(len_branches)
-#     w_avg_len = np.mean(([g(i)*i for i in len_branches]))
-#     print(f"The weighted avg len: {w_avg_len}")
-#     all_branches = [branch for branch in all_branches if len(branch) <= avg_len] 
-    
-    return all_branches
-
-
-def get_num_branch(all_branches,inter_points):
-    
-    list_num_branch = []
-    for point in inter_points:
-        num_branch = 0
-        for branch in all_branches:
-            if point in branch:
-                all_branches.remove(branch)
-                num_branch += 1
-        list_num_branch.append(num_branch)
-        
-    return list_num_branch
-
-def reconstruct(skel_img,dist_tr):
-    """
-    Attempt to reconstruct the binary image from the skeleton
-    
-    Arguments:
-    img - Skeleton image using thinning algorithm
-    dist_tr - Distance transform matrix
-    
-    Return:
-    bn_img - Binary image
-    """
-    row, col = np.nonzero(skel_img)
-    bn_img = skel_img.copy()*1
-    for (r,c) in zip(row,col):
-        radius = math.ceil(dist_tr[r,c]-1)
-        if radius >= 1:
-            stel = morphology.disk(radius)
-            bn_img[r-radius:r+radius+1,c-radius:c+radius+1] += stel
-    
-    return bn_img >= 1
-
-def DSE_v3(img,beta):
-    """
-    Discrete Skeletonization Evolution algorithm which finds the trade 
-    off between skeleton simplicity and reconstruction error.
-    
-    Arguments:
-    img - Binary image
-    
-    Returns:
-    pruned_img - Pruned binary image using DSE
-    """    
-    
-    img = img_as_bool(img_as_float(img))
-    
-    M,dist = medial_axis(img,return_distance = True)
-    #M = morphology.skeletonize(img)
-    S_all = [M]
-    norm_dist = lambda s: np.log(np.sum(s)+1)
-    norm_area = lambda s,d: (np.sum(d)-np.sum(reconstruct(s,dist)))/(np.sum(d)+1)
-    
-    all_branches = get_branches(M)
-    avg_curve_len = get_avg_curve_len(M)
-    all_branches = [branch for branch in all_branches if len(branch) < np.ceil(avg_curve_len)]
-
-    M_len = norm_dist(get_avg_curve_len(M))
-    avg_branch_len = np.mean([len(branch) for branch in all_branches]) # Average length of all branches
-    alpha = beta * np.log(avg_branch_len/M_len+1)
-    scores = [alpha*norm_area(M,reconstruct(M,dist))+norm_dist(M)]
-    
-    while len(all_branches) > 2:
-        weights = []
-        for branch in all_branches:
-            S = M.copy()                  # S_(i) 
-            r = [i[1] for i in branch]
-            c = [i[0] for i in branch]
-
-            S[r,c] = 0                    # Initialize the weights
-            AR = norm_area(img,reconstruct(S,dist))
-            LR = norm_dist(get_avg_curve_len(S))
-            weights.append(alpha*AR + LR)
-
-        min_idx = np.argmin(weights)
-        E = all_branches[min_idx]         # The minimum branch to be removed 
-        r = [i[1] for i in E]             # Get the rows of minimum weight branch
-        c = [i[0] for i in E]             # Get the columns of minimum weight branch
-        M[r,c] = 0                        # Remove the minimum branch from the medial axis, S_(i+1)
-        AR = norm_area(img,reconstruct(M,dist))
-        LR = norm_dist(get_avg_curve_len(M))
-
-        S_all.append(M)
-        del all_branches[min_idx]    
-    
-    if len(S_all) >= 2:
-        print(f"Length of S_all: {len(S_all)}")
-        for S in S_all:
-            AR = norm_area(img,reconstruct(S,dist))
-            LR = norm_dist(get_avg_curve_len(S))
-            scores.append(alpha*AR + LR)
-            S_best = S_all[np.argmin(scores)]
-            S_best = morphology.binary_dilation(S_best,morphology.disk(2))
-            S_best = morphology.thin(S_best)
-
-            return S_best, reconstruct(S_best,dist)
-    
-    else:
-        print(f"Defaulting to DSE_v2")
-        return DSE_v2(img,0.9)
-
-'''
 
 def watershed_seg(orig, thresh, min_distance_value):
     
@@ -585,11 +338,57 @@ def watershed_seg(orig, thresh, min_distance_value):
     # using 8-connectivity, then appy the Watershed algorithm
     markers = ndimage.label(localMax, structure = np.ones((3, 3)))[0]
     
+    #print("markers")
+    #print(type(markers))
+    
     labels = watershed(-D, markers, mask = thresh)
     
     print("[INFO] {} unique segments found\n".format(len(np.unique(labels)) - 1))
     
     return labels
+
+'''
+def watershed_seg_marker(orig, thresh, min_distance_value, img_marker):
+    
+    # compute the exact Euclidean distance from every binary
+    # pixel to the nearest zero pixel, then find peaks in this
+    # distance map
+    D = ndimage.distance_transform_edt(thresh)
+    
+    gray = cv2.cvtColor(img_marker, cv2.COLOR_BGR2GRAY)
+    img_marker = cv2.threshold(gray, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    
+    #localMax = peak_local_max(D, indices = False, min_distance = min_distance_value,  labels = thresh)
+     
+    # perform a connected component analysis on the local peaks,
+    # using 8-connectivity, then appy the Watershed algorithm
+    markers = ndimage.label(img_marker, structure = np.ones((3, 3)))[0]
+
+    labels = watershed(-D, markers, mask = thresh)
+
+    
+    props = regionprops(labels)
+    
+    areas = [p.area for p in props]
+    
+    import statistics
+    
+    
+    #outlier_list = outlier_doubleMAD(areas, thresh = 1.0)
+    
+    #indices = [i for i, x in enumerate(outlier_list) if x]
+    
+    print(areas)
+    print(statistics.mean(areas))
+    #
+    #print(outlier_list)
+    #print(indices)
+    
+    
+    print("[INFO] {} unique segments found\n".format(len(np.unique(labels)) - 1))
+    
+    return labels
+'''
 
 
 def comp_external_contour(orig,thresh):
@@ -1051,6 +850,88 @@ def color_region(image, mask, save_path, num_clusters):
     return rgb_colors
 
 
+def _normalise_image(image, *, image_cmap=None):
+    image = img_as_float(image)
+    if image.ndim == 2:
+        if image_cmap is None:
+            image = gray2rgb(image)
+        else:
+            image = plt.get_cmap(image_cmap)(image)[..., :3]
+    return image
+
+
+'''
+def overlay_skeleton_endpoints(image, stats, *, image_cmap=None, axes=None):
+
+    image = _normalise_image(image, image_cmap=image_cmap)
+    summary = stats
+    # transforming from row, col to x, y
+    #coords_cols = (['image-coord-src-%i' % i for i in [1, 0]] +
+    #               ['image-coord-dst-%i' % i for i in [1, 0]])
+    
+    coords_cols_src = (['image-coord-src-%i' % i for i in [1, 0]])
+    coords_cols_dst = (['image-coord-dst-%i' % i for i in [1, 0]])
+    
+    #coords = summary[coords_cols].values.reshape((-1, 1, 2))
+    
+    coords_src = summary[coords_cols_src].values
+    coords_dst = summary[coords_cols_dst].values
+
+    coords_src_x = [i[0] for i in coords_src]
+    coords_src_y = [i[1] for i in coords_src]
+    
+    coords_dst_x = [i[0] for i in coords_dst]
+    coords_dst_y = [i[1] for i in coords_dst]
+    
+    img_marker = np.zeros_like(image, dtype = np.uint8)
+    img_marker.fill(0) # or img[:] = 255
+    img_marker[list(map(int, coords_src_y)), list(map(int, coords_src_x))] = 255
+    img_marker[list(map(int, coords_dst_y)), list(map(int, coords_dst_x))] = 255
+    
+    #print("img_marker")
+    #print(img_marker.shape)
+    
+    if axes is None:
+        fig, axes = plt.subplots()
+    
+    axes.axis('off')
+    axes.imshow(image)
+
+    axes.scatter(coords_src_x, coords_src_y, c = 'w')
+    axes.scatter(coords_dst_x, coords_dst_y, c = 'w')
+
+    return fig, img_marker
+    #return coords
+'''
+
+def outlier_doubleMAD(data,thresh = 3.5):
+    
+    """
+    FOR ASSYMMETRIC DISTRIBUTION
+    Returns : filtered array excluding the outliers
+
+    Parameters : the actual data Points array
+
+    Calculates median to divide data into 2 halves.(skew conditions handled)
+    Then those two halves are treated as separate data with calculation same as for symmetric distribution.(first answer) 
+    Only difference being , the thresholds are now the median distance of the right and left median with the actual data median
+    """
+    
+    # warning: this function does not check for NAs
+    # nor does it address issues when 
+    # more than 50% of your data have identical values
+    m = np.median(data)
+    abs_dev = np.abs(data - m)
+    left_mad = np.median(abs_dev[data <= m])
+    right_mad = np.median(abs_dev[data >= m])
+    data_mad = left_mad * np.ones(len(data))
+    data_mad[data > m] = right_mad
+    modified_z_score = 0.6745 * abs_dev / data_mad
+    modified_z_score[data == m] = 0
+    return modified_z_score > thresh
+
+
+
 
 def extract_traits(image_file):
     
@@ -1091,6 +972,8 @@ def extract_traits(image_file):
     
     #make backup image
     orig = image.copy()
+    
+    source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
      
     args_colorspace = args['color_space']
     args_channels = args['channels']
@@ -1106,14 +989,11 @@ def extract_traits(image_file):
     
     
     
-    
-    
     num_clusters = 5
     #save color quantization result
     #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
     rgb_colors = color_region(orig, thresh, save_path, num_clusters)
     
-
     selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
     
     print("Color difference are : ") 
@@ -1134,46 +1014,71 @@ def extract_traits(image_file):
     
     
     ###############################################
-    #beta = 20
-    #threshold = 0.9 
-    #thin_img_f,_ = DSE_v3(thresh,beta)
-    
-    
-    
     
     #accquire medial axis of segmentation mask
     #image_medial_axis = medial_axis_image(thresh)
     
-    image_skeleton = skeleton_bw(thresh)
+    image_skeleton, skeleton = skeleton_bw(thresh)
 
     # save _skeleton result
     result_file = (save_path + base_name + '_skeleton' + file_extension)
     cv2.imwrite(result_file, img_as_ubyte(image_skeleton))
 
-    #fig = plt.plot()
+    ###
+    # ['skeleton-id', 'node-id-src', 'node-id-dst', 'branch-distance', 
+    #'branch-type', 'mean-pixel-value', 'stdev-pixel-value', 
+    #'image-coord-src-0', 'image-coord-src-1', 'image-coord-dst-0', 'image-coord-dst-1', 
+    #'coord-src-0', 'coord-src-1', 'coord-dst-0', 'coord-dst-1', 'euclidean-distance']
+    ###
+    
+    #get brach data
     branch_data = summarize(Skeleton(image_skeleton))
     #print(branch_data)
-        
-    from statistics import mean
     
+    #select end branch
     sub_branch = branch_data.loc[branch_data['branch-type'] == 1]
     
-    sub_branch_branch_distance = branch_data["branch-distance"].tolist()
+    sub_branch_branch_distance = sub_branch["branch-distance"].tolist()
+ 
+    # remove outliers in branch distance 
+    outlier_list = outlier_doubleMAD(sub_branch_branch_distance, thresh = 3.5)
     
+    indices = [i for i, x in enumerate(outlier_list) if x]
     
-    print(sub_branch)
+    sub_branch_cleaned = sub_branch.drop(sub_branch.index[indices])
+
+    #print(outlier_list)
+    #print(indices)
+    #print(sub_branch)
     
-    print(sub_branch_branch_distance)
+    print(sub_branch_cleaned)
     
-    print(mean(sub_branch_branch_distance))
-    #print(branch_data[["skeleton-id","branch-type","branch-distance", "euclidean-distance"]])
-    #print((type(branch_data["branch-type"])))
+    '''
+    min_distance_value_list = sub_branch_cleaned["branch-distance"].tolist()
     
-    branch_type_list = branch_data["branch-type"].tolist()
+    min_distance_value_list.sort()
+    
+    min_distance_value = int(min_distance_value_list[2])
+    
+    print("Smallest branch-distance is:", min_distance_value)
+    
+    #fig = plt.plot()
+    
+    (img_endpt_overlay, img_marker) = overlay_skeleton_endpoints(source_image, sub_branch_cleaned)
+    
+    result_file = (save_path + base_name + '_endpts_overlay' + file_extension)
+    plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
+    plt.close()
+    
+    result_file = (save_path + base_name + '_marker' + file_extension)
+    cv2.imwrite(result_file, img_marker)
+    '''
+    
+    branch_type_list = sub_branch_cleaned["branch-type"].tolist()
     
     #print(branch_type_list.count(1))
     
-    print("[INFO] {} n_leaves found\n".format(branch_type_list.count(1)))
+    print("[INFO] {} branch end points found\n".format(branch_type_list.count(1)))
     
     #img_hist = branch_data.hist(column = 'branch-distance', by = 'branch-type', bins = 100)
     #result_file = (save_path + base_name + '_hist' + file_extension)
@@ -1194,9 +1099,11 @@ def extract_traits(image_file):
     min_distance_value = 20
     #watershed based leaf area segmentaiton 
     labels = watershed_seg(orig, thresh, min_distance_value)
+    
+    #labels = watershed_seg_marker(orig, thresh, min_distance_value, img_marker)
 
     #save watershed result label image
-     #Map component labels to hue val
+    #Map component labels to hue val
     label_hue = np.uint8(128*labels/np.max(labels))
     #label_hue[labels == largest_label] = np.uint8(15)
     blank_ch = 255*np.ones_like(label_hue)
@@ -1225,13 +1132,13 @@ def extract_traits(image_file):
     #print(filename)
     cv2.imwrite(result_file, trait_img)   
     
-    n_leaves = int(len(np.unique(labels))/8 - 1)
+    n_leaves = int(len(np.unique(labels))/1 - 1)
     
     #print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
     
-    Path("/tmp/d/a.dat").name
+    #Path("/tmp/d/a.dat").name
     
-    return image_file_name, area, solidity, max_width, max_height, avg_curv #n_leaves
+    return image_file_name, area, solidity, max_width, max_height, avg_curv, n_leaves
     
 
 
@@ -1270,9 +1177,9 @@ if __name__ == '__main__':
     #loop execute
     for image in imgList:
         
-        (filename, area, solidity, max_width, max_height, avg_curv) = extract_traits(image)
+        (filename, area, solidity, max_width, max_height, avg_curv, n_leaves) = extract_traits(image)
         
-        result_list.append([filename, area, solidity, max_width, max_height, avg_curv])
+        result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves])
     
     
     #print(result_list)
@@ -1303,7 +1210,7 @@ if __name__ == '__main__':
     
     #output in command window in a sum table
  
-    table = tabulate(result_list, headers = ['filename', 'area', 'solidity', 'max_width', 'max_height' ,'avg_curv'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'area', 'solidity', 'max_width', 'max_height' ,'avg_curv', 'n_leaves'], tablefmt = 'orgtbl')
 
     print(table + "\n")
     
@@ -1339,7 +1246,7 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 4).value = 'max_width'
         sheet.cell(row = 1, column = 5).value = 'max_height'
         sheet.cell(row = 1, column = 6).value = 'curvature'
-        #sheet.cell(row = 1, column = 7).value = 'number_leaf'
+        sheet.cell(row = 1, column = 7).value = 'number_leaf'
     
     for row in result_list:
         sheet.append(row)

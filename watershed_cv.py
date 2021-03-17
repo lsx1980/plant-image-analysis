@@ -9,7 +9,7 @@ Author-email: suxingliu@gmail.com
 
 USAGE:
 
-python3 watershed_cv.py -p /home/suxingliu/plant-image-analysis/  -ft jpg
+python3 watershed_cv.py -p /home/suxing/plant-image-analysis/test/  -ft jpg
 
 
 argument:
@@ -21,7 +21,7 @@ argument:
 
 # import the necessary packages
 from skimage.feature import peak_local_max
-from skimage.morphology import watershed
+from skimage.segmentation import watershed
 from scipy import ndimage
 import numpy as np
 import argparse
@@ -87,6 +87,7 @@ def image_label(image_file):
     # distance map
     D = ndimage.distance_transform_edt(thresh)
     localMax = peak_local_max(D, indices=False, min_distance = 20, labels=thresh)
+    
      
     # perform a connected component analysis on the local peaks,
     # using 8-connectivity, then appy the Watershed algorithm
