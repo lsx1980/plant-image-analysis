@@ -76,7 +76,7 @@ from pathlib import Path
 
 from matplotlib import collections
 
-import numpy as np
+
 
 MBFACTOR = float(1<<20)
 
@@ -250,26 +250,12 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 50 
+    min_size = 1000 
     
     max_size = width*height*0.1
     
     img_thresh = np.zeros([width, height], dtype=np.uint8)
     
-    '''
-    #for every component in the image, keep it only if it's above min_size
-    for i in range(0, nb_components):
-        
-        if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
-            img_thresh[output == i + 1] = 255
-            
-            print("Foreground center found ")
-            
-        elif ((Coord_width[i] - Coord_left[i])*0.5 - width < 15) and (centroids[i][0] - width*0.5 < 15) and (centroids[i][1] - height*0.5 < 15) and ((sizes[i] <= max_size)):
-            imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
-            img_thresh[output == imax] = 255
-            print("Foreground max found ")
-    '''
     
     for i in range(0, nb_components):
         
@@ -295,6 +281,8 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #print(img_thresh.dtype)
     
     return img_thresh
+    
+    #return thresh_cleaned
     
 '''
 def medial_axis_image(thresh):
@@ -405,7 +393,7 @@ def comp_external_contour(orig,thresh):
         #get the bounding rect
         x, y, w, h = cv2.boundingRect(c)
         
-        if w>img_width*0.1 and h>img_height*0.1:
+        if w>img_width*0.01 and h>img_height*0.01:
             
             trait_img = cv2.drawContours(orig, contours, -1, (255, 255, 0), 1)
     

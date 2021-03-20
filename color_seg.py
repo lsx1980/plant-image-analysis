@@ -13,11 +13,11 @@ Author: suxing liu
 
 Author-email: suxingliu@gmail.com
 
-Created: 2018-09-29
+Created: 2019-09-29
 
 USAGE:
 
-python3 color_seg.py -p /home/suxingliu/plant-image-analysis/test/ -ft JPG
+python3 color_seg.py -p /home/suxing/plant-image-analysis/test/ -ft JPG
 
 
 '''
@@ -177,7 +177,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 850 
+    min_size = 50 
     
     max_size = width*height*0.1
     
@@ -204,7 +204,8 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #print("img_thresh.dtype")
     #print(img_thresh.dtype)
     
-    return img_thresh
+    #return img_thresh
+    return thresh_cleaned_bw
     
 '''
 def medial_axis_image(thresh):
@@ -344,17 +345,26 @@ if __name__ == '__main__':
     
     #(thresh, trait_img) = segmentation(current_img)
     
+    '''
      # get cpu number for parallel processing
     #agents = psutil.cpu_count()   
     agents = multiprocessing.cpu_count()
     print("Using {0} cores to perfrom parallel processing... \n".format(int(agents)))
+    
+    
     
     # Create a pool of processes. By default, one is created for each CPU in the machine.
     # extract the bouding box for each image in file list
     with closing(Pool(processes = agents)) as pool:
         result = pool.map(segmentation, imgList)
         pool.terminate()
-    
+    '''
+    #loop execute
+    for image in imgList:
+        
+        (thresh, trait_img) = segmentation(image)
+        
+        
     #color clustering based plant object segmentation
     #thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
     
