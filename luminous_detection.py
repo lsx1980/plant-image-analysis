@@ -69,7 +69,7 @@ def result_excel(result_list, file_path):
     
     result_file = (file_path + '/luminous_detection.xlsx')
     
-    print(result_file)
+    #print(result_file)
     
     if os.path.isfile(result_file):
         # update values
@@ -114,6 +114,8 @@ if __name__ == '__main__':
     
     # Accquire image file list
     imgList = sorted(glob.glob(image_file_path))
+    
+    #imgList = (glob.glob(image_file_path))
 
     #print((imgList))
     #global save_path

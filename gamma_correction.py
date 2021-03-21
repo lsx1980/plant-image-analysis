@@ -120,7 +120,7 @@ def gamma_correction(image_file):
     
     #image = cv2.resize(image, (0,0), fx = scale_factor, fy = scale_factor) 
     
-    gamma = 0.5
+    gamma = args['gamma']
     
     # apply gamma correction and show the images
     gamma = gamma if gamma > 0 else 0.1
@@ -141,6 +141,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-p", "--path", required = True,    help = "path to image file")
     ap.add_argument("-ft", "--filetype", required = False,  default = 'jpg',  help = "image filetype")
+    ap.add_argument("-gamma", "--gamma", type = float, required = False,  default = 0.5,  help = "gamma value")
     args = vars(ap.parse_args())
 
     # setting path to model file
