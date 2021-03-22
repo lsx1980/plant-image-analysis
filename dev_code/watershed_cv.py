@@ -125,6 +125,11 @@ def image_label(image_file):
         # it on the mask
         mask = np.zeros(gray.shape, dtype="uint8")
         mask[labels == label] = 255
+        
+        #define result path for simplified segmentation result
+        result_img_path = save_path_ac + str(filename[0:-4]) + str(label) + '_ac.jpg'
+        
+        cv2.imwrite(result_img_path,mask)
      
         # detect contours in the mask and grab the largest one
         cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

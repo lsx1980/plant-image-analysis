@@ -335,6 +335,32 @@ def watershed_seg(orig, thresh, min_distance_value):
     
     return labels
 
+
+def individual_object_seg(orig, labels, save_path, base_name, file_extension):
+    
+    
+    (width, height, n_channel) = orig.shape
+    
+    for label in np.unique(labels):
+    # if the label is zero, we are examining the 'background'
+    # so simply ignore it
+        if label == 0:
+            continue
+     
+        # otherwise, allocate memory for the label region and draw
+        # it on the mask
+        mask = np.zeros((width, height), dtype="uint8")
+        mask[labels == label] = 255
+        
+        # apply individual object mask
+        masked = cv2.bitwise_and(orig, orig, mask = mask)
+        
+        #define result path 
+        result_img_path = (save_path + base_name + '_leaf_' + str(label) + file_extension)
+        cv2.imwrite(result_img_path, masked)
+        
+
+
 '''
 def watershed_seg_marker(orig, thresh, min_distance_value, img_marker):
     
@@ -1089,6 +1115,8 @@ def extract_traits(image_file):
     labels = watershed_seg(orig, thresh, min_distance_value)
     
     #labels = watershed_seg_marker(orig, thresh, min_distance_value, img_marker)
+    
+    individual_object_seg(orig, labels, save_path, base_name, file_extension)
 
     #save watershed result label image
     #Map component labels to hue val
