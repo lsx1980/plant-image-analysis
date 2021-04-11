@@ -34,6 +34,47 @@ from contextlib import closing
 from tabulate import tabulate
 import openpyxl
 
+import itertools
+
+# generate foloder to store the output results
+def mkdir(path):
+    # import module
+    import os
+ 
+    # remove space at the beginning
+    path=path.strip()
+    # remove slash at the end
+    path=path.rstrip("\\")
+ 
+    # path exist?   # True  # False
+    isExists=os.path.exists(path)
+ 
+    # process
+    if not isExists:
+        # construct the path and folder
+        #print path + ' folder constructed!'
+        # make dir
+        os.makedirs(path)
+        return True
+    else:
+        # if exists, return 
+        #print path+' path exists!'
+        return False
+
+# get base name of a file from full path
+def get_basename(image_file):
+    
+    abs_path = os.path.abspath(image_file)
+    
+    filename, file_extension = os.path.splitext(abs_path)
+    
+    base_name = os.path.splitext(os.path.basename(filename))[0]
+
+    return base_name
+    
+    #image_file_name = Path(image_file).name
+
+
 # Convert it to LAB color space to access the luminous channel which is independent of colors.
 def isbright(image_file):
     
@@ -61,9 +102,127 @@ def isbright(image_file):
     L = L/np.max(L)
     
     text_bool = "bright" if np.mean(L) < thresh else "dark"
-
+    
     return image_file_name, np.mean(L), text_bool
     
+
+
+# get weight value based on liner interpolation
+def blend_weight_calculator(left_image_idx, right_image_idx, current_image_idx):
+    
+    window_width = right_image_idx - left_image_idx
+    
+    if window_width > 0:
+        left_weight = abs(right_image_idx - current_image_idx)/window_width
+                    
+        right_weight = abs(current_image_idx - left_image_idx)/window_width
+    else:
+        left_weight = 0.5
+        right_weight = 0.5
+    
+    return left_weight,right_weight
+
+
+# blend two images based on weights
+def blend_image(left_image, right_image, left_weight, right_weight):
+    
+    left_img = cv2.imread(left_image)
+    
+    right_img = cv2.imread(right_image)
+    
+    blended = cv2.addWeighted(left_img, left_weight, right_img, right_weight, 0)
+    
+    return blended
+
+
+# detect dark image and replac them with liner interpolated image
+def check_discard_merge(imgList):
+    
+    # create and assign index list for dark image
+    idx_dark_imglist = [0] * len(imgList)
+    
+    result_list = []
+    
+    
+    for idx, image in enumerate(imgList):
+        
+        img_name, mean_luminosity, luminosity_str = isbright(image)  # luminosity detection, luminosity_str is either 'dark' or 'bright'
+        
+        result_list.append([img_name, mean_luminosity, luminosity_str])
+        
+        idx_dark_imglist[idx] = -1 if luminosity_str == 'dark' else (idx)
+    
+    # Output sum table in command window 
+    print("Summary: {0} plant images were processed...\n".format(n_images))
+    
+    table = tabulate(result_list, headers = ['image_file_name', 'luminous_avg', 'dark_or_bright'], tablefmt = 'orgtbl')
+
+    print(table + "\n")
+
+    #print(idx_dark_imglist)
+    
+    #Finding consecutive occurrences of -1 in an array
+    max_dark_list_length = max(len(list(v)) for g,v in itertools.groupby(idx_dark_imglist))
+    
+    #check max dark image sequence length, current method only deal with case with length equals 2
+    #print(max_dark_list_length)
+    
+    #find dark image index 
+    idx_dark = [i for i,x in enumerate(idx_dark_imglist) if x == -1]
+    
+    #print(idx_dark)
+    
+    #print(len(idx_dark_imglist))
+    
+    # process dark image 
+    if len(idx_dark) > 1:
+        
+        for idx, value in enumerate(idx_dark):
+            
+            #print("current value:{0}".format(value))
+            
+            # if dark image appears as the start of image list
+            if value == 0:
+
+                right_image_idx = ((value+1) if idx_dark_imglist[value+1] != -1 else (value+2))
+                
+                left_image_idx = right_image_idx
+            
+            # if dark image appears as the end of image list
+            elif value == len(idx_dark_imglist)-1:
+                
+                left_image_idx = ((value-1) if idx_dark_imglist[value-1] != -1 else (value-2))
+                
+                right_image_idx = left_image_idx
+            
+            else:
+                
+                left_image_idx = ((value-1) if idx_dark_imglist[value-1] != -1 else (value-2))
+                
+                right_image_idx = ((value+1) if idx_dark_imglist[value+1] != -1 else (value+2))
+
+            
+            #print("current image idx:{0}, left_idx:{1}, right_idx:{2}\n".format(value, left_image_idx, right_image_idx))
+            
+            (left_weight, right_weight) = blend_weight_calculator(left_image_idx, right_image_idx, value)
+            
+            #print("current image idx:{0}, left_idx:{1}, right_idx:{2}, left_weight:{3}, right_weight:{4} \n".format(value, left_image_idx, right_image_idx, left_weight, right_weight))
+            
+
+            blended = blend_image(imgList[left_image_idx], imgList[right_image_idx], left_weight, right_weight)
+ 
+            print("blending current image:{0}, left:{1}, right:{2}, left_weight:{3:.2f}, right_weight:{4:.2f} \n".format(get_basename(imgList[value]), get_basename(imgList[left_image_idx]), get_basename(imgList[right_image_idx]), left_weight, right_weight))
+    
+            # save result by overwriting original files
+            result_file = (imgList[value])
+            cv2.imwrite(result_file, blended)
+            
+            #save result into result folder for debugging
+            result_file = (save_path + get_basename(imgList[value]) + '.' + args['filetype'])
+            cv2.imwrite(result_file, blended)
+
+
+
 
 def result_excel(result_list, file_path):
     
@@ -115,15 +274,20 @@ if __name__ == '__main__':
     # Accquire image file list
     imgList = sorted(glob.glob(image_file_path))
     
-    #imgList = (glob.glob(image_file_path))
-
+    global save_path
+   
+    mkpath = os.path.dirname(file_path) +'/merged'
+    mkdir(mkpath)
+    save_path = mkpath + '/'
+    
     #print((imgList))
     #global save_path
     
     # Get number of images in the data folder
     n_images = len(imgList)
     
-    result_list = []
+    
+    check_discard_merge(imgList)
     
     '''
     # Loop execute
@@ -133,7 +297,7 @@ if __name__ == '__main__':
         
         result_list.append([image_file_name, luminous_avg, dark_or_bright])
     '''
-
+    '''
     # Parallel processing
     
     # get cpu number for parallel processing
@@ -158,4 +322,4 @@ if __name__ == '__main__':
     print(table + "\n")
     
     result_excel(result_list, file_path)
-
+    '''

@@ -581,11 +581,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('-i', '--image', required = True, help = 'Path to image file')
     ap.add_argument('-s', '--color-space', type =str, default ='lab', help='Color space to use: BGR (default), HSV, Lab, YCrCb (YCC)')
-    ap.add_argument('-c', '--channels', type = str, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
-                                                                       + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
-                                                                       + 'selects channels B and R. (default "all")')
-    ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 3, min 2).')
-    args = vars(ap.parse_args())
+      args = vars(ap.parse_args())
     
 
     # load original image
