@@ -4,12 +4,14 @@ Name: luminous_detection.py
 Version: 1.0
 
 Summary: Detect dark images by converting it to LAB color space to access the luminous channel which is independent of colors.
+
+         Add crop image based on marker location and image enhancement modules
     
 Author: suxing liu
 
 Author-email: suxingliu@gmail.com
 
-Created: 2021-03-09
+Created: 2021-04-09
 
 USAGE:
 
@@ -33,6 +35,8 @@ from contextlib import closing
 
 from tabulate import tabulate
 import openpyxl
+from PIL import Image, ImageEnhance
+
 
 import itertools
 
@@ -158,6 +162,9 @@ def check_discard_merge(imgList):
     table = tabulate(result_list, headers = ['image_file_name', 'luminous_avg', 'dark_or_bright'], tablefmt = 'orgtbl')
 
     print(table + "\n")
+    
+    # save dark image detection result as excel file
+    result_excel(result_list, file_path)
 
     #print(idx_dark_imglist)
     
@@ -222,6 +229,72 @@ def check_discard_merge(imgList):
             cv2.imwrite(result_file, blended)
 
 
+# Detect circles in the image
+def circle_detect(image_file):
+   
+    print("Cropping image {}...\n".format(image_file))
+    
+    # load the image, clone it for output, and then convert it to grayscale
+    img_ori = cv2.imread(image_file)
+    
+    img_rgb = img_ori.copy()
+      
+    # Convert it to grayscale 
+    img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY) 
+      
+    # Store width and height of template in w and h 
+    w, h = template.shape[::-1] 
+      
+    # Perform match operations. 
+    res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED) 
+    
+    # Specify a threshold 
+    threshold = 0.8
+      
+    # Store the coordinates of matched area in a numpy array 
+    loc = np.where( res >= threshold)  
+    
+    if len(loc):
+    
+        (y,x) = np.unravel_index(res.argmax(), res.shape)
+    
+        (min_val, max_val, min_loc, max_loc) = cv2.minMaxLoc(res)
+    
+        #print(y,x)
+        
+        #print(min_val, max_val, min_loc, max_loc)
+    
+        # Draw a rectangle around the matched region. 
+        for pt in zip(*loc[::-1]): 
+            circle_overlay = cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,255,255), 2) 
+
+        # save segmentation result
+        #result_file = (save_path + base_name + '_circle.' + args['filetype'])
+        #print(result_file)
+        #cv2.imwrite(result_file, circle_overlay)
+        
+        crop_img = img_rgb[y+150:y+750, x-650:x]
+        
+        # save segmentation result
+        #result_file = (save_path + base_name + '_cropped.' + args['filetype'])
+        #print(result_file)
+        #cv2.imwrite(result_file, crop_img)
+
+    return crop_img
+    
+
+def image_enhance(image_file):
+
+    im = Image.fromarray(cv2.cvtColor(image_file, cv2.COLOR_BGR2RGB))
+    
+    im_sharpness = ImageEnhance.Sharpness(im).enhance(3.5)
+    
+    im_contrast = ImageEnhance.Contrast(im_sharpness).enhance(1.5)
+
+    im_out = ImageEnhance.Brightness(im_contrast).enhance(1.2)
+    
+    return im_out
+
 
 
 def result_excel(result_list, file_path):
@@ -274,11 +347,15 @@ if __name__ == '__main__':
     # Accquire image file list
     imgList = sorted(glob.glob(image_file_path))
     
-    global save_path
+    global save_path, template
    
     mkpath = os.path.dirname(file_path) +'/merged'
     mkdir(mkpath)
     save_path = mkpath + '/'
+    
+    template_path = "/home/suxing/plant-image-analysis/marker_template/template.png"
+    # Read the template 
+    template = cv2.imread(template_path, 0) 
     
     #print((imgList))
     #global save_path
@@ -286,8 +363,23 @@ if __name__ == '__main__':
     # Get number of images in the data folder
     n_images = len(imgList)
     
-    
+    # replace dark image using blended image
     check_discard_merge(imgList)
+    
+    # enhance image Contrast,Brightness,Sharpness
+    for image in imgList:
+       
+        im_out_name = get_basename(image)
+        
+        # construct the result file path
+        result_img_path = save_path + im_out_name + '.' + ext
+        
+        crop_img = circle_detect(image)
+        
+        im_out = image_enhance(crop_img)
+
+        im_out.save(result_img_path)
+    
     
     '''
     # Loop execute

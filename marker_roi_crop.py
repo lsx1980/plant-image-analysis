@@ -128,10 +128,10 @@ def circle_detect(image_file):
         print(result_file)
         cv2.imwrite(result_file, crop_img)
 
-    
-    
-    return image_file_name, (x,y)
-    
+    return image_file_name, (x,y), crop_img
+
+
+
 
 
 if __name__ == '__main__':

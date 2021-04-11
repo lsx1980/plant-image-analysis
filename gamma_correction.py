@@ -36,6 +36,8 @@ from contextlib import closing
 
 import resource
 
+from PIL import Image, ImageEnhance
+
 
 # create result folder
 def mkdir(path):
@@ -133,6 +135,28 @@ def gamma_correction(image_file):
     cv2.imwrite(result_img_path,enhanced_image)
 
 
+def image_enhance(image_file):
+    
+    #parse the file name 
+    path, filename = os.path.split(image_file)
+    
+    #filename, file_extension = os.path.splitext(image_file)
+    
+    # construct the result file path
+    result_img_path = save_path + str(filename[0:-4]) + '.' + ext
+    
+    print("Enhancing image : {0} \n".format(str(filename)))
+    
+    im = Image.open(image_file)
+    
+    im_sharpness = ImageEnhance.Sharpness(im).enhance(3.5)
+    
+    im_contrast = ImageEnhance.Contrast(im_sharpness).enhance(1.5)
+
+    im_out = ImageEnhance.Brightness(im_contrast).enhance(1.2)
+    
+    im_out.save(result_img_path)
+    
 
 
 if __name__ == '__main__':
@@ -178,7 +202,7 @@ if __name__ == '__main__':
     # Create a pool of processes. By default, one is created for each CPU in the machine.
     # extract the bouding box for each image in file list
     with closing(Pool(processes = agents)) as pool:
-        result = pool.map(gamma_correction, imgList)
+        result = pool.map(image_enhance, imgList)
         pool.terminate()
     
       
