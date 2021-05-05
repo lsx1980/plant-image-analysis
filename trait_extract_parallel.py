@@ -250,7 +250,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 1000 
+    min_size = 100 
     
     max_size = width*height*0.1
     

@@ -149,11 +149,11 @@ def image_enhance(image_file):
     
     im = Image.open(image_file)
     
-    im_sharpness = ImageEnhance.Sharpness(im).enhance(3.5)
+    im_sharpness = ImageEnhance.Sharpness(im).enhance(1.5)
     
     im_contrast = ImageEnhance.Contrast(im_sharpness).enhance(1.5)
 
-    im_out = ImageEnhance.Brightness(im_contrast).enhance(1.2)
+    im_out = ImageEnhance.Brightness(im_contrast).enhance(0.8)
     
     im_out.save(result_img_path)
     
