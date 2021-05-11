@@ -273,7 +273,7 @@ def circle_detect(image_file):
         #print(result_file)
         #cv2.imwrite(result_file, circle_overlay)
         
-        crop_img = img_rgb[y+150:y+750, x-650:x]
+        crop_img = img_rgb[y+100:y+800, x-700:x]
         
         # save segmentation result
         #result_file = (save_path + base_name + '_cropped.' + args['filetype'])
@@ -364,7 +364,7 @@ if __name__ == '__main__':
     n_images = len(imgList)
     
     # replace dark image using blended image
-    check_discard_merge(imgList)
+    #check_discard_merge(imgList)
     
     # enhance image Contrast,Brightness,Sharpness
     for image in imgList:
