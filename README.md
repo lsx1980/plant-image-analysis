@@ -4,6 +4,8 @@ Author: Suxing Liu
 
 ![CI](https://github.com/Computational-Plant-Science/arabidopsis-rosette-analysis/workflows/CI/badge.svg)
 
+![Optional Text](../master/media/image_01.png) 
+
 Robust and parameter-free plant image segmentation and trait extraction.
 
 1. Process with plant image top view, including whole tray plant image, this tool will segment it into individual images.
