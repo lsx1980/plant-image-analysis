@@ -273,7 +273,7 @@ def circle_detect(image_file):
         #print(result_file)
         #cv2.imwrite(result_file, circle_overlay)
         
-        crop_img = img_rgb[y+100:y+800, x-700:x]
+        crop_img = img_rgb[y+250:y+700, x-600:x]
         
         # save segmentation result
         #result_file = (save_path + base_name + '_cropped.' + args['filetype'])

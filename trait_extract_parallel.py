@@ -248,7 +248,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 100 
+    min_size = 50 
     
     max_size = width*height*0.1
     
@@ -334,8 +334,17 @@ def watershed_seg(orig, thresh, min_distance_value):
     return labels
 
 
+def percentage(part, whole):
+  
+  percentage = "{:.0%}".format(float(part)/float(whole))
+  
+  return str(percentage)
+
+
+
 def individual_object_seg(orig, labels, save_path, base_name, file_extension):
     
+    num_clusters = 5
     
     (width, height, n_channel) = orig.shape
     
@@ -353,9 +362,41 @@ def individual_object_seg(orig, labels, save_path, base_name, file_extension):
         # apply individual object mask
         masked = cv2.bitwise_and(orig, orig, mask = mask)
         
+        # detect contours in the mask and grab the largest one
+        #cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+        #contours, hierarchy = cv2.findContours(mask.copy(),cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        #c = max(contours, key = cv2.contourArea)
+        
+        #if len(c) >= 5 :
+            #label_img = cv2.drawContours(masked, [c], -1, (255, 0, 0), 2)
+        
+        mkpath_leaf = os.path.dirname(save_path) + '/leaf' + str(label)
+        mkdir(mkpath_leaf)
+        save_path_leaf = mkpath_leaf + '/'
+        
+        
+        
         #define result path 
-        result_img_path = (save_path + base_name + '_leaf_' + str(label) + file_extension)
+        result_img_path = (save_path_leaf + 'leaf_' + str(label) + file_extension)
         cv2.imwrite(result_img_path, masked)
+        
+        #save color quantization result
+        #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
+        rgb_colors, counts = color_region(masked, mask, save_path_leaf, num_clusters)
+        
+        list_counts = list(counts.values())
+        
+        #print(type(list_counts))
+        
+        for value in list_counts:
+            
+            print(percentage(value, np.sum(list_counts)))
+
+
+        
+        
+    
+    
         
 
 
@@ -505,12 +546,23 @@ def comp_external_contour(orig,thresh):
     
     
 
-def compute_curv(orig, labels):
+def compute_curv(orig, labels, save_path, base_name, file_extension):
     
     gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
     
+    leaf_index_rec = []
+    contours_rec = []
+    area_rec = []
+    curv_rec = []
+    color_ratio_rec = []
+    
+    
     curv_sum = 0.0
     count = 0
+    
+    num_clusters = 5
+    
+
     # curvature computation
     # loop over the unique labels returned by the Watershed algorithm
     for index, label in enumerate(np.unique(labels), start = 1):
@@ -523,23 +575,59 @@ def compute_curv(orig, labels):
         # it on the mask
         mask = np.zeros(gray.shape, dtype = "uint8")
         mask[labels == label] = 255
-     
+        
+        
+        # apply individual object mask
+        masked = cv2.bitwise_and(orig, orig, mask = mask)
+        
+        #individual leaf segmentation and color analysis
+        ################################################################################
+        mkpath_leaf = os.path.dirname(save_path) + '/leaf' + str(label)
+        mkdir(mkpath_leaf)
+        save_path_leaf = mkpath_leaf + '/'
+        
+
+        #define result path 
+        result_img_path = (save_path_leaf + 'leaf_' + str(label) + file_extension)
+        cv2.imwrite(result_img_path, masked)
+        
+        #save color quantization result
+        #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
+        rgb_colors, counts = color_region(masked, mask, save_path_leaf, num_clusters)
+        
+        list_counts = list(counts.values())
+        
+        #print(type(list_counts))
+        
+        color_ratio = []
+        
+        for value in list_counts:
+            
+            print(percentage(value, np.sum(list_counts)))
+            
+            color_ratio.append(percentage(value, np.sum(list_counts)))
+            
+            
+        color_ratio_rec.append(color_ratio)
+        
         # detect contours in the mask and grab the largest one
         #cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
         contours, hierarchy = cv2.findContours(mask.copy(),cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         c = max(contours, key = cv2.contourArea)
         
+        #individual leaf curvature computation
+        ################################################################################
         # draw a circle enclosing the object
-        ((x, y), r) = cv2.minEnclosingCircle(c)
-        label_trait = cv2.circle(orig, (int(x), int(y)), 3, (0, 255, 0), 2)
-        label_trait = cv2.putText(orig, "#{}".format(label), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        #((x, y), r) = cv2.minEnclosingCircle(c)
+        #label_trait = cv2.circle(orig, (int(x), int(y)), 3, (0, 255, 0), 2)
+        #label_trait = cv2.putText(orig, "#{}".format(label), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         #cv2.putText(orig, "#{}".format(curvature), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         
         
         if len(c) >= 5 :
-            label_trait = cv2.drawContours(orig, [c], -1, (255, 0, 0), 2)
+            #label_trait = cv2.drawContours(orig, [c], -1, (255, 0, 0), 2)
             ellipse = cv2.fitEllipse(c)
-            label_trait = cv2.ellipse(orig,ellipse,(0,255,0),2)
+            #label_trait = cv2.ellipse(orig,ellipse,(0,255,0),2)
             
             c_np = np.vstack(c).squeeze()
             count+=1
@@ -551,10 +639,16 @@ def compute_curv(orig, labels):
             curvature = comp_curv.fit(x, y)
             
             curv_sum = curv_sum + curvature
+            
+            contours_rec.append(c)
+            area_rec.append(cv2.contourArea(c))
+            curv_rec.append(curvature)
+            
+            
 
         else:
             # optional to "delete" the small contours
-            label_trait = cv2.drawContours(orig, [c], -1, (0, 0, 255), 2)
+            #label_trait = cv2.drawContours(orig, [c], -1, (0, 0, 255), 2)
             print("lack of enough points to fit ellipse")
     
     if count > 0:
@@ -562,7 +656,50 @@ def compute_curv(orig, labels):
     else:
         count = 1.0
     
-    return curv_sum/count, label_trait
+    
+    
+    contours_rec_sorted = [x for _, x in sorted(zip(area_rec, contours_rec), key=lambda pair: pair[0])]
+    
+    #cmap = get_cmap(len(contours_rec_sorted)) 
+    
+    cmap = get_cmap(len(contours_rec_sorted)+1)
+    
+    
+    #individual leaf traits sorting based on area order 
+    ################################################################################
+    for i in range(len(contours_rec_sorted)):
+        
+        c = contours_rec_sorted[i]
+
+        area = cv2.contourArea(c)
+        
+        #color_rgb = cmap(i)[:len(cmap(i))-1]
+        
+        color_rgb = tuple(reversed(cmap(i)[:len(cmap(i))-1]))
+        
+        color_rgb = tuple([255*x for x in color_rgb])
+        
+        #print(type(color_rgb))
+        
+        # draw a circle enclosing the object
+        ((x, y), r) = cv2.minEnclosingCircle(c)
+        #label_trait = cv2.circle(orig, (int(x), int(y)), 3, (0, 255, 0), 2)
+        
+        #draw filled contour
+        #label_trait = cv2.drawContours(orig, [c], -1, color_rgb, -1)
+        
+        label_trait = cv2.drawContours(orig, [c], -1, color_rgb, 2)
+        
+        label_trait = cv2.putText(orig, "#{}".format(i), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rgb, 2)
+        
+        leaf_index_rec.append(i)
+        
+        #label_trait = cv2.putText(orig, "#{}".format(area), (int(x) - 10, int(y) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 1)
+    ################################################################################
+    
+    return curv_sum/count, label_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, color_ratio_rec
+    
+    
 
 
 def RGB2HEX(color):
@@ -684,7 +821,7 @@ def color_quantization(image, mask, save_path, num_clusters):
     return rgb_colors
 '''
 
-def get_cmap(n, name='hsv'):
+def get_cmap(n, name = 'hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     return plt.cm.get_cmap(name, n)
@@ -859,7 +996,7 @@ def color_region(image, mask, save_path, num_clusters):
     plt.savefig(result_img_path)
 
    
-    return rgb_colors
+    return rgb_colors, counts
 
 
 def _normalise_image(image, *, image_cmap=None):
@@ -1040,7 +1177,7 @@ def extract_traits(image_file):
         num_clusters = 5
         #save color quantization result
         #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
-        rgb_colors = color_region(orig, thresh, save_path, num_clusters)
+        rgb_colors, counts = color_region(orig, thresh, save_path, num_clusters)
         
         selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
         '''
@@ -1126,13 +1263,13 @@ def extract_traits(image_file):
         '''
          
         ############################################## leaf number computation
-        min_distance_value = 20
+        min_distance_value = 10
         #watershed based leaf area segmentaiton 
         labels = watershed_seg(orig, thresh, min_distance_value)
         
         #labels = watershed_seg_marker(orig, thresh, min_distance_value, img_marker)
         
-        individual_object_seg(orig, labels, save_path, base_name, file_extension)
+        #individual_object_seg(orig, labels, save_path, base_name, file_extension)
 
         #save watershed result label image
         #Map component labels to hue val
@@ -1150,7 +1287,9 @@ def extract_traits(image_file):
         #plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
         cv2.imwrite(result_file, labeled_img)
         
-        (avg_curv, label_trait) = compute_curv(orig, labels)
+        (avg_curv, label_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, color_ratio_rec) = compute_curv(orig, labels, save_path, base_name, file_extension)
+        
+        #print(area_rec, curv_rec, color_ratio_rec)
         
          #save watershed result label image
         result_file = (save_path + base_name + '_curv' + file_extension)
@@ -1174,7 +1313,7 @@ def extract_traits(image_file):
     
     #Path("/tmp/d/a.dat").name
     
-    return image_file_name, area, solidity, max_width, max_height, avg_curv, n_leaves
+    return image_file_name, area, solidity, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, color_ratio_rec
     
 
 
@@ -1213,12 +1352,16 @@ if __name__ == '__main__':
     
     result_list = []
     
+    result_list_leaf = []
+    
     #loop execute
     for image in imgList:
         
-        (filename, area, solidity, max_width, max_height, avg_curv, n_leaves) = extract_traits(image)
+        (filename, area, solidity, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, color_ratio_rec) = extract_traits(image)
         
         result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves])
+        
+        result_list_leaf.append([leaf_index_rec, area_rec, curv_rec])
     
     
     #print(result_list)
@@ -1241,7 +1384,7 @@ if __name__ == '__main__':
     with closing(Pool(processes = agents)) as pool:
         result_list = pool.map(extract_traits, imgList)
         pool.terminate()
-    
+    '''
     
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
     
@@ -1252,11 +1395,19 @@ if __name__ == '__main__':
     table = tabulate(result_list, headers = ['filename', 'area', 'solidity', 'max_width', 'max_height' ,'avg_curv', 'n_leaves'], tablefmt = 'orgtbl')
 
     print(table + "\n")
+    
+    
+    
+    print("Summary: {0} plant images were processed...\n".format(n_images))
+    
+    #output in command window in a sum table
+ 
+    table = tabulate(result_list_leaf, headers = ['leaf_index', 'area', 'curvature'], tablefmt = 'orgtbl')
+
+    print(table + "\n")
+    
+    
     '''
-    
-    
-    
-    
     if (args['result']):
 
         trait_file = (args['result'] + 'trait.xlsx')
@@ -1299,7 +1450,7 @@ if __name__ == '__main__':
         c = csv.writer(f)
         for r in sh.rows: # generator; was sh.rows
             c.writerow([cell.value for cell in r])
-    
+    '''
 
     
 
