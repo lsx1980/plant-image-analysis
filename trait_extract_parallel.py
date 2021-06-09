@@ -56,6 +56,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
+import math
 import openpyxl
 import csv
     
@@ -341,7 +342,7 @@ def percentage(part, whole):
   return str(percentage)
 
 
-
+'''
 def individual_object_seg(orig, labels, save_path, base_name, file_extension):
     
     num_clusters = 5
@@ -391,7 +392,7 @@ def individual_object_seg(orig, labels, save_path, base_name, file_extension):
         for value in list_counts:
             
             print(percentage(value, np.sum(list_counts)))
-
+'''
 
         
         
@@ -545,8 +546,8 @@ def comp_external_contour(orig,thresh):
     return trait_img, area, solidity, w, h
     
     
-
-def compute_curv(orig, labels, save_path, base_name, file_extension):
+# individual leaf object segmentation and traits computation
+def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
     
     gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
     
@@ -554,10 +555,13 @@ def compute_curv(orig, labels, save_path, base_name, file_extension):
     contours_rec = []
     area_rec = []
     curv_rec = []
+    solidity_rec = []
+    major_axis_rec = []
+    minor_axis_rec = []
+    
     color_ratio_rec = []
     
     
-    curv_sum = 0.0
     count = 0
     
     num_clusters = 5
@@ -603,60 +607,32 @@ def compute_curv(orig, labels, save_path, base_name, file_extension):
         
         for value in list_counts:
             
-            print(percentage(value, np.sum(list_counts)))
+            #print(percentage(value, np.sum(list_counts)))
             
             color_ratio.append(percentage(value, np.sum(list_counts)))
             
             
         color_ratio_rec.append(color_ratio)
         
+        
         # detect contours in the mask and grab the largest one
         #cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
         contours, hierarchy = cv2.findContours(mask.copy(),cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         c = max(contours, key = cv2.contourArea)
         
-        #individual leaf curvature computation
-        ################################################################################
-        # draw a circle enclosing the object
-        #((x, y), r) = cv2.minEnclosingCircle(c)
-        #label_trait = cv2.circle(orig, (int(x), int(y)), 3, (0, 255, 0), 2)
-        #label_trait = cv2.putText(orig, "#{}".format(label), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-        #cv2.putText(orig, "#{}".format(curvature), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         
-        
+       
         if len(c) >= 5 :
-            #label_trait = cv2.drawContours(orig, [c], -1, (255, 0, 0), 2)
-            ellipse = cv2.fitEllipse(c)
-            #label_trait = cv2.ellipse(orig,ellipse,(0,255,0),2)
-            
-            c_np = np.vstack(c).squeeze()
-            count+=1
-            
-            x = c_np[:,0]
-            y = c_np[:,1]
-            
-            comp_curv = ComputeCurvature(x, y)
-            curvature = comp_curv.fit(x, y)
-            
-            curv_sum = curv_sum + curvature
-            
+
             contours_rec.append(c)
             area_rec.append(cv2.contourArea(c))
-            curv_rec.append(curvature)
-            
-            
 
         else:
             # optional to "delete" the small contours
             #label_trait = cv2.drawContours(orig, [c], -1, (0, 0, 255), 2)
             print("lack of enough points to fit ellipse")
     
-    if count > 0:
-        print('average curvature = {0:.2f}\n'.format(curv_sum/count))
-    else:
-        count = 1.0
-    
-    
+ 
     
     contours_rec_sorted = [x for _, x in sorted(zip(area_rec, contours_rec), key=lambda pair: pair[0])]
     
@@ -665,21 +641,19 @@ def compute_curv(orig, labels, save_path, base_name, file_extension):
     cmap = get_cmap(len(contours_rec_sorted)+1)
     
     
+    #clean area record list
+    area_rec = []
     #individual leaf traits sorting based on area order 
     ################################################################################
     for i in range(len(contours_rec_sorted)):
         
         c = contours_rec_sorted[i]
-
-        area = cv2.contourArea(c)
         
-        #color_rgb = cmap(i)[:len(cmap(i))-1]
-        
+        #assign unique color value in opencv format
         color_rgb = tuple(reversed(cmap(i)[:len(cmap(i))-1]))
         
         color_rgb = tuple([255*x for x in color_rgb])
         
-        #print(type(color_rgb))
         
         # draw a circle enclosing the object
         ((x, y), r) = cv2.minEnclosingCircle(c)
@@ -688,16 +662,79 @@ def compute_curv(orig, labels, save_path, base_name, file_extension):
         #draw filled contour
         #label_trait = cv2.drawContours(orig, [c], -1, color_rgb, -1)
         
-        label_trait = cv2.drawContours(orig, [c], -1, color_rgb, 2)
+        #label_trait = cv2.drawContours(orig, [c], -1, color_rgb, 2)
         
-        label_trait = cv2.putText(orig, "#{}".format(i), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rgb, 2)
+        label_trait = cv2.putText(orig, "#{}".format(i), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rgb, 1)
         
+        
+        #######################################individual leaf curvature computation
+        
+        #Gets rotated bounding ellipse of contour
+        ellipse = cv2.fitEllipse(c)
+        
+        #get paramters of ellipse
+        ((xc,yc), (d1,d2), angle) = ellipse
+        
+        # draw circle at ellipse center
+        label_trait = cv2.ellipse(orig, ellipse, color_rgb, 2)
+        label_trait = cv2.circle(orig, (int(xc),int(yc)), 2, color_rgb, -1)
+        
+        #draw major radius
+        #compute major radius
+        rmajor = max(d1,d2)/2
+        rminor = min(d1,d2)/2
+        
+        if angle > 90:
+            angle = angle - 90
+        else:
+            angle = angle + 90
+        
+        #print(angle)
+        
+        xtop = xc + math.cos(math.radians(angle))*rmajor
+        ytop = yc + math.sin(math.radians(angle))*rmajor
+        xbot = xc + math.cos(math.radians(angle+180))*rmajor
+        ybot = yc + math.sin(math.radians(angle+180))*rmajor
+        
+        label_trait = cv2.line(orig, (int(xtop),int(ytop)), (int(xbot),int(ybot)), color_rgb, 1)
+        label_trait = cv2.line(orig, (int(xtop),int(ytop)), (int(xbot),int(ybot)), color_rgb, 1)
+
+                
+        c_np = np.vstack(c).squeeze()
+        
+        x = c_np[:,0]
+        y = c_np[:,1]
+        
+        comp_curv = ComputeCurvature(x, y)
+        
+        curvature = comp_curv.fit(x, y)
+        
+        #compute solidity
+        solidity = float(cv2.contourArea(c))/cv2.contourArea(cv2.convexHull(c))
+        
+        #print("solidity = {0:.2f}... \n".format(solidity))
+        
+
+        
+        #record all traits 
         leaf_index_rec.append(i)
+        area_rec.append(cv2.contourArea(c))
+        curv_rec.append(curvature)
         
-        #label_trait = cv2.putText(orig, "#{}".format(area), (int(x) - 10, int(y) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 1)
+        solidity_rec.append(solidity)
+        major_axis_rec.append(rmajor)
+        minor_axis_rec.append(rminor)
+        
     ################################################################################
     
-    return curv_sum/count, label_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, color_ratio_rec
+    n_contours = len(contours_rec_sorted)
+    
+    if n_contours > 0:
+        print('average curvature = {0:.2f}\n'.format(sum(curv_rec)/n_contours))
+    else:
+        n_contours = 1.0
+    
+    return sum(curv_rec)/n_contours, label_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
     
     
 
@@ -903,7 +940,7 @@ def color_region(image, mask, save_path, num_clusters):
 
     for cluster in range(num_clusters):
 
-        print("Processing Cluster{0} ...\n".format(cluster))
+        print("Processing color cluster {0} ...\n".format(cluster))
         #print(clrs[cluster])
         #print(color_conversion(clrs[cluster]))
 
@@ -1287,7 +1324,7 @@ def extract_traits(image_file):
         #plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
         cv2.imwrite(result_file, labeled_img)
         
-        (avg_curv, label_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, color_ratio_rec) = compute_curv(orig, labels, save_path, base_name, file_extension)
+        (avg_curv, label_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec) = leaf_traits_computation(orig, labels, save_path, base_name, file_extension)
         
         #print(area_rec, curv_rec, color_ratio_rec)
         
@@ -1313,7 +1350,7 @@ def extract_traits(image_file):
     
     #Path("/tmp/d/a.dat").name
     
-    return image_file_name, area, solidity, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, color_ratio_rec
+    return image_file_name, area, solidity, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
     
 
 
@@ -1357,11 +1394,13 @@ if __name__ == '__main__':
     #loop execute
     for image in imgList:
         
-        (filename, area, solidity, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, color_ratio_rec) = extract_traits(image)
+        (filename, area, solidity, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec) = extract_traits(image)
         
         result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves])
         
-        result_list_leaf.append([leaf_index_rec, area_rec, curv_rec])
+        for i in range(len(leaf_index_rec)):
+            
+            result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], color_ratio_rec[i][0], color_ratio_rec[i][1], color_ratio_rec[i][2], color_ratio_rec[i][3]])
     
     
     #print(result_list)
@@ -1398,16 +1437,16 @@ if __name__ == '__main__':
     
     
     
-    print("Summary: {0} plant images were processed...\n".format(n_images))
+    print("Summary: Leaf specific traits...\n")
     
     #output in command window in a sum table
  
-    table = tabulate(result_list_leaf, headers = ['leaf_index', 'area', 'curvature'], tablefmt = 'orgtbl')
+    table = tabulate(result_list_leaf, headers = ['filename', 'leaf_index', 'area', 'curvature', 'solidity', 'major_axis', 'minor_axis', 'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4'], tablefmt = 'orgtbl')
 
     print(table + "\n")
     
     
-    '''
+    
     if (args['result']):
 
         trait_file = (args['result'] + 'trait.xlsx')
@@ -1424,11 +1463,15 @@ if __name__ == '__main__':
 
         #Get the current Active Sheet
         sheet = wb.active
+        
+        sheet_leaf = wb.create_sheet()
 
     else:
         # Keep presets
         wb = openpyxl.Workbook()
         sheet = wb.active
+        
+        sheet_leaf = wb.create_sheet()
 
         sheet.cell(row = 1, column = 1).value = 'filename'
         sheet.cell(row = 1, column = 2).value = 'leaf_area'
@@ -1437,13 +1480,33 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 5).value = 'max_height'
         sheet.cell(row = 1, column = 6).value = 'curvature'
         sheet.cell(row = 1, column = 7).value = 'number_leaf'
-    
+        
+        sheet_leaf.cell(row = 1, column = 1).value = 'filename'
+        sheet_leaf.cell(row = 1, column = 2).value = 'leaf_index'
+        sheet_leaf.cell(row = 1, column = 3).value = 'area'
+        sheet_leaf.cell(row = 1, column = 4).value = 'curvature'
+        sheet_leaf.cell(row = 1, column = 5).value = 'solidity'
+        sheet_leaf.cell(row = 1, column = 6).value = 'major_axis'
+        sheet_leaf.cell(row = 1, column = 7).value = 'minor_axis'
+        sheet_leaf.cell(row = 1, column = 8).value = 'color distribution cluster 1'
+        sheet_leaf.cell(row = 1, column = 9).value = 'color distribution cluster 2'
+        sheet_leaf.cell(row = 1, column = 10).value = 'color distribution cluster 3'
+        sheet_leaf.cell(row = 1, column = 11).value = 'color distribution cluster 4'
+        
+        
     for row in result_list:
         sheet.append(row)
    
+    #for row in result_list_leaf:
+        #sheet_leaf.append(row)
+        
+    for row in result_list_leaf:
+        sheet_leaf.append(row)
+    
     #save the csv file
     wb.save(trait_file)
     
+    '''
     wb = openpyxl.load_workbook(trait_file)
     sh = wb.active # was .get_active_sheet()
     with open(trait_file_csv, 'w', newline = "") as f:
