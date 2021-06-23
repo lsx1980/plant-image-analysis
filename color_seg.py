@@ -155,7 +155,9 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     else:
         thresh_cleaned_bw = thresh
         
-    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned_bw, connectivity = 8)
+    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
+    
+    
     
     # stats[0], centroids[0] are for the background label. ignore
     # cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT
@@ -177,7 +179,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 50 
+    min_size = 50
     
     max_size = width*height*0.1
     
@@ -185,7 +187,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     #for every component in the image, keep it only if it's above min_size
     for i in range(0, nb_components):
-        
+        '''
         if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
             img_thresh[output == i + 1] = 255
             
@@ -195,7 +197,11 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
             imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
             img_thresh[output == imax] = 255
             print("Foreground max found ")
-       
+        '''
+        
+        if (sizes[i] >= min_size):
+        
+            img_thresh[output == i + 1] = 255
     
     #from skimage import img_as_ubyte
     
@@ -205,7 +211,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #print(img_thresh.dtype)
     
     #return img_thresh
-    return thresh_cleaned_bw
+    return img_thresh
     
 '''
 def medial_axis_image(thresh):
@@ -235,7 +241,7 @@ def comp_external_contour(orig, thresh, save_path):
         #get the bounding rect
         x, y, w, h = cv2.boundingRect(c)
         
-        if w>img_width*0.1 and h>img_height*0.1:
+        if w>img_width*0.05 and h>img_height*0.05:
             
             offset_w = int(w*0.05)
             offset_h = int(h*0.05)
@@ -252,7 +258,7 @@ def comp_external_contour(orig, thresh, save_path):
             
             trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 3)
             
-            trait_img = cv2.putText(orig, "#{}".format(index), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (255, 0, 255), 10)
+            #trait_img = cv2.putText(orig, "#{}".format(index), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (255, 0, 255), 10)
             
             index+= 1
 
@@ -296,6 +302,11 @@ def segmentation(image_file):
     #color clustering based plant object segmentation
     thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
     
+    result_mask = save_path + 'mask.' + ext
+    
+    cv2.imwrite(result_mask, thresh)
+    
+    
     #find external contour and segment image into small ROI based on each plant
     trait_img = comp_external_contour(image.copy(),thresh, save_path)
     
@@ -303,7 +314,8 @@ def segmentation(image_file):
             
     cv2.imwrite(result_file, trait_img)
     
-    return thresh, trait_img
+    return thresh
+    #trait_img
     
     
     
@@ -362,7 +374,7 @@ if __name__ == '__main__':
     #loop execute
     for image in imgList:
         
-        (thresh, trait_img) = segmentation(image)
+        (thresh) = segmentation(image)
         
         
     #color clustering based plant object segmentation

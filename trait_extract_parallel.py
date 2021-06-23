@@ -249,7 +249,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 50 
+    min_size = 100 
     
     max_size = width*height*0.1
     
@@ -622,7 +622,7 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         
         
        
-        if len(c) >= 5 :
+        if len(c) >= 50 :
 
             contours_rec.append(c)
             area_rec.append(cv2.contourArea(c))
@@ -664,7 +664,7 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         
         #label_trait = cv2.drawContours(orig, [c], -1, color_rgb, 2)
         
-        label_trait = cv2.putText(orig, "#{}".format(i), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rgb, 1)
+        label_trait = cv2.putText(orig, "#{}".format(i+1), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rgb, 1)
         
         
         #######################################individual leaf curvature computation
@@ -1236,7 +1236,7 @@ def extract_traits(image_file):
         '''
         
         ###############################################
-        '''
+        
         #accquire medial axis of segmentation mask
         #image_medial_axis = medial_axis_image(thresh)
         
@@ -1252,7 +1252,7 @@ def extract_traits(image_file):
         #'image-coord-src-0', 'image-coord-src-1', 'image-coord-dst-0', 'image-coord-dst-1', 
         #'coord-src-0', 'coord-src-1', 'coord-dst-0', 'coord-dst-1', 'euclidean-distance']
         ###
-        
+        '''
         #get brach data
         branch_data = summarize(Skeleton(image_skeleton))
         #print(branch_data)
@@ -1300,7 +1300,7 @@ def extract_traits(image_file):
         '''
          
         ############################################## leaf number computation
-        min_distance_value = 10
+        min_distance_value = 15
         #watershed based leaf area segmentaiton 
         labels = watershed_seg(orig, thresh, min_distance_value)
         

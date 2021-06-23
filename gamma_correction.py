@@ -99,7 +99,38 @@ def image_enhance(img):
     
     return img_enhance
 
+# Convert it to LAB color space to access the luminous channel which is independent of colors.
+def isbright(image_file):
+    
+    # Set up threshold value for luminous channel, can be adjusted and generalized 
+    thresh = 0.1
+    
+    # Load image file 
+    orig = cv2.imread(image_file)
+    
+    # Make backup image
+    image = orig.copy()
+    
+    # Get file name
+    #abs_path = os.path.abspath(image_file)
+    
+    #filename, file_extension = os.path.splitext(abs_path)
+    #base_name = os.path.splitext(os.path.basename(filename))[0]
 
+    #image_file_name = Path(image_file).name
+    
+    # Convert color space to LAB format and extract L channel
+    L, A, B = cv2.split(cv2.cvtColor(image, cv2.COLOR_BGR2LAB))
+    
+    # Normalize L channel by dividing all pixel values with maximum pixel value
+    L = L/np.max(L)
+    
+    text_bool = "bright" if np.mean(L) < thresh else "dark"
+    
+    print(np.mean(L))
+    
+    return np.mean(L) > thresh
+    
 
 def gamma_correction(image_file):
     
@@ -130,6 +161,8 @@ def gamma_correction(image_file):
     adjusted = adjust_gamma(image, gamma=gamma)
     
     enhanced_image = image_enhance(adjusted)
+    
+    
 
     # save result as images for reference
     cv2.imwrite(result_img_path,enhanced_image)
@@ -157,6 +190,38 @@ def image_enhance(image_file):
     
     im_out.save(result_img_path)
     
+
+def Adaptive_Histogram_Equalization(image_file):
+    
+     #parse the file name 
+    path, filename = os.path.split(image_file)
+    
+    #filename, file_extension = os.path.splitext(image_file)
+    
+    # construct the result file path
+    result_img_path = save_path + str(filename[0:-4]) + '.' + ext
+    
+    print("AHE image : {0} \n".format(str(filename)))
+
+    #print(isbright(image_file))
+
+     # Load the image
+    bgr = cv2.imread(image_file)
+
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+
+    lab_planes = cv2.split(lab)
+
+    clahe = cv2.createCLAHE(clipLimit=2.0,tileGridSize=(8,8))
+
+    lab_planes[0] = clahe.apply(lab_planes[0])
+
+    lab = cv2.merge(lab_planes)
+
+    out = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+    # save result as images for reference
+    cv2.imwrite(result_img_path, out)
 
 
 if __name__ == '__main__':
@@ -190,6 +255,14 @@ if __name__ == '__main__':
     save_path = mkpath + '/'
 
     #print "results_folder: " + save_path  
+    
+    # Loop execute
+    for image in imgList:
+        
+        Adaptive_Histogram_Equalization(image)
+        
+
+    '''
 
     
     # get cpu number for parallel processing
@@ -202,9 +275,9 @@ if __name__ == '__main__':
     # Create a pool of processes. By default, one is created for each CPU in the machine.
     # extract the bouding box for each image in file list
     with closing(Pool(processes = agents)) as pool:
-        result = pool.map(image_enhance, imgList)
+        result = pool.map(Adaptive_Histogram_Equalization, imgList)
         pool.terminate()
-    
+    '''
       
     # monitor memory usage 
     rusage_denom = 1024.0
