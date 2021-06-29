@@ -38,6 +38,7 @@ from scipy.spatial import distance as dist
 from scipy import optimize
 from scipy import ndimage
 
+import math
 
 import numpy as np
 import argparse
@@ -187,6 +188,8 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     #for every component in the image, keep it only if it's above min_size
     for i in range(0, nb_components):
+        
+        #print("{} nb_components found".format(i))
         '''
         if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
             img_thresh[output == i + 1] = 255
@@ -226,6 +229,62 @@ def medial_axis_image(thresh):
     return image_medial_axis
 '''
 
+
+class clockwise_angle_and_distance():
+    
+
+    '''
+    A class to tell if point is clockwise from origin or not.
+    This helps if one wants to use sorted() on a list of points.
+
+    Parameters
+    ----------
+    point : ndarray or list, like [x, y]. The point "to where" we g0
+    self.origin : ndarray or list, like [x, y]. The center around which we go
+    refvec : ndarray or list, like [x, y]. The direction of reference
+
+    use: 
+        instantiate with an origin, then call the instance during sort
+    reference: 
+    https://stackoverflow.com/questions/41855695/sorting-list-of-two-dimensional-coordinates-by-clockwise-angle-using-python
+
+    Returns
+    -------
+    angle
+    
+    distance
+    
+
+    '''
+    def __init__(self, origin):
+        self.origin = origin
+
+    def __call__(self, point, refvec = [0, 1]):
+        if self.origin is None:
+            raise NameError("clockwise sorting needs an origin. Please set origin.")
+        # Vector between point and the origin: v = p - o
+        vector = [point[0]-self.origin[0], point[1]-self.origin[1]]
+        # Length of vector: ||v||
+        lenvector = np.linalg.norm(vector[0] - vector[1])
+        # If length is zero there is no angle
+        if lenvector == 0:
+            return -pi, 0
+        # Normalize vector: v/||v||
+        normalized = [vector[0]/lenvector, vector[1]/lenvector]
+        dotprod  = normalized[0]*refvec[0] + normalized[1]*refvec[1] # x1*x2 + y1*y2
+        diffprod = refvec[1]*normalized[0] - refvec[0]*normalized[1] # x1*y2 - y1*x2
+        angle = math.atan2(diffprod, dotprod)
+        # Negative angles represent counter-clockwise angles so we need to 
+        # subtract them from 2*pi (360 degrees)
+        if angle < 0:
+            return 2*math.pi+angle, lenvector
+        # I return first the angle because that's the primary sorting criterium
+        # but if two vectors have the same angle then the shorter distance 
+        # should come first.
+        return angle, lenvector
+
+
+
 def comp_external_contour(orig, thresh, save_path):
     
     #find contours and get the external one
@@ -236,12 +295,60 @@ def comp_external_contour(orig, thresh, save_path):
     
     index = 1
     
+    
+    print("contour length {}".format(len(contours)))
+    
+    
+    list_of_pts = []
+    
+    if len(contours) > 1:
+        
+        
+        '''
+        for ctr in contours:
+            
+            list_of_pts += [pt[0] for pt in ctr]
+    
+        center_pt = np.array(list_of_pts).mean(axis = 0) # get origin
+        
+        clock_ang_dist = clockwise_angle_and_distance(center_pt) # set origin
+        
+        list_of_pts = sorted(list_of_pts, key=clock_ang_dist) # use to sort
+        
+        contours_joined = np.array(list_of_pts).reshape((-1,1,2)).astype(np.int32)
+        
+        
+        '''
+        kernel = np.ones((4,4), np.uint8)
+
+        dilation = cv2.dilate(thresh.copy(), kernel, iterations = 1)
+        
+        closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
+        
+        trait_img = closing
+        
+    
+
+    
+    #trait_img = cv2.drawContours(thresh, contours_joined, -1, (0,255,255), -1)
+    
+    #x, y, w, h = cv2.boundingRect(contours_joined)
+    
+    #trait_img = cv2.rectangle(thresh, (x, y), (x+w, y+h), (255, 255, 0), 3)
+    
+    contours, hier = cv2.findContours(trait_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    print("contour length {}".format(len(contours)))
+    
+    '''
     for c in contours:
         
         #get the bounding rect
         x, y, w, h = cv2.boundingRect(c)
         
-        if w>img_width*0.05 and h>img_height*0.05:
+        #if w>img_width*0.05 and h>img_height*0.05:
+            
+        if w>0 and h>0:
             
             offset_w = int(w*0.05)
             offset_h = int(h*0.05)
@@ -258,9 +365,13 @@ def comp_external_contour(orig, thresh, save_path):
             
             trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 3)
             
+            
+            
             #trait_img = cv2.putText(orig, "#{}".format(index), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (255, 0, 255), 10)
             
             index+= 1
+     '''
+            
 
     return trait_img
 

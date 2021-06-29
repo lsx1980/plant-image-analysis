@@ -167,7 +167,6 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         
     else:
         colorSpace = 'bgr'  # set for file naming purposes
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     # Keep only the selected channels for K-means clustering.
     if args_channels != 'all':
@@ -213,22 +212,19 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     for i, label in enumerate(sortedLabels):
         kmeansImage[clustering == label] = int(255 / (numClusters - 1)) * i
     
-    ret, thresh = cv2.threshold(kmeansImage, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    #return thresh =
+    #thresh_cleaned = clear_border(thresh)
     
-    #num_of_non_zeros = np.count_nonzero(thresh)
-    
-    thresh_cleaned = clear_border(thresh)
     
     if np.count_nonzero(thresh) > 0:
         
-        thresh_cleaned_bw = clear_border(thresh)
+        thresh_cleaned = clear_border(thresh)
     else:
-        thresh_cleaned_bw = thresh
+        thresh_cleaned = thresh
         
-    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned_bw, connectivity = 8)
-    
+    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
+
     # stats[0], centroids[0] are for the background label. ignore
     # cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT
     sizes = stats[1:, cv2.CC_STAT_AREA]
@@ -249,28 +245,31 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 100 
+    min_size = 50
     
     max_size = width*height*0.1
     
     img_thresh = np.zeros([width, height], dtype=np.uint8)
     
-    
+    #for every component in the image, keep it only if it's above min_size
     for i in range(0, nb_components):
         
+        #print("{} nb_components found".format(i))
+        '''
+        if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
+            img_thresh[output == i + 1] = 255
+            
+            print("Foreground center found ")
+            
+        elif ((Coord_width[i] - Coord_left[i])*0.5 - width < 15) and (centroids[i][0] - width*0.5 < 15) and (centroids[i][1] - height*0.5 < 15) and ((sizes[i] <= max_size)):
+            imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
+            img_thresh[output == imax] = 255
+            print("Foreground max found ")
+        '''
+        
         if (sizes[i] >= min_size):
-            
-            if (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and (centroids[i][1] - height*0.5 < 10):
-                img_thresh[output == i + 1] = 255
-                print("Foreground center found ")
-            
-            elif ((Coord_width[i] - Coord_left[i])*0.5 - width < 15) and (centroids[i][0] - width*0.5 < 15) and (centroids[i][1] - height*0.5 < 15) and ((sizes[i] <= max_size)):
-                imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
-                img_thresh[output == imax] = 255
-                print("Foreground max found ")
-            
-            else:
-                img_thresh[output == i + 1] = 255
+        
+            img_thresh[output == i + 1] = 255
     
     #from skimage import img_as_ubyte
     
@@ -279,6 +278,20 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #print("img_thresh.dtype")
     #print(img_thresh.dtype)
     
+    contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    if len(contours) > 1:
+        
+        kernel = np.ones((4,4), np.uint8)
+
+        dilation = cv2.dilate(img_thresh.copy(), kernel, iterations = 1)
+        
+        closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
+        
+        img_thresh = closing
+        
+    
+    #return img_thresh
     return img_thresh
     
     #return thresh_cleaned
@@ -1122,7 +1135,7 @@ def outlier_doubleMAD(data,thresh = 3.5):
 def isbright(image_file):
     
     # Set up threshold value for luminous channel, can be adjusted and generalized 
-    thresh = 0.5
+    thresh = 1.5
     
     # Load image file 
     orig = cv2.imread(image_file)
@@ -1147,6 +1160,8 @@ def isbright(image_file):
     text_bool = "bright" if np.mean(L) < thresh else "dark"
     
     #return image_file_name, np.mean(L), text_bool
+    
+    print("np.mean(L) < thresh = {}".format(np.mean(L)))
     
     return np.mean(L) < thresh
 
@@ -1206,6 +1221,7 @@ def extract_traits(image_file):
         
         # save segmentation result
         result_file = (save_path + base_name + '_seg' + file_extension)
+        
         #print(filename)
         cv2.imwrite(result_file, thresh)
         
@@ -1217,6 +1233,8 @@ def extract_traits(image_file):
         rgb_colors, counts = color_region(orig, thresh, save_path, num_clusters)
         
         selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
+        
+        ####################################################
         '''
         print("Color difference are : ") 
         
@@ -1298,9 +1316,9 @@ def extract_traits(image_file):
         plt.close()
         
         '''
-         
+        
         ############################################## leaf number computation
-        min_distance_value = 15
+        min_distance_value = 20
         #watershed based leaf area segmentaiton 
         labels = watershed_seg(orig, thresh, min_distance_value)
         
@@ -1352,7 +1370,7 @@ def extract_traits(image_file):
     
     return image_file_name, area, solidity, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
     
-
+    
 
 
 
@@ -1401,14 +1419,14 @@ if __name__ == '__main__':
         for i in range(len(leaf_index_rec)):
             
             result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], color_ratio_rec[i][0], color_ratio_rec[i][1], color_ratio_rec[i][2], color_ratio_rec[i][3]])
-    
+    '''
     
     #print(result_list)
     
+    for image in imgList:
     
-    
-
-    
+        extract_traits(image)
+    '''
 
     '''
     # get cpu number for parallel processing
@@ -1425,6 +1443,7 @@ if __name__ == '__main__':
         pool.terminate()
     '''
     
+    '''
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
     
     print("Summary: {0} plant images were processed...\n".format(n_images))
@@ -1505,6 +1524,8 @@ if __name__ == '__main__':
     
     #save the csv file
     wb.save(trait_file)
+    
+    '''
     
     '''
     wb = openpyxl.load_workbook(trait_file)
