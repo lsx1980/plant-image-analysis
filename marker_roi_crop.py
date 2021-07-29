@@ -122,9 +122,14 @@ def circle_detect(image_file):
         #print(result_file)
         #cv2.imwrite(result_file, circle_overlay)
         
-        #crop_img = img_rgb[y-200:y+950, x-950:x+450]
+        #crop_img = img_rgb[y-350:y+1050, x-1050:x+550]
         
-        crop_img = img_rgb[y+150:y+750, x-650:x]
+        #crop_img = img_rgb[y+150:y+1050, x-850:x+250]
+        
+        #crop_img = img_rgb[y+50:y+850, x-750:x+150]
+        
+        crop_img = img_rgb[y+200:y+800, x-650:x+0]
+        
         # save segmentation result
         result_file = (save_path + base_name + '_cropped.' + args['filetype'])
         print(result_file)
@@ -157,7 +162,7 @@ if __name__ == '__main__':
     imgList = sorted(glob.glob(image_file_path))
     
     global  template
-    template_path = "/home/suxing/plant-image-analysis/marker_template/marker_rotate.png"
+    template_path = "/home/suxing/plant-image-analysis/marker_template/template_10.png"
     # Read the template 
     template = cv2.imread(template_path, 0) 
     print(template)

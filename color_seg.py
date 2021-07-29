@@ -180,7 +180,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 50
+    min_size = 100
     
     max_size = width*height*0.1
     
@@ -190,7 +190,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     for i in range(0, nb_components):
         
         #print("{} nb_components found".format(i))
-        '''
+        
         if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
             img_thresh[output == i + 1] = 255
             
@@ -200,11 +200,11 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
             imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
             img_thresh[output == imax] = 255
             print("Foreground max found ")
-        '''
         
-        if (sizes[i] >= min_size):
         
-            img_thresh[output == i + 1] = 255
+        #if (sizes[i] >= min_size):
+        
+            #img_thresh[output == i + 1] = 255
     
     #from skimage import img_as_ubyte
     
@@ -419,11 +419,11 @@ def segmentation(image_file):
     
     
     #find external contour and segment image into small ROI based on each plant
-    trait_img = comp_external_contour(image.copy(),thresh, save_path)
+    #trait_img = comp_external_contour(image.copy(),thresh, save_path)
     
-    result_file = abs_path +  '_label.' + ext
+    #result_file = abs_path +  '_label.' + ext
             
-    cv2.imwrite(result_file, trait_img)
+    #cv2.imwrite(result_file, trait_img)
     
     return thresh
     #trait_img
@@ -468,7 +468,7 @@ if __name__ == '__main__':
     
     #(thresh, trait_img) = segmentation(current_img)
     
-    '''
+    
      # get cpu number for parallel processing
     #agents = psutil.cpu_count()   
     agents = multiprocessing.cpu_count()
@@ -481,6 +481,8 @@ if __name__ == '__main__':
     with closing(Pool(processes = agents)) as pool:
         result = pool.map(segmentation, imgList)
         pool.terminate()
+    
+    
     '''
     #loop execute
     for image in imgList:
@@ -511,7 +513,7 @@ if __name__ == '__main__':
     #result_file = (save_path + filename + '_medial_axis' + file_extension)
     #cv2.imwrite(result_file, img_as_ubyte(image_medial_axis))
     
-    
+    '''
 
     
 

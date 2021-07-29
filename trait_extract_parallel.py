@@ -245,7 +245,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 50
+    min_size = 2000*1
     
     max_size = width*height*0.1
     
@@ -254,8 +254,9 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #for every component in the image, keep it only if it's above min_size
     for i in range(0, nb_components):
         
-        #print("{} nb_components found".format(i))
         '''
+        #print("{} nb_components found".format(i))
+        
         if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
             img_thresh[output == i + 1] = 255
             
@@ -270,7 +271,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         if (sizes[i] >= min_size):
         
             img_thresh[output == i + 1] = 255
-    
+        
     #from skimage import img_as_ubyte
     
     #img_thresh = img_as_ubyte(img_thresh)
@@ -291,12 +292,14 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         img_thresh = closing
         
     
+    
+    
     #return img_thresh
     return img_thresh
     
     #return thresh_cleaned
     
-'''
+
 def medial_axis_image(thresh):
     
     #convert an image from OpenCV to skimage
@@ -307,7 +310,7 @@ def medial_axis_image(thresh):
     image_medial_axis = medial_axis(image_bw)
     
     return image_medial_axis
-'''
+
 
 def skeleton_bw(thresh):
 
@@ -318,7 +321,9 @@ def skeleton_bw(thresh):
 
     image_bw = img_as_bool((thresh_sk))
 
-    skeleton = morphology.skeletonize(image_bw)
+    #skeleton = morphology.skeletonize(image_bw)
+    
+    skeleton = morphology.thin(image_bw)
 
     skeleton_img = skeleton.astype(np.uint8) * 255
 
@@ -594,6 +599,12 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         mask[labels == label] = 255
         
         
+        #get the medial axis of the contour
+        image_skeleton, skeleton = skeleton_bw(mask)
+
+        
+        
+        
         # apply individual object mask
         masked = cv2.bitwise_and(orig, orig, mask = mask)
         
@@ -607,6 +618,11 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         #define result path 
         result_img_path = (save_path_leaf + 'leaf_' + str(label) + file_extension)
         cv2.imwrite(result_img_path, masked)
+        
+        # save _skeleton result
+        result_file = (save_path_leaf + 'leaf_skeleton_' + str(label) + file_extension)
+        cv2.imwrite(result_file, img_as_ubyte(image_skeleton))
+        
         
         #save color quantization result
         #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
@@ -635,7 +651,7 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         
         
        
-        if len(c) >= 50 :
+        if len(c) >= 10 :
 
             contours_rec.append(c)
             area_rec.append(cv2.contourArea(c))
@@ -653,6 +669,11 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
     
     cmap = get_cmap(len(contours_rec_sorted)+1)
     
+    
+    tracking_backgd = np.zeros(gray.shape, dtype = "uint8")
+    #backgd.fill(128)
+    
+    #backgd = orig
     
     #clean area record list
     area_rec = []
@@ -675,22 +696,26 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         #draw filled contour
         #label_trait = cv2.drawContours(orig, [c], -1, color_rgb, -1)
         
-        #label_trait = cv2.drawContours(orig, [c], -1, color_rgb, 2)
+        label_trait = cv2.drawContours(orig, [c], -1, color_rgb, 2)
         
         label_trait = cv2.putText(orig, "#{}".format(i+1), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rgb, 1)
+        #label_trait = cv2.putText(backgd, "#{}".format(i+1), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rgb, 1)
         
         
         #######################################individual leaf curvature computation
         
-        #Gets rotated bounding ellipse of contour
+        #Get rotated bounding ellipse of contour
         ellipse = cv2.fitEllipse(c)
         
         #get paramters of ellipse
         ((xc,yc), (d1,d2), angle) = ellipse
         
         # draw circle at ellipse center
-        label_trait = cv2.ellipse(orig, ellipse, color_rgb, 2)
-        label_trait = cv2.circle(orig, (int(xc),int(yc)), 2, color_rgb, -1)
+        #label_trait = cv2.ellipse(orig, ellipse, color_rgb, 2)
+        #label_trait = cv2.circle(backgd, (int(xc),int(yc)), 10, color_rgb, -1)
+        
+        track_trait = cv2.circle(tracking_backgd, (int(xc),int(yc)), 5, (255, 255, 255), -1)
+        
         
         #draw major radius
         #compute major radius
@@ -710,8 +735,6 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         ybot = yc + math.sin(math.radians(angle+180))*rmajor
         
         label_trait = cv2.line(orig, (int(xtop),int(ytop)), (int(xbot),int(ybot)), color_rgb, 1)
-        label_trait = cv2.line(orig, (int(xtop),int(ytop)), (int(xbot),int(ybot)), color_rgb, 1)
-
                 
         c_np = np.vstack(c).squeeze()
         
@@ -727,7 +750,6 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         
         #print("solidity = {0:.2f}... \n".format(solidity))
         
-
         
         #record all traits 
         leaf_index_rec.append(i)
@@ -740,6 +762,9 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         
     ################################################################################
     
+    
+    #print('unique labels={0}, len(contours_rec)={1}, len(leaf_index_rec)={2}'.format(np.unique(labels),len(contours_rec),len(leaf_index_rec)))
+        
     n_contours = len(contours_rec_sorted)
     
     if n_contours > 0:
@@ -747,7 +772,7 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
     else:
         n_contours = 1.0
     
-    return sum(curv_rec)/n_contours, label_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
+    return sum(curv_rec)/n_contours, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
     
     
 
@@ -1193,8 +1218,13 @@ def extract_traits(image_file):
         mkpath = os.path.dirname(abs_path) +'/' + base_name
         mkdir(mkpath)
         save_path = mkpath + '/'
+        
+        track_save_path = os.path.dirname(abs_path) + '/trace/'
+        mkdir(track_save_path)
 
     print ("results_folder: " + save_path)
+    
+    print ("track_save_path: " + track_save_path)
     
     
     
@@ -1254,9 +1284,9 @@ def extract_traits(image_file):
         '''
         
         ###############################################
-        
+        '''
         #accquire medial axis of segmentation mask
-        #image_medial_axis = medial_axis_image(thresh)
+        #image_skeleton = medial_axis_image(thresh)
         
         image_skeleton, skeleton = skeleton_bw(thresh)
 
@@ -1270,7 +1300,7 @@ def extract_traits(image_file):
         #'image-coord-src-0', 'image-coord-src-1', 'image-coord-dst-0', 'image-coord-dst-1', 
         #'coord-src-0', 'coord-src-1', 'coord-dst-0', 'coord-dst-1', 'euclidean-distance']
         ###
-        '''
+        
         #get brach data
         branch_data = summarize(Skeleton(image_skeleton))
         #print(branch_data)
@@ -1318,9 +1348,14 @@ def extract_traits(image_file):
         '''
         
         ############################################## leaf number computation
-        min_distance_value = 20
+
+        min_distance_value = 15
         #watershed based leaf area segmentaiton 
         labels = watershed_seg(orig, thresh, min_distance_value)
+        
+        #n_leaves = int(len(np.unique(labels)))
+        
+
         
         #labels = watershed_seg_marker(orig, thresh, min_distance_value, img_marker)
         
@@ -1342,14 +1377,21 @@ def extract_traits(image_file):
         #plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
         cv2.imwrite(result_file, labeled_img)
         
-        (avg_curv, label_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec) = leaf_traits_computation(orig, labels, save_path, base_name, file_extension)
+        (avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec) = leaf_traits_computation(orig, labels, save_path, base_name, file_extension)
         
         #print(area_rec, curv_rec, color_ratio_rec)
         
-         #save watershed result label image
-        result_file = (save_path + base_name + '_curv' + file_extension)
+        n_leaves = int(len((leaf_index_rec)))
+        
+        #print('number of leaves{0}'.format(n_leaves))
+        
+        #save watershed result label image
+        result_file = (save_path + base_name + '_leafspec' + file_extension)
         cv2.imwrite(result_file, label_trait)
         
+        #save watershed result label image
+        result_file = (track_save_path + base_name + '_trace' + file_extension)
+        cv2.imwrite(result_file, track_trait)
         
         #find external contour 
         (trait_img, area, solidity, max_width, max_height) = comp_external_contour(image.copy(),thresh)
@@ -1358,7 +1400,7 @@ def extract_traits(image_file):
         #print(filename)
         cv2.imwrite(result_file, trait_img)   
         
-        n_leaves = int(len(np.unique(labels))/1 - 1)
+        
     
     else:
         
@@ -1443,7 +1485,7 @@ if __name__ == '__main__':
         pool.terminate()
     '''
     
-    '''
+    
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
     
     print("Summary: {0} plant images were processed...\n".format(n_images))
@@ -1525,7 +1567,7 @@ if __name__ == '__main__':
     #save the csv file
     wb.save(trait_file)
     
-    '''
+    
     
     '''
     wb = openpyxl.load_workbook(trait_file)

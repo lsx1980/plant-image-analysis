@@ -76,6 +76,7 @@ def adjust_gamma(image, gamma):
     # apply gamma correction using the lookup table
     return cv2.LUT(image, table)
 
+'''
 #apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to perfrom image enhancement
 def image_enhance(img):
 
@@ -98,15 +99,42 @@ def image_enhance(img):
     img_enhance = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)  
     
     return img_enhance
+'''
+
+def change_brightness(image, value = 150):
+    
+    # Load the image
+    #image = cv2.imread(image_file)
+    
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    
+    h, s, v = cv2.split(hsv)
+    
+    v = cv2.add(v,value)
+    
+    v[v > 255] = 255
+    
+    v[v < 0] = 0
+    
+    final_hsv = cv2.merge((h, s, v))
+    
+    adjusted = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
+    
+    # save result as images for reference
+    #cv2.imwrite(result_img_path, adjusted)
+    
+    return adjusted
+
+
 
 # Convert it to LAB color space to access the luminous channel which is independent of colors.
-def isbright(image_file):
+def isbright(orig):
     
     # Set up threshold value for luminous channel, can be adjusted and generalized 
     thresh = 0.1
     
     # Load image file 
-    orig = cv2.imread(image_file)
+    #orig = cv2.imread(image_file)
     
     # Make backup image
     image = orig.copy()
@@ -127,45 +155,37 @@ def isbright(image_file):
     
     text_bool = "bright" if np.mean(L) < thresh else "dark"
     
-    print(np.mean(L))
+    #print(np.mean(L))
     
-    return np.mean(L) > thresh
+    return np.mean(L) 
     
 
-def gamma_correction(image_file):
-    
-  
-    #parse the file name 
-    path, filename = os.path.split(image_file)
-    
-    #filename, file_extension = os.path.splitext(image_file)
-    
-    # construct the result file path
-    result_img_path = save_path + str(filename[0:-4]) + '.' + ext
-    
-    print("Enhancing image : {0} \n".format(str(filename)))
-    
+def gamma_correction(image):
+
     # Load the image
-    image = cv2.imread(image_file)
+    #image = cv2.imread(image_file)
     
     #get size of image
     img_height, img_width = image.shape[:2]
     
     #image = cv2.resize(image, (0,0), fx = scale_factor, fy = scale_factor) 
     
-    gamma = args['gamma']
+    #gamma = args['gamma']
     
     # apply gamma correction and show the images
-    gamma = gamma if gamma > 0 else 0.1
+    #gamma = gamma if gamma > 0 else 1.5
+    
+    gamma = 1.5
     
     adjusted = adjust_gamma(image, gamma=gamma)
     
-    enhanced_image = image_enhance(adjusted)
-    
+    #enhanced_image = image_enhance(adjusted)
     
 
     # save result as images for reference
-    cv2.imwrite(result_img_path,enhanced_image)
+    #cv2.imwrite(result_img_path,adjusted)
+    
+    return adjusted
 
 
 def image_enhance(image_file):
@@ -182,31 +202,20 @@ def image_enhance(image_file):
     
     im = Image.open(image_file)
     
-    im_sharpness = ImageEnhance.Sharpness(im).enhance(1.5)
-    
-    im_contrast = ImageEnhance.Contrast(im_sharpness).enhance(1.5)
+    #im_sharpness = ImageEnhance.Sharpness(im).enhance(1.5)
 
-    im_out = ImageEnhance.Brightness(im_contrast).enhance(0.8)
+    im_brightness = ImageEnhance.Brightness(im).enhance(2.8)
     
-    im_out.save(result_img_path)
+    im_contrast = ImageEnhance.Contrast(im_brightness).enhance(1.5)
+    
+    im_contrast.save(result_img_path)
     
 
-def Adaptive_Histogram_Equalization(image_file):
+def Adaptive_Histogram_Equalization(bgr):
     
-     #parse the file name 
-    path, filename = os.path.split(image_file)
-    
-    #filename, file_extension = os.path.splitext(image_file)
-    
-    # construct the result file path
-    result_img_path = save_path + str(filename[0:-4]) + '.' + ext
-    
-    print("Processing image : {0} \n".format(str(filename)))
-
-    #print(isbright(image_file))
-
-     # Load the image
-    bgr = cv2.imread(image_file)
+  
+    # Load the image
+    #bgr = cv2.imread(image_file)
 
     lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
 
@@ -218,24 +227,19 @@ def Adaptive_Histogram_Equalization(image_file):
 
     lab = cv2.merge(lab_planes)
 
-    out = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    AHE_result = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
     # save result as images for reference
-    cv2.imwrite(result_img_path, out)
+    #cv2.imwrite(result_img_path, AHE_result)
+    
+    return AHE_result
 
 
 
-def histogram_equalization(image_file):
+def histogram_equalization(rgb_img):
     
-    #parse the file name 
-    path, filename = os.path.split(image_file)
     
-    # construct the result file path
-    result_img_path = save_path + str(filename[0:-4]) + '.' + ext
-    
-    print("Processing image : {0} \n".format(str(filename)))
-    
-    rgb_img = cv2.imread(image_file)
+    #rgb_img = cv2.imread(image_file)
 
     # convert from RGB color-space to YCrCb
     ycrcb_img = cv2.cvtColor(rgb_img, cv2.COLOR_BGR2YCrCb)
@@ -247,7 +251,9 @@ def histogram_equalization(image_file):
     equalized_img = cv2.cvtColor(ycrcb_img, cv2.COLOR_YCrCb2BGR)
 
     # save result as images for reference
-    cv2.imwrite(result_img_path, equalized_img)
+    #cv2.imwrite(result_img_path, equalized_img)
+    
+    return equalized_img
     
 
 if __name__ == '__main__':
@@ -256,7 +262,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-p", "--path", required = True,    help = "path to image file")
     ap.add_argument("-ft", "--filetype", required = False,  default = 'jpg',  help = "image filetype")
-    ap.add_argument("-gamma", "--gamma", type = float, required = False,  default = 0.5,  help = "gamma value")
+    #ap.add_argument("-gamma", "--gamma", type = float, required = False,  default = 0.5,  help = "gamma value")
     args = vars(ap.parse_args())
 
     # setting path to model file
@@ -284,13 +290,40 @@ if __name__ == '__main__':
     
     # Loop execute
     for image in imgList:
-        
-        Adaptive_Histogram_Equalization(image)
-        
 
+        #parse the file name 
+        path, filename = os.path.split(image)
+    
+        # construct the result file path
+        result_img_path = save_path + str(filename[0:-4]) + '.' + ext
+        
+        image_data = cv2.imread(image)
+    
+        print("Processing image : {0} Brightness value is {1}\n".format(str(filename),str(isbright(image_data))))
+        
+        
+        
+        if isbright(image_data) < 1.2:
+            
+            result_gamma = gamma_correction(image_data)
+            
+            result_img = Adaptive_Histogram_Equalization(result_gamma)
+            
+        else:
+                
+            result_img = Adaptive_Histogram_Equalization(image_data)
+        
+        cv2.imwrite(result_img_path, result_img)
+    
+    '''
+    # Loop execute
+    for image in imgList:
+        
+        image_enhance(image)
+    
     '''
 
-    
+    '''
     # get cpu number for parallel processing
     #agents = psutil.cpu_count()   
     agents = multiprocessing.cpu_count()-1
