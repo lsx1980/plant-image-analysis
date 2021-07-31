@@ -17,7 +17,7 @@ Created: 2019-09-29
 
 USAGE:
 
-python3 color_seg.py -p /home/suxing/plant-image-analysis/test/ -ft JPG
+python3 color_seg.py -p ~/smart_plant/test/ -ft JPG
 
 
 '''
@@ -567,7 +567,7 @@ if __name__ == '__main__':
     
     
     global  template
-    template_path = "/home/suxing/smart/marker_template/sticker_template.jpg"
+    template_path = "/home/suxing/smart_plant/marker_template/sticker_template.jpg"
     # Read the template 
     template = cv2.imread(template_path, 0) 
     print(template)
