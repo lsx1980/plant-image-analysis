@@ -85,7 +85,7 @@ def mkdir(path):
         return False
         
 
-def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
+def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, min_size):
     
     # Change image color space, if necessary.
     colorSpace = args_colorspace.lower()
@@ -180,7 +180,9 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 100
+    
+    
+    #min_size = 70
     
     max_size = width*height*0.1
     
@@ -188,7 +190,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     #for every component in the image, keep it only if it's above min_size
     for i in range(0, nb_components):
-        
+        '''
         #print("{} nb_components found".format(i))
         
         if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
@@ -200,12 +202,12 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
             imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
             img_thresh[output == imax] = 255
             print("Foreground max found ")
+        '''
         
+        if (sizes[i] >= min_size):
         
-        #if (sizes[i] >= min_size):
+            img_thresh[output == i + 1] = 255
         
-            #img_thresh[output == i + 1] = 255
-    
     #from skimage import img_as_ubyte
     
     #img_thresh = img_as_ubyte(img_thresh)
@@ -284,6 +286,80 @@ class clockwise_angle_and_distance():
         return angle, lenvector
 
 
+# Detect stickers in the image
+def sticker_detect(img_ori, save_path):
+    
+    '''
+    image_file_name = Path(image_file).name
+    
+    abs_path = os.path.abspath(image_file)
+    
+    filename, file_extension = os.path.splitext(abs_path)
+    base_name = os.path.splitext(os.path.basename(filename))[0]
+    
+    print("Processing image : {0}\n".format(str(image_file)))
+     
+    # save folder construction
+    mkpath = os.path.dirname(abs_path) +'/cropped'
+    mkdir(mkpath)
+    save_path = mkpath + '/'
+
+    print ("results_folder: " + save_path)
+    '''
+   
+
+    # load the image, clone it for output, and then convert it to grayscale
+    #img_ori = cv2.imread(image_file)
+    
+    img_rgb = img_ori.copy()
+      
+    # Convert it to grayscale 
+    img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY) 
+      
+    # Store width and height of template in w and h 
+    w, h = template.shape[::-1] 
+      
+    # Perform match operations. 
+    res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
+    
+    #(minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(res)
+    
+    
+    # Specify a threshold 
+    threshold = 0.8
+      
+    # Store the coordinates of matched area in a numpy array 
+    loc = np.where( res >= threshold)  
+    
+    if len(loc):
+    
+        (y,x) = np.unravel_index(res.argmax(), res.shape)
+    
+        (min_val, max_val, min_loc, max_loc) = cv2.minMaxLoc(res)
+    
+        print(y,x)
+        
+        print(min_val, max_val, min_loc, max_loc)
+        
+    
+        (startX, startY) = max_loc
+        endX = startX + template.shape[1]
+        endY = startY + template.shape[0]
+        
+        '''
+        # Draw a rectangle around the matched region. 
+        for pt in zip(*loc[::-1]): 
+            sticker_overlay = cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,255,255), 2)
+        '''
+        
+        sticker_crop_img = img_rgb[startY:endY, startX:endX]
+
+      
+        
+    return  sticker_crop_img
+
+
+
 
 def comp_external_contour(orig, thresh, save_path):
     
@@ -340,7 +416,7 @@ def comp_external_contour(orig, thresh, save_path):
     
     print("contour length {}".format(len(contours)))
     
-    '''
+    
     for c in contours:
         
         #get the bounding rect
@@ -370,10 +446,14 @@ def comp_external_contour(orig, thresh, save_path):
             #trait_img = cv2.putText(orig, "#{}".format(index), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (255, 0, 255), 10)
             
             index+= 1
-     '''
+     
             
 
     return trait_img
+
+
+
+
 
 def segmentation(image_file):
     
@@ -400,6 +480,10 @@ def segmentation(image_file):
     mkdir(mkpath)
     save_path = mkpath + '/'
     
+    mkpath_sticker = os.path.dirname(abs_path) +'/' + base_name + '/sticker'
+    mkdir(mkpath_sticker)
+    save_path_sticker = mkpath_sticker + '/'
+    
     print("results_folder: {0}\n".format(str(save_path)))  
     
     if (file_size > 5.0):
@@ -411,19 +495,38 @@ def segmentation(image_file):
     orig = image.copy()
 
     #color clustering based plant object segmentation
-    thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
+    thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size = 2000)
     
-    result_mask = save_path + 'mask.' + ext
+    #result_mask = save_path + 'mask.' + ext
     
-    cv2.imwrite(result_mask, thresh)
+    #cv2.imwrite(result_mask, thresh)
     
     
     #find external contour and segment image into small ROI based on each plant
-    #trait_img = comp_external_contour(image.copy(),thresh, save_path)
+    trait_img = comp_external_contour(image.copy(), thresh, save_path)
     
-    #result_file = abs_path +  '_label.' + ext
+    result_file = abs_path +  '_label.' + ext
             
-    #cv2.imwrite(result_file, trait_img)
+    cv2.imwrite(result_file, trait_img)
+    
+    
+    (sticker_crop_img) = sticker_detect(image.copy(), save_path)
+    
+    # save segmentation result
+    #result_file = (save_path + base_name + 'sticker_matched.' + args['filetype'])
+    #print(result_file)
+    #cv2.imwrite(result_file, sticker_overlay)
+    
+    thresh_sticker = color_cluster_seg(sticker_crop_img.copy(), args_colorspace, args_channels, 4, min_size = 1000)
+    trait_img_sticker = comp_external_contour(sticker_crop_img.copy(), thresh_sticker, save_path_sticker)
+    result_file_sticker = save_path_sticker +  '_label.' + ext
+    cv2.imwrite(result_file_sticker, trait_img_sticker)
+
+    # save segmentation result
+    result_file = (save_path_sticker + base_name + '_sticker_match.' + args['filetype'])
+    #print(result_file)
+    cv2.imwrite(result_file, sticker_crop_img)
+    
     
     return thresh
     #trait_img
@@ -462,6 +565,13 @@ if __name__ == '__main__':
     #accquire image file list
     imgList = sorted(glob.glob(image_file_path))
     
+    
+    global  template
+    template_path = "/home/suxing/smart/marker_template/sticker_template.jpg"
+    # Read the template 
+    template = cv2.imread(template_path, 0) 
+    print(template)
+    
     #print((imgList))
     
     #current_img = imgList[0]
@@ -472,7 +582,7 @@ if __name__ == '__main__':
      # get cpu number for parallel processing
     #agents = psutil.cpu_count()   
     agents = multiprocessing.cpu_count()
-    print("Using {0} cores to perfrom parallel processing... \n".format(int(agents)))
+    print("Using {0} cores to perform parallel processing... \n".format(int(agents)))
     
     
     
@@ -488,7 +598,7 @@ if __name__ == '__main__':
     for image in imgList:
         
         (thresh) = segmentation(image)
-        
+    '''
         
     #color clustering based plant object segmentation
     #thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
@@ -500,7 +610,8 @@ if __name__ == '__main__':
     
     
     #find external contour 
-    #trait_img = comp_external_contour(image.copy(),thresh)
+    #trait_img = comp_external_contour(image.copy(),thresh, file_path)
+    
     #save segmentation result
     #result_file = (save_path + filename + '_excontour' + file_extension)
     #cv2.imwrite(result_file, trait_img)
@@ -513,7 +624,7 @@ if __name__ == '__main__':
     #result_file = (save_path + filename + '_medial_axis' + file_extension)
     #cv2.imwrite(result_file, img_as_ubyte(image_medial_axis))
     
-    '''
+    
 
     
 
