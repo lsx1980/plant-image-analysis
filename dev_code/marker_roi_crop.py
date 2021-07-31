@@ -1,9 +1,9 @@
 '''
-Name: circle_detection.py
+Name: sticker_detection.py
 
 Version: 1.0
 
-Summary: Detect circle shape markers in image and cropp image based on marker location
+Summary: Detect sticker shape markers in image and cropp image based on marker location
     
 Author: suxing liu
 
@@ -62,8 +62,8 @@ def mkdir(path):
         #print path+' path exists!'
         return False
 
-# Detect circles in the image
-def circle_detect(image_file):
+# Detect stickers in the image
+def sticker_detect(image_file):
     
     image_file_name = Path(image_file).name
     
@@ -95,7 +95,10 @@ def circle_detect(image_file):
     w, h = template.shape[::-1] 
       
     # Perform match operations. 
-    res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED) 
+    res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
+    
+    #(minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(res)
+    
     
     # Specify a threshold 
     threshold = 0.8
@@ -112,29 +115,29 @@ def circle_detect(image_file):
         print(y,x)
         
         print(min_val, max_val, min_loc, max_loc)
+        
     
+        (startX, startY) = max_loc
+        endX = startX + template.shape[1]
+        endY = startY + template.shape[0]
+        
         # Draw a rectangle around the matched region. 
         for pt in zip(*loc[::-1]): 
-            circle_overlay = cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,255,255), 2) 
+            sticker_overlay = cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,255,255), 2) 
 
         # save segmentation result
-        #result_file = (save_path + base_name + '_circle.' + args['filetype'])
-        #print(result_file)
-        #cv2.imwrite(result_file, circle_overlay)
+        result_file = (save_path + base_name + '_sticker_matched.' + args['filetype'])
+        print(result_file)
+        cv2.imwrite(result_file, sticker_overlay)
         
-        #crop_img = img_rgb[y-350:y+1050, x-1050:x+550]
-        
-        #crop_img = img_rgb[y+150:y+1050, x-850:x+250]
-        
-        #crop_img = img_rgb[y+50:y+850, x-750:x+150]
-        
-        crop_img = img_rgb[y+200:y+800, x-650:x+0]
+       
+        crop_img = img_rgb[startY:endY, startX:endX]
         
         # save segmentation result
         result_file = (save_path + base_name + '_cropped.' + args['filetype'])
         print(result_file)
         cv2.imwrite(result_file, crop_img)
-
+        
     return image_file_name, (x,y)
 
 
@@ -162,7 +165,7 @@ if __name__ == '__main__':
     imgList = sorted(glob.glob(image_file_path))
     
     global  template
-    template_path = "/home/suxing/plant-image-analysis/marker_template/template_10.png"
+    template_path = "/home/suxing/smart/marker_template/sticker_template.jpg"
     # Read the template 
     template = cv2.imread(template_path, 0) 
     print(template)
@@ -180,11 +183,11 @@ if __name__ == '__main__':
     # Loop execute
     for image in imgList:
         
-        (image_file_name, circle_overlay) = circle_detect(image)
+        (image_file_name, sticker_overlay) = sticker_detect(image)
         
-        result_list.append([image_file_name, circle_overlay])
+        result_list.append([image_file_name, sticker_overlay])
         
-        circle_detect(image)
+        #sticker_detect(image)
    
     '''
     # Parallel processing
@@ -199,7 +202,7 @@ if __name__ == '__main__':
     # Create a pool of processes. By default, one is created for each CPU in the machine.
     # extract the bouding box for each image in file list
     with closing(Pool(processes = agents)) as pool:
-        result_list = pool.map(circle_detect, imgList)
+        result_list = pool.map(sticker_detect, imgList)
         pool.terminate()
     '''
     

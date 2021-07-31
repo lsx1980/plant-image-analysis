@@ -65,9 +65,12 @@ def execute_script(cmd_line):
 def image_analysis_pipeline(file_path, ext):
     """execute pipeline scripts in order"""
     
+    # step 1: segment tray image into individual plant objects
+    seg = "python3 color_seg.py -p " + file_path + " -ft " + str(ext) 
+    
     #python /opt/code/trait_extract_parallel.py -p /home/suxingliu/plant-image-analysis/data/ -ft JPG
-    # step 1
-    trait_extract_parallel = "python /opt/code/trait_extract_parallel.py -p " + file_path + " -ft " + str(ext) 
+    # step 2: compute traits for each individual plant objects in a parallel way
+    trait_extract_parallel = "python3 trait_extract_parallel.py -p " + file_path + " -ft " + str(ext) 
     
     print("Plant image traits computation pipeline...\n")
     
