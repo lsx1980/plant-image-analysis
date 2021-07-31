@@ -3,7 +3,7 @@ Name: trait_extract_parallel.py
 
 Version: 1.0
 
-Summary: Extract plant shoot traits (larea, solidity, max_width, max_height, avg_curv, color_cluster) by paralell processing 
+Summary: Extract plant shoot traits (larea, temp_index, max_width, max_height, avg_curv, color_cluster) by paralell processing 
     
 Author: suxing liu
 
@@ -13,7 +13,7 @@ Created: 2018-09-29
 
 USAGE:
 
-time python3 demo_trait_extract_parallel.py -p ~/example/test/ -ft jpg 
+time python3 trait_extract_parallel.py -p ~/example/test/ -ft jpg 
 
 '''
 
@@ -542,8 +542,8 @@ def comp_external_contour(orig,thresh):
             
             hull = cv2.convexHull(c)
             hull_area = cv2.contourArea(hull)
-            solidity = float(area)/hull_area
-            print("solidity = {0:.2f}... \n".format(solidity))
+            temp_index = float(area)/hull_area
+            print("temp_index = {0:.2f}... \n".format(temp_index))
             
             extLeft = tuple(c[c[:,:,0].argmin()][0])
             extRight = tuple(c[c[:,:,0].argmax()][0])
@@ -567,7 +567,7 @@ def comp_external_contour(orig,thresh):
             
             
             
-    return trait_img, area, solidity, w, h, center_X, center_Y
+    return trait_img, area, temp_index, w, h, center_X, center_Y
 
 
 def scale_contour(cnt, scale):
@@ -582,7 +582,7 @@ def scale_contour(cnt, scale):
     
     return cnt_scaled
 
-    
+
 # individual leaf object segmentation and traits computation
 def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_name, file_extension):
     
@@ -592,7 +592,7 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
     contours_rec = []
     area_rec = []
     curv_rec = []
-    solidity_rec = []
+    temp_index_rec = []
     major_axis_rec = []
     minor_axis_rec = []
     
@@ -626,6 +626,8 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
         
         # apply individual object mask
         masked = cv2.bitwise_and(orig, orig, mask = mask)
+        
+        '''
         
         #individual leaf segmentation and color analysis
         ################################################################################
@@ -661,7 +663,7 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
             
             
         color_ratio_rec.append(color_ratio)
-        
+        '''
         
         # detect contours in the mask and grab the largest one
         #cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
@@ -747,7 +749,7 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
         
         #simplify each leaf as a dot, its size was proportional to leaf area
         #track_trait = cv2.circle(tracking_backgd, (int(xc),int(yc)), int(normalized_area_rec[i]*50), (255, 255, 255), -1)
-        track_trait = cv2.drawContours(tracking_backgd, [scale_contour(c,0.7)], -1, (255, 255, 255), -1)
+        #track_trait = cv2.drawContours(tracking_backgd, [scale_contour(c,0.7)], -1, (255, 255, 255), -1)
         
         #draw major radius
         #compute major radius
@@ -779,10 +781,10 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
         
         curvature = comp_curv.fit(x, y)
         
-        #compute solidity
-        solidity = float(cv2.contourArea(c))/cv2.contourArea(cv2.convexHull(c))
+        #compute temp_index
+        temp_index = float(cv2.contourArea(c))/cv2.contourArea(cv2.convexHull(c))
         
-        #print("solidity = {0:.2f}... \n".format(solidity))
+        #print("temp_index = {0:.2f}... \n".format(temp_index))
         
         
         #record all traits 
@@ -790,7 +792,7 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
         area_rec.append(cv2.contourArea(c))
         curv_rec.append(curvature)
         
-        solidity_rec.append(solidity)
+        temp_index_rec.append(temp_index)
         major_axis_rec.append(rmajor)
         minor_axis_rec.append(rminor)
         
@@ -809,9 +811,9 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
     #print(normalized_area_rec)
     #print(area_rec)
     
-    return sum(curv_rec)/n_contours, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
+    #return sum(curv_rec)/n_contours, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, temp_index_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
     
-    
+    return sum(curv_rec)/n_contours, label_trait, leaf_index_rec
 
 
 def RGB2HEX(color):
@@ -1256,12 +1258,12 @@ def extract_traits(image_file):
         mkdir(mkpath)
         save_path = mkpath + '/'
         
-        track_save_path = os.path.dirname(abs_path) + '/trace/'
-        mkdir(track_save_path)
+        #track_save_path = os.path.dirname(abs_path) + '/trace/'
+        #mkdir(track_save_path)
 
     print ("results_folder: " + save_path)
     
-    print ("track_save_path: " + track_save_path)
+    #print ("track_save_path: " + track_save_path)
     
     
     
@@ -1294,7 +1296,7 @@ def extract_traits(image_file):
         
         
         #find external contour 
-        (trait_img, area, solidity, max_width, max_height, center_X, center_Y) = comp_external_contour(image.copy(),thresh)
+        (trait_img, area, temp_index, max_width, max_height, center_X, center_Y) = comp_external_contour(image.copy(),thresh)
         # save segmentation result
         result_file = (save_path + base_name + '_excontour' + file_extension)
         #print(filename)
@@ -1309,7 +1311,7 @@ def extract_traits(image_file):
         selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
         
         ####################################################
-        '''
+        
         print("Color difference are : ") 
         
         print(selected_color)
@@ -1323,9 +1325,11 @@ def extract_traits(image_file):
             
             color_diff.append(diff)
             
-            print(index, value, diff) 
+            #print(index, value, diff) 
         
-        '''
+        temp_idex = sum(color_diff) / len(color_diff)
+        
+        print(temp_idex) 
         
         ###############################################
         '''
@@ -1423,8 +1427,9 @@ def extract_traits(image_file):
         #plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
         cv2.imwrite(result_file, labeled_img)
         
-        (avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec) = leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_name, file_extension)
+        #(avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, temp_index_rec, major_axis_rec, minor_axis_rec, color_ratio_rec) = leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_name, file_extension)
         
+        (avg_curv, label_trait, leaf_index_rec) = leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_name, file_extension)
         #print(area_rec, curv_rec, color_ratio_rec)
         
         n_leaves = int(len((leaf_index_rec)))
@@ -1436,22 +1441,21 @@ def extract_traits(image_file):
         cv2.imwrite(result_file, label_trait)
         
         #save watershed result label image
-        result_file = (track_save_path + base_name + '_trace' + file_extension)
-        cv2.imwrite(result_file, track_trait)
+        #result_file = (track_save_path + base_name + '_trace' + file_extension)
+        #cv2.imwrite(result_file, track_trait)
         
-        
-        
-        
-    
+
     else:
         
-        area=solidity=max_width=max_height=avg_curv=n_leaves=0
+        area=temp_index=max_width=max_height=avg_curv=n_leaves=0
         
     #print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
     
     #Path("/tmp/d/a.dat").name
     
-    return image_file_name, area, solidity, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
+    #return image_file_name, area, temp_index, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, temp_index_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
+    
+    return image_file_name, area, temp_index, max_width, max_height, avg_curv, n_leaves
     
     
 
@@ -1495,13 +1499,13 @@ if __name__ == '__main__':
     #loop execute
     for image in imgList:
         
-        (filename, area, solidity, max_width, max_height, avg_curv, n_leaves, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec) = extract_traits(image)
+        (filename, area, temp_index, max_width, max_height, avg_curv, n_leaves) = extract_traits(image)
         
-        result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves])
+        result_list.append([filename, area, temp_index, max_width, max_height, avg_curv, n_leaves])
         
-        for i in range(len(leaf_index_rec)):
+        #for i in range(len(leaf_index_rec)):
             
-            result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], color_ratio_rec[i][0], color_ratio_rec[i][1], color_ratio_rec[i][2], color_ratio_rec[i][3]])
+            #result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], temp_index_rec[i], major_axis_rec[i], minor_axis_rec[i], color_ratio_rec[i][0], color_ratio_rec[i][1], color_ratio_rec[i][2], color_ratio_rec[i][3]])
     '''
     
     #print(result_list)
@@ -1533,20 +1537,20 @@ if __name__ == '__main__':
     
     #output in command window in a sum table
  
-    table = tabulate(result_list, headers = ['filename', 'area', 'solidity', 'max_width', 'max_height' ,'avg_curv', 'n_leaves'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'area', 'temp_index', 'max_width', 'max_height' ,'avg_curv', 'n_leaves'], tablefmt = 'orgtbl')
 
     print(table + "\n")
     
     
-    
+    '''
     print("Summary: Leaf specific traits...\n")
     
     #output in command window in a sum table
  
-    table = tabulate(result_list_leaf, headers = ['filename', 'leaf_index', 'area', 'curvature', 'solidity', 'major_axis', 'minor_axis', 'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4'], tablefmt = 'orgtbl')
+    table = tabulate(result_list_leaf, headers = ['filename', 'leaf_index', 'area', 'curvature', 'temp', 'major_axis', 'minor_axis', 'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4'], tablefmt = 'orgtbl')
 
     print(table + "\n")
-    
+    '''
     
     
     if (args['result']):
@@ -1566,35 +1570,36 @@ if __name__ == '__main__':
         #Get the current Active Sheet
         sheet = wb.active
         
-        sheet_leaf = wb.create_sheet()
+        #sheet_leaf = wb.create_sheet()
 
     else:
         # Keep presets
         wb = openpyxl.Workbook()
         sheet = wb.active
         
-        sheet_leaf = wb.create_sheet()
+        #sheet_leaf = wb.create_sheet()
 
         sheet.cell(row = 1, column = 1).value = 'filename'
         sheet.cell(row = 1, column = 2).value = 'leaf_area'
-        sheet.cell(row = 1, column = 3).value = 'solidity'
+        sheet.cell(row = 1, column = 3).value = 'temp_index'
         sheet.cell(row = 1, column = 4).value = 'max_width'
         sheet.cell(row = 1, column = 5).value = 'max_height'
         sheet.cell(row = 1, column = 6).value = 'curvature'
         sheet.cell(row = 1, column = 7).value = 'number_leaf'
         
+        '''
         sheet_leaf.cell(row = 1, column = 1).value = 'filename'
         sheet_leaf.cell(row = 1, column = 2).value = 'leaf_index'
         sheet_leaf.cell(row = 1, column = 3).value = 'area'
         sheet_leaf.cell(row = 1, column = 4).value = 'curvature'
-        sheet_leaf.cell(row = 1, column = 5).value = 'solidity'
+        sheet_leaf.cell(row = 1, column = 5).value = 'temp_index'
         sheet_leaf.cell(row = 1, column = 6).value = 'major_axis'
         sheet_leaf.cell(row = 1, column = 7).value = 'minor_axis'
         sheet_leaf.cell(row = 1, column = 8).value = 'color distribution cluster 1'
         sheet_leaf.cell(row = 1, column = 9).value = 'color distribution cluster 2'
         sheet_leaf.cell(row = 1, column = 10).value = 'color distribution cluster 3'
         sheet_leaf.cell(row = 1, column = 11).value = 'color distribution cluster 4'
-        
+        '''
         
     for row in result_list:
         sheet.append(row)
@@ -1602,8 +1607,8 @@ if __name__ == '__main__':
     #for row in result_list_leaf:
         #sheet_leaf.append(row)
         
-    for row in result_list_leaf:
-        sheet_leaf.append(row)
+    #for row in result_list_leaf:
+        #sheet_leaf.append(row)
     
     #save the csv file
     wb.save(trait_file)
