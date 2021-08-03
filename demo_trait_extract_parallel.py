@@ -1230,8 +1230,23 @@ def isbright(image_file):
     return np.mean(L) < thresh
 
 
-def extract_traits(image_file):
+def Lab_distance(image, mask):
+    
+    # Make backup image
+    image_rgb = image.copy()
+    
+    # apply object mask
+    masked_rgb = cv2.bitwise_and(image_rgb, image_rgb, mask = mask)
+    
+    # Convert color space to LAB space and extract L channel
+    L, A, B = cv2.split(cv2.cvtColor(masked_rgb, cv2.COLOR_BGR2LAB))
+    
+    return masked_rgb, L, A, B
+    
+    
 
+
+def extract_traits(image_file):
 
     #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
@@ -1293,6 +1308,23 @@ def extract_traits(image_file):
         
         #print(filename)
         cv2.imwrite(result_file, thresh)
+        
+        
+        (masked_rgb, L, A, B) = Lab_distance(orig, thresh)
+        
+        # save Lab result
+        result_file = (save_path + base_name + '_L' + file_extension)
+        cv2.imwrite(result_file, L)
+        
+        # save Lab result
+        result_file = (save_path + base_name + '_A' + file_extension)
+        cv2.imwrite(result_file, A)
+        
+        # save Lab result
+        result_file = (save_path + base_name + '_B' + file_extension)
+        cv2.imwrite(result_file, B)
+        
+        
         
         
         #find external contour 
