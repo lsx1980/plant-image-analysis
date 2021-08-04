@@ -13,7 +13,9 @@ Created: 2018-09-29
 
 USAGE:
 
-time python3 trait_extract_parallel.py -p ~/example/test/ -ft jpg 
+time python3 demo_trait_extract_parallel.py -p ~/example/test/ -ft jpg 
+
+time python3 demo_trait_extract_parallel.py -p ~/plant-image-analysis/demo_test/16-1_6-25/ -ft JPG
 
 '''
 
@@ -79,6 +81,7 @@ from matplotlib import collections
 
 MBFACTOR = float(1<<20)
 
+# define class for curvature computation
 class ComputeCurvature:
 
     def __init__(self,x,y):
@@ -149,9 +152,10 @@ def mkdir(path):
         # if exists, return 
         #print path+' path exists!'
         return False
-        
 
-def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
+
+# color cluster based object segmentation
+def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, min_size):
     
     # Change image color space, if necessary.
     colorSpace = args_colorspace.lower()
@@ -245,7 +249,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 2000*1
+    #min_size = 2000*1
     
     max_size = width*height*0.1
     
@@ -299,7 +303,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     #return thresh_cleaned
     
-
+# extract medial_axis for binary mask
 def medial_axis_image(thresh):
     
     #convert an image from OpenCV to skimage
@@ -311,7 +315,7 @@ def medial_axis_image(thresh):
     
     return image_medial_axis
 
-
+# extract skeleton for binary mask
 def skeleton_bw(thresh):
 
     # Convert mask to boolean image, rather than 0 and 255 for skimage to use it
@@ -353,6 +357,7 @@ def watershed_seg(orig, thresh, min_distance_value):
     return labels
 
 
+# computation of percentage
 def percentage(part, whole):
   
   percentage = "{:.0%}".format(float(part)/float(whole))
@@ -361,6 +366,7 @@ def percentage(part, whole):
 
 
 '''
+# extract individual leaf object
 def individual_object_seg(orig, labels, save_path, base_name, file_extension):
     
     num_clusters = 5
@@ -420,6 +426,7 @@ def individual_object_seg(orig, labels, save_path, base_name, file_extension):
 
 
 '''
+# watershed segmentation with marker 
 def watershed_seg_marker(orig, thresh, min_distance_value, img_marker):
     
     # compute the exact Euclidean distance from every binary
@@ -462,7 +469,7 @@ def watershed_seg_marker(orig, thresh, min_distance_value, img_marker):
     return labels
 '''
 
-
+# computation of external traits like contour, convelhull, area, ,max width and height
 def comp_external_contour(orig,thresh):
     
     #find contours and get the external one
@@ -815,7 +822,7 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
     
     return sum(curv_rec)/n_contours, label_trait, leaf_index_rec
 
-
+# convert RGB value to HEX value
 def RGB2HEX(color):
     return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
 
@@ -935,13 +942,14 @@ def color_quantization(image, mask, save_path, num_clusters):
     return rgb_colors
 '''
 
+# get color map for drawing figures
 def get_cmap(n, name = 'hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     return plt.cm.get_cmap(name, n)
     
     
-
+# computation of color distributation 
 def color_region(image, mask, save_path, num_clusters):
     
     # read the image
@@ -1112,7 +1120,7 @@ def color_region(image, mask, save_path, num_clusters):
    
     return rgb_colors, counts
 
-
+# normalize image data
 def _normalise_image(image, *, image_cmap=None):
     image = img_as_float(image)
     if image.ndim == 2:
@@ -1229,7 +1237,7 @@ def isbright(image_file):
     
     return np.mean(L) < thresh
 
-
+# concersion from RGB to LAB space
 def Lab_distance(image, mask):
     
     # Make backup image
@@ -1243,9 +1251,32 @@ def Lab_distance(image, mask):
     
     return masked_rgb, L, A, B
     
+#computation of temperature index
+def temperature_index(ref_color, rgb_colors):
     
+    #print(ref_color)
+    
+    color_diff = []
+    
+    for index, value in enumerate(rgb_colors): 
+        #print(index, value) 
+        curr_color = rgb2lab(np.uint8(np.asarray([[value]])))
+        
+        #color difference in CIE lab space
+        diff = deltaE_cie76(ref_color, curr_color)
+        
+        color_diff.append(diff)
+        
+        #print(index, value, diff) 
+    
+    temp_idex = sum(color_diff) / len(color_diff)
+    
+    print("Color difference are {}: \n".format(temp_idex)) 
+
+    return temp_idex
 
 
+# computation of all traits 
 def extract_traits(image_file):
 
     #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -1300,8 +1331,10 @@ def extract_traits(image_file):
         args_channels = args['channels']
         args_num_clusters = args['num_clusters']
         
+        min_size = 2000
+        
         #color clustering based plant object segmentation
-        thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
+        thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size)
         
         # save segmentation result
         result_file = (save_path + base_name + '_seg' + file_extension)
@@ -1340,10 +1373,14 @@ def extract_traits(image_file):
         #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
         rgb_colors, counts = color_region(orig, thresh, save_path, num_clusters)
         
-        selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
+        ref_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
         
         ####################################################
+        #compute color difference in cie lab space and return difference value
         
+        temp_idex = temperature_index(ref_color, rgb_colors)
+        
+        '''
         print("Color difference are : ") 
         
         print(selected_color)
@@ -1362,7 +1399,7 @@ def extract_traits(image_file):
         temp_idex = sum(color_diff) / len(color_diff)
         
         print(temp_idex) 
-        
+        '''
         ###############################################
         '''
         #accquire medial axis of segmentation mask
@@ -1493,7 +1530,7 @@ def extract_traits(image_file):
 
 
 
-
+#main fucntion for parameters and user input
 if __name__ == '__main__':
     
     ap = argparse.ArgumentParser()
