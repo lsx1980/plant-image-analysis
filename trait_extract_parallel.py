@@ -78,7 +78,7 @@ from matplotlib import collections
 
 
 MBFACTOR = float(1<<20)
-
+# define class for curvature computation
 class ComputeCurvature:
 
     def __init__(self,x,y):
@@ -150,8 +150,8 @@ def mkdir(path):
         #print path+' path exists!'
         return False
         
-
-def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
+# color cluster based object segmentation
+def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, min_size):
     
     # Change image color space, if necessary.
     colorSpace = args_colorspace.lower()
@@ -245,7 +245,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 2000*1
+    #min_size = 2000*1
     
     max_size = width*height*0.1
     
@@ -290,16 +290,14 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
         
         img_thresh = closing
-        
-    
-    
+
     
     #return img_thresh
     return img_thresh
     
     #return thresh_cleaned
     
-
+# extract medial_axis for binary mask
 def medial_axis_image(thresh):
     
     #convert an image from OpenCV to skimage
@@ -311,7 +309,7 @@ def medial_axis_image(thresh):
     
     return image_medial_axis
 
-
+# extract skeleton for binary mask
 def skeleton_bw(thresh):
 
     # Convert mask to boolean image, rather than 0 and 255 for skimage to use it
@@ -329,7 +327,7 @@ def skeleton_bw(thresh):
 
     return skeleton_img, skeleton
 
-
+# watershed based individual leaf segmentation
 def watershed_seg(orig, thresh, min_distance_value):
     
     # compute the exact Euclidean distance from every binary
@@ -352,7 +350,7 @@ def watershed_seg(orig, thresh, min_distance_value):
     
     return labels
 
-
+# computation of percentage
 def percentage(part, whole):
   
   percentage = "{:.0%}".format(float(part)/float(whole))
@@ -361,6 +359,7 @@ def percentage(part, whole):
 
 
 '''
+# extract individual leaf object
 def individual_object_seg(orig, labels, save_path, base_name, file_extension):
     
     num_clusters = 5
@@ -412,14 +411,10 @@ def individual_object_seg(orig, labels, save_path, base_name, file_extension):
             print(percentage(value, np.sum(list_counts)))
 '''
 
-        
-        
-    
-    
-        
 
 
 '''
+# watershed segmentation with marker 
 def watershed_seg_marker(orig, thresh, min_distance_value, img_marker):
     
     # compute the exact Euclidean distance from every binary
@@ -462,7 +457,7 @@ def watershed_seg_marker(orig, thresh, min_distance_value, img_marker):
     return labels
 '''
 
-
+# computation of external traits like contour, convelhull, area, max width and height
 def comp_external_contour(orig,thresh):
     
     #find contours and get the external one
@@ -567,11 +562,10 @@ def comp_external_contour(orig,thresh):
             
             
             
-<<<<<<< HEAD
     return trait_img, area, solidity, w, h, center_X, center_Y
-=======
+
     return trait_img, area, temp_index, w, h, center_X, center_Y
->>>>>>> ac2e99d13559eb56c71a4cb7f336b94bd8c860b6
+
 
 
 def scale_contour(cnt, scale):
@@ -583,12 +577,10 @@ def scale_contour(cnt, scale):
     cnt_scaled = cnt_norm * scale
     cnt_scaled = cnt_scaled + [cx, cy]
     cnt_scaled = cnt_scaled.astype(np.int32)
-<<<<<<< HEAD
     
     return cnt_scaled
 
-=======
->>>>>>> ac2e99d13559eb56c71a4cb7f336b94bd8c860b6
+
     
     return cnt_scaled
 
@@ -759,11 +751,10 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
         
         #simplify each leaf as a dot, its size was proportional to leaf area
         #track_trait = cv2.circle(tracking_backgd, (int(xc),int(yc)), int(normalized_area_rec[i]*50), (255, 255, 255), -1)
-<<<<<<< HEAD
+
         track_trait = cv2.drawContours(tracking_backgd, [scale_contour(c,0.7)], -1, (255, 255, 255), -1)
-=======
-        #track_trait = cv2.drawContours(tracking_backgd, [scale_contour(c,0.7)], -1, (255, 255, 255), -1)
->>>>>>> ac2e99d13559eb56c71a4cb7f336b94bd8c860b6
+
+
         
         #draw major radius
         #compute major radius
@@ -824,17 +815,15 @@ def leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_na
     
     #print(normalized_area_rec)
     #print(area_rec)
-<<<<<<< HEAD
     
     return sum(curv_rec)/n_contours, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
-=======
->>>>>>> ac2e99d13559eb56c71a4cb7f336b94bd8c860b6
+
     
     #return sum(curv_rec)/n_contours, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, temp_index_rec, major_axis_rec, minor_axis_rec, color_ratio_rec
     
     return sum(curv_rec)/n_contours, label_trait, leaf_index_rec
 
-
+# convert RGB value to HEX value
 def RGB2HEX(color):
     return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
 
@@ -953,14 +942,14 @@ def color_quantization(image, mask, save_path, num_clusters):
 
     return rgb_colors
 '''
-
+# get color map for drawing figures
 def get_cmap(n, name = 'hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     return plt.cm.get_cmap(name, n)
     
     
-
+# computation of color distributation 
 def color_region(image, mask, save_path, num_clusters):
     
     # read the image
@@ -1131,7 +1120,7 @@ def color_region(image, mask, save_path, num_clusters):
    
     return rgb_colors, counts
 
-
+# normalize image data
 def _normalise_image(image, *, image_cmap=None):
     image = img_as_float(image)
     if image.ndim == 2:
@@ -1185,7 +1174,7 @@ def overlay_skeleton_endpoints(image, stats, *, image_cmap=None, axes=None):
     return fig, img_marker
     #return coords
 '''
-
+# Calculates median to divide data into 2 halves.
 def outlier_doubleMAD(data,thresh = 3.5):
     
     """
@@ -1214,7 +1203,7 @@ def outlier_doubleMAD(data,thresh = 3.5):
 
 
 
-# Convert it to LAB color space to access the luminous channel which is independent of colors.
+# Convert RGB to LAB color space to access the luminous channel which is independent of colors.
 def isbright(image_file):
     
     # Set up threshold value for luminous channel, can be adjusted and generalized 
@@ -1249,6 +1238,45 @@ def isbright(image_file):
     return np.mean(L) < thresh
 
 
+# convert from RGB to LAB space
+def Lab_distance(image, mask):
+    
+    # Make backup image
+    image_rgb = image.copy()
+    
+    # apply object mask
+    masked_rgb = cv2.bitwise_and(image_rgb, image_rgb, mask = mask)
+    
+    # Convert color space to LAB space and extract L channel
+    L, A, B = cv2.split(cv2.cvtColor(masked_rgb, cv2.COLOR_BGR2LAB))
+    
+    return masked_rgb, L, A, B
+    
+#computation of temperature index
+def temperature_index(ref_color, rgb_colors):
+    
+    #print(ref_color)
+    
+    color_diff = []
+    
+    for index, value in enumerate(rgb_colors): 
+        #print(index, value) 
+        curr_color = rgb2lab(np.uint8(np.asarray([[value]])))
+        
+        #color difference in CIE lab space
+        diff = deltaE_cie76(ref_color, curr_color)
+        
+        color_diff.append(diff)
+        
+        #print(index, value, diff) 
+    
+    temp_idex = sum(color_diff) / len(color_diff)
+    
+    print("Color difference are {}: \n".format(temp_idex)) 
+
+    return temp_idex
+
+# computation of all traits 
 def extract_traits(image_file):
 
 
@@ -1304,8 +1332,10 @@ def extract_traits(image_file):
         args_channels = args['channels']
         args_num_clusters = args['num_clusters']
         
+        min_size = 2000
+        
         #color clustering based plant object segmentation
-        thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
+        thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size)
         
         # save segmentation result
         result_file = (save_path + base_name + '_seg' + file_extension)
@@ -1313,13 +1343,29 @@ def extract_traits(image_file):
         #print(filename)
         cv2.imwrite(result_file, thresh)
         
+        '''
+        # save lab channel image
+        (masked_rgb, L, A, B) = Lab_distance(orig, thresh)
+        
+        # save Lab result
+        result_file = (save_path + base_name + '_L' + file_extension)
+        cv2.imwrite(result_file, L)
+        
+        # save Lab result
+        result_file = (save_path + base_name + '_A' + file_extension)
+        cv2.imwrite(result_file, A)
+        
+        # save Lab result
+        result_file = (save_path + base_name + '_B' + file_extension)
+        cv2.imwrite(result_file, B)
+        '''
         
         #find external contour 
-<<<<<<< HEAD
+
         (trait_img, area, solidity, max_width, max_height, center_X, center_Y) = comp_external_contour(image.copy(),thresh)
-=======
-        (trait_img, area, temp_index, max_width, max_height, center_X, center_Y) = comp_external_contour(image.copy(),thresh)
->>>>>>> ac2e99d13559eb56c71a4cb7f336b94bd8c860b6
+
+        #(trait_img, area, temp_index, max_width, max_height, center_X, center_Y) = comp_external_contour(image.copy(),thresh)
+
         # save segmentation result
         result_file = (save_path + base_name + '_excontour' + file_extension)
         #print(filename)
@@ -1335,24 +1381,9 @@ def extract_traits(image_file):
         
         ####################################################
         
-        print("Color difference are : ") 
+        #compute color difference in cie lab space and return difference value
         
-        print(selected_color)
-        
-        color_diff = []
-        
-        for index, value in enumerate(rgb_colors): 
-            #print(index, value) 
-            curr_color = rgb2lab(np.uint8(np.asarray([[value]])))
-            diff = deltaE_cie76(selected_color, curr_color)
-            
-            color_diff.append(diff)
-            
-            #print(index, value, diff) 
-        
-        temp_idex = sum(color_diff) / len(color_diff)
-        
-        print(temp_idex) 
+        temp_idex = temperature_index(ref_color, rgb_colors)
         
         ###############################################
         '''
@@ -1450,11 +1481,11 @@ def extract_traits(image_file):
         #plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
         cv2.imwrite(result_file, labeled_img)
         
-<<<<<<< HEAD
+
         (avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, color_ratio_rec) = leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_name, file_extension)
-=======
+
         #(avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, temp_index_rec, major_axis_rec, minor_axis_rec, color_ratio_rec) = leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_name, file_extension)
->>>>>>> ac2e99d13559eb56c71a4cb7f336b94bd8c860b6
+
         
         (avg_curv, label_trait, leaf_index_rec) = leaf_traits_computation(orig, labels, center_X, center_Y, save_path, base_name, file_extension)
         #print(area_rec, curv_rec, color_ratio_rec)
@@ -1468,15 +1499,14 @@ def extract_traits(image_file):
         cv2.imwrite(result_file, label_trait)
         
         #save watershed result label image
-<<<<<<< HEAD
+
         result_file = (track_save_path + base_name + '_trace' + file_extension)
         cv2.imwrite(result_file, track_trait)
         
         
-=======
+
         #result_file = (track_save_path + base_name + '_trace' + file_extension)
         #cv2.imwrite(result_file, track_trait)
->>>>>>> ac2e99d13559eb56c71a4cb7f336b94bd8c860b6
         
 
     else:
@@ -1495,7 +1525,7 @@ def extract_traits(image_file):
 
 
 
-
+#main fucntion for parameters and user input
 if __name__ == '__main__':
     
     ap = argparse.ArgumentParser()

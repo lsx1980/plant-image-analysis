@@ -333,7 +333,7 @@ def skeleton_bw(thresh):
 
     return skeleton_img, skeleton
 
-
+#watershed based individual leaf segmentation
 def watershed_seg(orig, thresh, min_distance_value):
     
     # compute the exact Euclidean distance from every binary
@@ -576,7 +576,7 @@ def comp_external_contour(orig,thresh):
             
     return trait_img, area, temp_index, w, h, center_X, center_Y
 
-
+# scale contour for tracking
 def scale_contour(cnt, scale):
     M = cv2.moments(cnt)
     cx = int(M['m10']/M['m00'])
@@ -1203,7 +1203,7 @@ def outlier_doubleMAD(data,thresh = 3.5):
 
 
 
-# Convert it to LAB color space to access the luminous channel which is independent of colors.
+# Convert RGB to LAB color space to access the luminous channel which is independent of colors.
 def isbright(image_file):
     
     # Set up threshold value for luminous channel, can be adjusted and generalized 
@@ -1237,7 +1237,7 @@ def isbright(image_file):
     
     return np.mean(L) < thresh
 
-# concersion from RGB to LAB space
+# convert from RGB to LAB space
 def Lab_distance(image, mask):
     
     # Make backup image
