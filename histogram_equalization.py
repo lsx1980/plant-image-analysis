@@ -302,7 +302,7 @@ if __name__ == '__main__':
         print("Processing image : {0} Brightness value is {1}\n".format(str(filename),str(isbright(image_data))))
         
         
-        
+        '''
         if isbright(image_data) < 1.2:
             
             result_gamma = gamma_correction(image_data)
@@ -312,9 +312,13 @@ if __name__ == '__main__':
         else:
                 
             result_img = Adaptive_Histogram_Equalization(image_data)
+        '''
+        result_gamma = gamma_correction(image_data)
+            
+        result_img = Adaptive_Histogram_Equalization(result_gamma)
         
         cv2.imwrite(result_img_path, result_img)
-    
+     
     '''
     # Loop execute
     for image in imgList:

@@ -495,7 +495,7 @@ def segmentation(image_file):
     orig = image.copy()
 
     #color clustering based plant object segmentation
-    thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size = 2000)
+    thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size = 100)
     
     #result_mask = save_path + 'mask.' + ext
     
@@ -509,7 +509,7 @@ def segmentation(image_file):
             
     cv2.imwrite(result_file, trait_img)
     
-    
+    '''
     (sticker_crop_img) = sticker_detect(image.copy(), save_path)
     
     # save segmentation result
@@ -526,7 +526,7 @@ def segmentation(image_file):
     result_file = (save_path_sticker + base_name + '_sticker_match.' + args['filetype'])
     #print(result_file)
     cv2.imwrite(result_file, sticker_crop_img)
-    
+    '''
     
     return thresh
     #trait_img
