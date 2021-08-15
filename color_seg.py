@@ -497,9 +497,9 @@ def segmentation(image_file):
     #color clustering based plant object segmentation
     thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size = 100)
     
-    #result_mask = save_path + 'mask.' + ext
+    result_mask = save_path + 'mask.' + ext
     
-    #cv2.imwrite(result_mask, thresh)
+    cv2.imwrite(result_mask, thresh)
     
     
     #find external contour and segment image into small ROI based on each plant
@@ -579,7 +579,7 @@ if __name__ == '__main__':
     #(thresh, trait_img) = segmentation(current_img)
     
     
-     # get cpu number for parallel processing
+    # get cpu number for parallel processing
     #agents = psutil.cpu_count()   
     agents = multiprocessing.cpu_count()
     print("Using {0} cores to perform parallel processing... \n".format(int(agents)))

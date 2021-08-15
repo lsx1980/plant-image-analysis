@@ -245,7 +245,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 2000*1
+    min_size = 2000*2
     
     max_size = width*height*0.1
     
@@ -1259,13 +1259,18 @@ def extract_traits(image_file):
         
         #color clustering based plant object segmentation
         thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
-        
         # save segmentation result
         result_file = (save_path + base_name + '_seg' + file_extension)
-        
         #print(filename)
         cv2.imwrite(result_file, thresh)
         
+        
+        #find external contour 
+        (trait_img, area, solidity, max_width, max_height) = comp_external_contour(image.copy(),thresh)
+        # save segmentation result
+        result_file = (save_path + base_name + '_excontour' + file_extension)
+        #print(filename)
+        cv2.imwrite(result_file, trait_img)   
         
         
         num_clusters = 5
@@ -1386,8 +1391,18 @@ def extract_traits(image_file):
         '''
         
         ############################################## leaf number computation
-
-        min_distance_value = 15
+        
+        if area > 100000:
+            min_distance_value = 45
+        elif area > 50000:
+            min_distance_value = 40
+        elif area > 20000:
+            min_distance_value = 35
+        else:
+            min_distance_value = 25
+            
+        print("min_distance_value = {}\n".format(min_distance_value))
+        
         #watershed based leaf area segmentaiton 
         labels = watershed_seg(orig, thresh, min_distance_value)
         
@@ -1431,12 +1446,7 @@ def extract_traits(image_file):
         result_file = (track_save_path + base_name + '_trace' + file_extension)
         cv2.imwrite(result_file, track_trait)
         
-        #find external contour 
-        (trait_img, area, solidity, max_width, max_height) = comp_external_contour(image.copy(),thresh)
-        # save segmentation result
-        result_file = (save_path + base_name + '_excontour' + file_extension)
-        #print(filename)
-        cv2.imwrite(result_file, trait_img)   
+
         
         
     
@@ -1448,9 +1458,9 @@ def extract_traits(image_file):
     
     #Path("/tmp/d/a.dat").name
     
-    print("color_ratio = {}".format(color_ratio))
+    #print("color_ratio = {}".format(color_ratio))
     
-    print("hex_colors = {}".format(hex_colors))
+    #print("hex_colors = {}".format(hex_colors))
     
     return image_file_name, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec
     
