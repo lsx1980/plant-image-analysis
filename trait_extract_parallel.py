@@ -245,7 +245,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 2000*2
+    min_size = 20*2
     
     max_size = width*height*0.1
     
@@ -279,9 +279,13 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #print("img_thresh.dtype")
     #print(img_thresh.dtype)
     
+    
+    #if mask contains mutiple non-conected parts, combine them into one. 
     contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     if len(contours) > 1:
+        
+        print("mask contains mutiple non-conected parts, combine them into one\n")
         
         kernel = np.ones((4,4), np.uint8)
 
@@ -605,9 +609,7 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         #get the medial axis of the contour
         image_skeleton, skeleton = skeleton_bw(mask)
 
-        
-        
-        
+                
         # apply individual object mask
         masked = cv2.bitwise_and(orig, orig, mask = mask)
         
@@ -699,6 +701,12 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         
         color_rgb = tuple([255*x for x in color_rgb])
         
+        
+        # get coordinates of bounding box
+        
+        x,y,w,h = cv2.boundingRect(c)
+        
+        print("bbox coordinates :{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}".format(x, y, x+w, y, x+w, y+h, x, y+h))
         
         # draw a circle enclosing the object
         ((x, y), r) = cv2.minEnclosingCircle(c)
@@ -1392,14 +1400,14 @@ def extract_traits(image_file):
         
         ############################################## leaf number computation
         
-        if area > 100000:
-            min_distance_value = 45
-        elif area > 50000:
-            min_distance_value = 40
-        elif area > 20000:
-            min_distance_value = 35
+        if area > 20000:
+            min_distance_value = 10
+        elif area > 10000:
+            min_distance_value = 7
+        elif area > 5000:
+            min_distance_value = 7
         else:
-            min_distance_value = 25
+            min_distance_value = 5
             
         print("min_distance_value = {}\n".format(min_distance_value))
         
@@ -1509,6 +1517,8 @@ if __name__ == '__main__':
         (filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec) = extract_traits(image)
         
         result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[0], color_ratio[0], color_ratio[0], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
+        
+        print(leaf_color_value_rec)
         
         for i in range(len(leaf_index_rec)):
             
