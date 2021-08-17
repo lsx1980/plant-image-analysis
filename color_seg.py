@@ -493,9 +493,12 @@ def segmentation(image_file):
     
     #make backup image
     orig = image.copy()
+    
+    
+    min_size = 200
 
     #color clustering based plant object segmentation
-    thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size = 100)
+    thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size)
     
     result_mask = save_path + 'mask.' + ext
     
