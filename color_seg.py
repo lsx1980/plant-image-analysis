@@ -44,6 +44,9 @@ import numpy as np
 import argparse
 import cv2
 
+import openpyxl
+import csv
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -193,14 +196,15 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
         '''
         #print("{} nb_components found".format(i))
         
-        if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 10) and ((centroids[i][1] - height*0.5 < 10)) and ((sizes[i] <= max_size)):
+        if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 5) and ((centroids[i][1] - height*0.5 < 5)) and ((sizes[i] <= max_size)):
             img_thresh[output == i + 1] = 255
             
             print("Foreground center found ")
             
-        elif ((Coord_width[i] - Coord_left[i])*0.5 - width < 15) and (centroids[i][0] - width*0.5 < 15) and (centroids[i][1] - height*0.5 < 15) and ((sizes[i] <= max_size)):
+        elif ((Coord_width[i] - Coord_left[i])*0.5 - width < 5) and (centroids[i][0] - width*0.5 < 5) and (centroids[i][1] - height*0.5 < 5) and ((sizes[i] <= max_size)):
             imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
-            img_thresh[output == imax] = 255
+            #img_thresh[output == imax] = 255
+            img_thresh[output == i + 1] = 255
             print("Foreground max found ")
         '''
         
@@ -208,6 +212,25 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
         
             img_thresh[output == i + 1] = 255
         
+        
+    
+    #if mask contains mutiple non-conected parts, combine them into one. 
+    contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    #size_kernel = 13
+    
+    if len(contours) > 1:
+        
+        print("mask contains mutiple non-conected parts, combine them into one\n")
+        
+        kernel = np.ones((size_kernel,size_kernel), np.uint8)
+
+        dilation = cv2.dilate(img_thresh.copy(), kernel, iterations = 1)
+        
+        closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
+        
+        img_thresh = closing
+    
     #from skimage import img_as_ubyte
     
     #img_thresh = img_as_ubyte(img_thresh)
@@ -374,13 +397,12 @@ def comp_external_contour(orig, thresh, save_path):
     
     print("contour length {}".format(len(contours)))
     
-    
+    '''
     list_of_pts = []
     
     if len(contours) > 1:
         
         
-        '''
         for ctr in contours:
             
             list_of_pts += [pt[0] for pt in ctr]
@@ -394,16 +416,15 @@ def comp_external_contour(orig, thresh, save_path):
         contours_joined = np.array(list_of_pts).reshape((-1,1,2)).astype(np.int32)
         
         
-        '''
-        kernel = np.ones((4,4), np.uint8)
+        
+        kernel = np.ones((size_kernel,size_kernel), np.uint8)
 
         dilation = cv2.dilate(thresh.copy(), kernel, iterations = 1)
         
         closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
         
         trait_img = closing
-        
-    
+    '''
 
     
     #trait_img = cv2.drawContours(thresh, contours_joined, -1, (0,255,255), -1)
@@ -412,22 +433,36 @@ def comp_external_contour(orig, thresh, save_path):
     
     #trait_img = cv2.rectangle(thresh, (x, y), (x+w, y+h), (255, 255, 0), 3)
     
-    contours, hier = cv2.findContours(trait_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    #contours, hier = cv2.findContours(trait_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-    print("contour length {}".format(len(contours)))
+    #print("contour length {}".format(len(contours)))
     
+    box_coord_rec = []
     
     for c in contours:
         
         #get the bounding rect
         x, y, w, h = cv2.boundingRect(c)
         
+        rect = cv2.minAreaRect(c)
+        box = cv2.boxPoints(rect)
+        box = np.array(box, dtype="int")
+        box_coord_flat = box.flatten()
+        
+        #print("bbox coordinates :{0}".format(box_coord_flat))
+
+        box_coord = []
+        for item in box_coord_flat:
+            box_coord.append(item)
+            
+        box_coord_rec.append(box_coord)
+        
         #if w>img_width*0.05 and h>img_height*0.05:
             
         if w>0 and h>0:
             
-            offset_w = int(w*0.05)
-            offset_h = int(h*0.05)
+            offset_w = int(w*0.25)
+            offset_h = int(h*0.25)
             # draw a green rectangle to visualize the bounding rect
             roi = orig[y-offset_h : y+h+offset_h, x-offset_w : x+w+offset_w]
             
@@ -449,7 +484,7 @@ def comp_external_contour(orig, thresh, save_path):
      
             
 
-    return trait_img
+    return trait_img, box_coord_rec
 
 
 
@@ -480,10 +515,11 @@ def segmentation(image_file):
     mkdir(mkpath)
     save_path = mkpath + '/'
     
+    '''
     mkpath_sticker = os.path.dirname(abs_path) +'/' + base_name + '/sticker'
     mkdir(mkpath_sticker)
     save_path_sticker = mkpath_sticker + '/'
-    
+    '''
     print("results_folder: {0}\n".format(str(save_path)))  
     
     if (file_size > 5.0):
@@ -506,11 +542,51 @@ def segmentation(image_file):
     
     
     #find external contour and segment image into small ROI based on each plant
-    trait_img = comp_external_contour(image.copy(), thresh, save_path)
+    (trait_img, box_coord_rec) = comp_external_contour(image.copy(), thresh, save_path)
+    
+    #print("bbox coordinates :{0}".format(box_coord_rec))
     
     result_file = abs_path +  '_label.' + ext
             
     cv2.imwrite(result_file, trait_img)
+    
+    
+    #########################################################validation purpose, can be removed 
+    #write out box coordinates for validation
+    #print("bbox coordinates :{0}".format((box_coord_rec)))
+    
+    wb = openpyxl.Workbook()
+    sheet = wb.active
+    
+    sheet_leaf = wb.create_sheet()
+
+    sheet.cell(row = 1, column = 1).value = 'c1x'
+    sheet.cell(row = 1, column = 2).value = 'c1y'
+    sheet.cell(row = 1, column = 3).value = 'c2x'
+    sheet.cell(row = 1, column = 4).value = 'c2y'
+    sheet.cell(row = 1, column = 5).value = 'c3x'
+    sheet.cell(row = 1, column = 6).value = 'c3y'
+    sheet.cell(row = 1, column = 7).value = 'c4x'
+    sheet.cell(row = 1, column = 8).value = 'c4y'
+    
+    for row in box_coord_rec:
+        sheet.append(row)
+   
+    #file name and path
+    bbox_file = (args["path"] + base_name + '_bbox.xlsx')
+    
+    wb.save(bbox_file)
+    
+    bbox_file_csv = (args["path"] + base_name + '_bbox.csv')
+    #convert xlsx to csv format
+    wb = openpyxl.load_workbook(bbox_file)
+    sh = wb.active # was .get_active_sheet()
+    with open(bbox_file_csv, 'w', newline = "") as f:
+        c = csv.writer(f)
+        for r in sh.rows: # generator; was sh.rows
+            c.writerow([cell.value for cell in r])
+            
+        #################################################################end of validation file
     
     '''
     (sticker_crop_img) = sticker_detect(image.copy(), save_path)
@@ -569,12 +645,15 @@ if __name__ == '__main__':
     imgList = sorted(glob.glob(image_file_path))
     
     
+    size_kernel = 3
+    
+    '''
     global  template
     template_path = "/home/suxing/smart_plant/marker_template/sticker_template.jpg"
     # Read the template 
     template = cv2.imread(template_path, 0) 
     print(template)
-    
+    '''
     #print((imgList))
     
     #current_img = imgList[0]

@@ -13,11 +13,11 @@ Author: suxing liu
 
 Author-email: suxingliu@gmail.com
 
-Created: 2019-09-29
+Created: 2018-05-29
 
 USAGE:
 
-python3 demo_color_seg.py -p ~/smart_plant/test/ -ft JPG
+python3 demo_color_seg.py -p ~/plant-image-analysis/test/ -ft JPG
 
 
 '''
@@ -495,7 +495,7 @@ def segmentation(image_file):
     orig = image.copy()
 
     #color clustering based plant object segmentation
-    thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size = 2000)
+    thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size = 1000)
     
     #result_mask = save_path + 'mask.' + ext
     
@@ -567,7 +567,7 @@ if __name__ == '__main__':
     
     
     global  template
-    template_path = "/home/suxing/smart_plant/marker_template/sticker_template.jpg"
+    template_path = "/home/suxing/plant-image-analysis/marker_template/sticker_template.jpg"
     # Read the template 
     template = cv2.imread(template_path, 0) 
     print(template)

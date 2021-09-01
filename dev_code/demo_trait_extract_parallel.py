@@ -9,7 +9,7 @@ Author: suxing liu
 
 Author-email: suxingliu@gmail.com
 
-Created: 2018-09-29
+Created: 2018-05-29
 
 USAGE:
 
@@ -549,7 +549,7 @@ def comp_external_contour(orig,thresh):
             
             hull = cv2.convexHull(c)
             hull_area = cv2.contourArea(hull)
-            temp_index = float(area)/hull_area
+            solidity = float(area)/hull_area
             print("temp_index = {0:.2f}... \n".format(temp_index))
             
             extLeft = tuple(c[c[:,:,0].argmin()][0])
@@ -574,7 +574,7 @@ def comp_external_contour(orig,thresh):
             
             
             
-    return trait_img, area, temp_index, w, h, center_X, center_Y
+    return trait_img, area, solidity, w, h, center_X, center_Y
 
 # scale contour for tracking
 def scale_contour(cnt, scale):
@@ -1358,16 +1358,6 @@ def extract_traits(image_file):
         cv2.imwrite(result_file, B)
         
         
-        
-        
-        #find external contour 
-        (trait_img, area, temp_index, max_width, max_height, center_X, center_Y) = comp_external_contour(image.copy(),thresh)
-        # save segmentation result
-        result_file = (save_path + base_name + '_excontour' + file_extension)
-        #print(filename)
-        cv2.imwrite(result_file, trait_img)   
-        
-        
         num_clusters = 5
         #save color quantization result
         #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
@@ -1401,6 +1391,9 @@ def extract_traits(image_file):
         print(temp_idex) 
         '''
         ###############################################
+        
+     
+     
         '''
         #accquire medial axis of segmentation mask
         #image_skeleton = medial_axis_image(thresh)
@@ -1474,7 +1467,16 @@ def extract_traits(image_file):
         
         #n_leaves = int(len(np.unique(labels)))
         
-
+           
+        #find external contour 
+        (trait_img, area, temp_index, max_width, max_height, center_X, center_Y) = comp_external_contour(image.copy(),thresh)
+        # save segmentation result
+        result_file = (save_path + base_name + '_excontour' + file_extension)
+        #print(filename)
+        cv2.imwrite(result_file, trait_img)   
+        
+        
+        
         
         #labels = watershed_seg_marker(orig, thresh, min_distance_value, img_marker)
         
