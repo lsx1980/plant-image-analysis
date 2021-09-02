@@ -175,7 +175,7 @@ def gamma_correction(image):
     # apply gamma correction and show the images
     #gamma = gamma if gamma > 0 else 1.5
     
-    gamma = 1.5
+    gamma = 1.0
     
     adjusted = adjust_gamma(image, gamma=gamma)
     
