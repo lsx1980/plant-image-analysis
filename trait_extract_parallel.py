@@ -625,7 +625,7 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         result_img_path = (save_path_leaf + 'leaf_' + str(label) + file_extension)
         cv2.imwrite(result_img_path, masked)
         
-        # save _skeleton result
+        # save skeleton result
         result_file = (save_path_leaf + 'leaf_skeleton_' + str(label) + file_extension)
         cv2.imwrite(result_file, img_as_ubyte(image_skeleton))
         
@@ -1572,7 +1572,7 @@ if __name__ == '__main__':
         
         (filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec) = extract_traits(image)
         
-        result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[0], color_ratio[0], color_ratio[0], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
+        result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
         #print(leaf_color_value_rec)
         

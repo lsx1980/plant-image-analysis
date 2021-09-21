@@ -596,7 +596,7 @@ if __name__ == '__main__':
     template = cv2.imread(template_path, 0) 
     print("template was found")
     
-    #print((imgList))
+    print((imgList))
     
     #current_img = imgList[0]
     
