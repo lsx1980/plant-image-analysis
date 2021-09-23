@@ -213,7 +213,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
             img_thresh[output == i + 1] = 255
         
         
-    
+    '''
     #if mask contains mutiple non-conected parts, combine them into one. 
     contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
@@ -230,7 +230,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
         closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
         
         img_thresh = closing
-    
+    '''
     #from skimage import img_as_ubyte
     
     #img_thresh = img_as_ubyte(img_thresh)
@@ -531,7 +531,7 @@ def segmentation(image_file):
     orig = image.copy()
     
     
-    min_size = 200
+    min_size = 10
 
     #color clustering based plant object segmentation
     thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size)

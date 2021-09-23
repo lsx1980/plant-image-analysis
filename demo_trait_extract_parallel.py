@@ -960,8 +960,8 @@ def color_region(image, mask, save_path, num_clusters):
     masked_image_ori = cv2.bitwise_and(image, image, mask = mask)
     
     #define result path for labeled images
-    result_img_path = save_path + 'masked.png'
-    cv2.imwrite(result_img_path, masked_image_ori)
+    #result_img_path = save_path + 'masked.png'
+    #cv2.imwrite(result_img_path, masked_image_ori)
     
     # convert to RGB
     image_RGB = cv2.cvtColor(masked_image_ori, cv2.COLOR_BGR2RGB)
@@ -993,9 +993,9 @@ def color_region(image, mask, save_path, num_clusters):
 
 
     segmented_image_BRG = cv2.cvtColor(segmented_image, cv2.COLOR_RGB2BGR)
-    #define result path for labeled images
-    result_img_path = save_path + 'clustered.png'
-    cv2.imwrite(result_img_path, segmented_image_BRG)
+    #define result path for labeled imagpie_color.pnges
+    #result_img_path = save_path + 'clustered.png'
+    #cv2.imwrite(result_img_path, segmented_image_BRG)
 
 
     '''
@@ -1114,8 +1114,8 @@ def color_region(image, mask, save_path, num_clusters):
     plt.pie(counts.values(), labels = hex_colors, colors = hex_colors)
 
     #define result path for labeled images
-    result_img_path = save_path + 'pie_color.png'
-    plt.savefig(result_img_path)
+    #result_img_path = save_path + 'pie_color.png'
+    #plt.savefig(result_img_path)
 
    
     return rgb_colors, counts
@@ -1580,7 +1580,7 @@ if __name__ == '__main__':
     image_file_path = file_path + filetype
     
     #temperature sticker readings
-    sticker_path = file_path + '/sticker/' + '03.jpg'
+    sticker_path = file_path + '/sticker/' + '02.jpg'
     # Read the template 
     sticker = cv2.imread(sticker_path, 0) 
     print("sticker was found")
