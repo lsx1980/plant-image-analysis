@@ -245,7 +245,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 100*2
+    min_size = 1500*1
     
     max_size = width*height*0.1
     
@@ -1355,7 +1355,7 @@ def extract_traits(image_file):
         '''
         
         ###############################################
-        '''
+        
         #accquire medial axis of segmentation mask
         #image_skeleton = medial_axis_image(thresh)
         
@@ -1364,7 +1364,7 @@ def extract_traits(image_file):
         # save _skeleton result
         result_file = (save_path + base_name + '_skeleton' + file_extension)
         cv2.imwrite(result_file, img_as_ubyte(image_skeleton))
-        
+        '''
         ###
         # ['skeleton-id', 'node-id-src', 'node-id-dst', 'branch-distance', 
         #'branch-type', 'mean-pixel-value', 'stdev-pixel-value', 
@@ -1419,7 +1419,7 @@ def extract_traits(image_file):
         '''
         
         ############################################## leaf number computation
-        
+        '''
         if area > 20000:
             min_distance_value = 10
         elif area > 10000:
@@ -1428,6 +1428,8 @@ def extract_traits(image_file):
             min_distance_value = 7
         else:
             min_distance_value = 5
+        '''
+        min_distance_value = 25
             
         print("min_distance_value = {}\n".format(min_distance_value))
         

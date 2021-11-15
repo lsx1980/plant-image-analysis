@@ -17,7 +17,7 @@ Created: 2019-09-29
 
 USAGE:
 
-python3 color_seg.py -p ~/smart_plant/test/ -ft JPG
+python3 color_seg.py -p ~/example/plant_test/ -ft jpg -c 0
 
 
 '''
@@ -193,9 +193,9 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
     
     #for every component in the image, keep it only if it's above min_size
     for i in range(0, nb_components):
-        '''
-        #print("{} nb_components found".format(i))
         
+        #print("{} nb_components found".format(i))
+        '''
         if (sizes[i] >= min_size) and (Coord_left[i] > 1) and (Coord_top[i] > 1) and (Coord_width[i] - Coord_left[i] > 0) and (Coord_height[i] - Coord_top[i] > 0) and (centroids[i][0] - width*0.5 < 5) and ((centroids[i][1] - height*0.5 < 5)) and ((sizes[i] <= max_size)):
             img_thresh[output == i + 1] = 255
             
@@ -213,7 +213,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
             img_thresh[output == i + 1] = 255
         
         
-    '''
+    
     #if mask contains mutiple non-conected parts, combine them into one. 
     contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
@@ -230,7 +230,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
         closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
         
         img_thresh = closing
-    '''
+    
     #from skimage import img_as_ubyte
     
     #img_thresh = img_as_ubyte(img_thresh)
@@ -437,7 +437,11 @@ def comp_external_contour(orig, thresh, save_path):
     
     #print("contour length {}".format(len(contours)))
     
+    trait_img = thresh
+    
     box_coord_rec = []
+    
+    
     
     for c in contours:
         
@@ -463,8 +467,31 @@ def comp_external_contour(orig, thresh, save_path):
             
             offset_w = int(w*0.25)
             offset_h = int(h*0.25)
+            
+            if y-offset_h < 0:
+                start_y = 0
+            else:
+                start_y = y-offset_h
+                
+            if y+h+offset_h > img_height:
+                end_y = img_height
+            else:
+                end_y = y+h+offset_h
+                
+            if x-offset_w < 0:
+                start_x = 0
+            else:
+                start_x = x-offset_w
+                
+            if x+w+offset_w > img_width:
+                end_x = img_width
+            else:
+                end_x = x+w+offset_w
+            
             # draw a green rectangle to visualize the bounding rect
-            roi = orig[y-offset_h : y+h+offset_h, x-offset_w : x+w+offset_w]
+            roi = orig[start_y : end_y, start_x : end_x]
+            
+           
             
             print("ROI {} detected ...".format(index))
             
@@ -474,15 +501,17 @@ def comp_external_contour(orig, thresh, save_path):
             
             cv2.imwrite(result_file, roi)
             
+            #trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 3)
+            
+            #trait_img = cv2.drawContours(orig, c, -1, (0,255,255), -1)
+            
             trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 3)
             
-            
-            
-            #trait_img = cv2.putText(orig, "#{}".format(index), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (255, 0, 255), 10)
+            trait_img = cv2.putText(orig, "#{}".format(index), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
             
             index+= 1
      
-            
+    
 
     return trait_img, box_coord_rec
 
@@ -496,9 +525,13 @@ def segmentation(image_file):
     
     filename, file_extension = os.path.splitext(image_file)
     
+    base_name = os.path.splitext(os.path.basename(filename))[0]
+    
     file_size = os.path.getsize(image_file)/MBFACTOR
     
     print("Segmenting image : {0} \n".format(str(filename)))
+    
+    #print("Base image : {0} \n".format(str(base_name)))
     
     # load original image
     image = cv2.imread(image_file)
@@ -515,12 +548,13 @@ def segmentation(image_file):
     mkdir(mkpath)
     save_path = mkpath + '/'
     
-    '''
-    mkpath_sticker = os.path.dirname(abs_path) +'/' + base_name + '/sticker'
-    mkdir(mkpath_sticker)
-    save_path_sticker = mkpath_sticker + '/'
-    '''
+    
+    mkpath_mask = os.path.dirname(abs_path) +'/' + base_name + '/mask'
+    mkdir(mkpath_mask)
+    save_path_mask = mkpath_mask + '/'
+    
     print("results_folder: {0}\n".format(str(save_path)))  
+    
     
     if (file_size > 5.0):
         print("It will take some time due to large file size {0} MB".format(str(int(file_size))))
@@ -531,12 +565,28 @@ def segmentation(image_file):
     orig = image.copy()
     
     
-    min_size = 10
+    # Convert color space to LAB space and extract L channel
+    L, A, B = cv2.split(cv2.cvtColor(orig.copy(), cv2.COLOR_BGR2LAB))
+    
+    # save Lab result
+    result_file = (save_path_mask + base_name + '_L.' + ext)
+    cv2.imwrite(result_file, L)
+    
+    # save Lab result
+    result_file = (save_path_mask + base_name + '_A.' + ext)
+    cv2.imwrite(result_file, A)
+    
+    # save Lab result
+    result_file = (save_path_mask + base_name + '_B.' + ext)
+    cv2.imwrite(result_file, B)
+    
+    
+    min_size = 2000
 
     #color clustering based plant object segmentation
     thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size)
     
-    result_mask = abs_path + 'mask.' + ext
+    result_mask = save_path_mask + base_name + 'mask.' + ext
     
     cv2.imwrite(result_mask, thresh)
     
@@ -546,10 +596,10 @@ def segmentation(image_file):
     
     #print("bbox coordinates :{0}".format(box_coord_rec))
     
-    result_file = abs_path +  '_label.' + ext
+    result_file = save_path_mask + base_name + '_label.' + ext
             
     cv2.imwrite(result_file, trait_img)
-    
+    '''
     
     #########################################################validation purpose, can be removed 
     #write out box coordinates for validation
@@ -587,6 +637,9 @@ def segmentation(image_file):
             c.writerow([cell.value for cell in r])
             
         #################################################################end of validation file
+    '''
+    
+    
     
     '''
     (sticker_crop_img) = sticker_detect(image.copy(), save_path)
@@ -624,7 +677,7 @@ if __name__ == '__main__':
     ap.add_argument('-c', '--channels', type = str, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
-    ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 3, min 2).')
+    ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     args = vars(ap.parse_args())
     
     
@@ -645,7 +698,7 @@ if __name__ == '__main__':
     imgList = sorted(glob.glob(image_file_path))
     
     
-    size_kernel = 3
+    size_kernel = 1
     
     '''
     global  template
