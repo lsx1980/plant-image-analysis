@@ -245,7 +245,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 1500*1
+    min_size = 1
     
     max_size = width*height*0.1
     
@@ -687,8 +687,8 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
     tracking_backgd = np.zeros(gray.shape, dtype = "uint8")
     #backgd.fill(128)
     
-    #backgd = orig
-    
+    label_trait = orig
+    track_trait = orig
     #clean area record list
     area_rec = []
     #individual leaf traits sorting based on area order 
@@ -1462,7 +1462,7 @@ def extract_traits(image_file):
         
         (avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec, box_coord_rec) = leaf_traits_computation(orig, labels, save_path, base_name, file_extension)
         
-        
+        '''
         #########################################################validation purpose, can be removed 
         #write out box coordinates for validation
         #print("bbox coordinates :{0}".format((box_coord_rec)))
@@ -1497,7 +1497,7 @@ def extract_traits(image_file):
             c = csv.writer(f)
             for r in sh.rows: # generator; was sh.rows
                 c.writerow([cell.value for cell in r])
-            
+        '''
         #################################################################end of validation file
         
         n_leaves = int(len((leaf_index_rec)))
