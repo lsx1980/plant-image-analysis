@@ -245,7 +245,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 1
+    min_size = 2000
     
     max_size = width*height*0.1
     
@@ -477,6 +477,14 @@ def comp_external_contour(orig,thresh):
     img_height, img_width, img_channels = orig.shape
    
     index = 1
+    
+    trait_img = orig.copy()
+    
+    area = 0
+    
+    solidity = 0
+    
+    w=h=0
     
     for c in contours:
         
@@ -1429,7 +1437,7 @@ def extract_traits(image_file):
         else:
             min_distance_value = 5
         '''
-        min_distance_value = 25
+        min_distance_value = 10
             
         print("min_distance_value = {}\n".format(min_distance_value))
         

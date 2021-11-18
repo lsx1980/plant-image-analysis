@@ -17,7 +17,7 @@ Created: 2019-09-29
 
 USAGE:
 
-python3 color_seg.py -p ~/example/plant_test/ -ft jpg -c 0 -min 100  -max 1500
+python3 color_seg.py -p ~/example/plant_test/ -ft jpg -c 2 -min 100  -max 1500
 
 python3 color_seg.py -p ~/example/plant_test/ -ft jpg 
 
@@ -67,6 +67,7 @@ from scipy.spatial import distance as dist
 from collections import OrderedDict
 
 
+
 class ColorLabeler:
     def __init__(self):
         # initialize the colors dictionary, containing the color
@@ -109,6 +110,8 @@ class ColorLabeler:
                 minDist = (d, i)
         # return the name of the color with the smallest distance
         return self.colorNames[minDist[1]]
+
+
 
 class clockwise_angle_and_distance():
     
@@ -579,9 +582,9 @@ def comp_external_contour(orig, thresh, save_path):
         box_coord_rec.append(box_coord)
         
         
-        #if w>img_width*0.05 and h>img_height*0.05:
+        if w>0 and h>0:
             
-        if w>0 and h>0 and color == 'green':
+        #if w>0 and h>0 and color == 'green':
             
             offset_w = int(w*0.25)
             offset_h = int(h*0.25)
@@ -820,7 +823,7 @@ if __name__ == '__main__':
     imgList = sorted(glob.glob(image_file_path))
     
     
-    size_kernel = 3
+    size_kernel = 10
     
     
    
