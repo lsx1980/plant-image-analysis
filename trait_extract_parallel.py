@@ -245,7 +245,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 2000
+    min_size = 100
     
     max_size = width*height*0.1
     
@@ -1437,7 +1437,7 @@ def extract_traits(image_file):
         else:
             min_distance_value = 5
         '''
-        min_distance_value = 10
+        min_distance_value = 3
             
         print("min_distance_value = {}\n".format(min_distance_value))
         
