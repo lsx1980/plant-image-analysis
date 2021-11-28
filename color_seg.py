@@ -1,3 +1,4 @@
+
 '''
 Name: color_segmentation.py
 
@@ -17,11 +18,9 @@ Created: 2019-09-29
 
 USAGE:
 
-python3 color_seg.py -p ~/example/plant_test/ -ft jpg -c 2 -min 100  -max 1500
+python3 color_seg.py -p ~/example/plant_test/ -ft jpg -c 0 -min 100  -max 1500
 
 python3 color_seg.py -p ~/example/plant_test/ -ft jpg 
-
-
 
 '''
 
@@ -119,25 +118,21 @@ class clockwise_angle_and_distance():
     '''
     A class to tell if point is clockwise from origin or not.
     This helps if one wants to use sorted() on a list of points.
-
     Parameters
     ----------
     point : ndarray or list, like [x, y]. The point "to where" we g0
     self.origin : ndarray or list, like [x, y]. The center around which we go
     refvec : ndarray or list, like [x, y]. The direction of reference
-
     use: 
         instantiate with an origin, then call the instance during sort
     reference: 
     https://stackoverflow.com/questions/41855695/sorting-list-of-two-dimensional-coordinates-by-clockwise-angle-using-python
-
     Returns
     -------
     angle
     
     distance
     
-
     '''
     def __init__(self, origin):
         self.origin = origin
@@ -166,6 +161,8 @@ class clockwise_angle_and_distance():
         # should come first.
         return angle, lenvector
 
+
+
 # generate foloder to store the output results
 def mkdir(path):
     # import module
@@ -190,7 +187,40 @@ def mkdir(path):
         # if exists, return 
         #print path+' path exists!'
         return False
-        
+
+
+def sort_contours(contours):
+
+    # initialize the reverse flag and sort index
+    reverse = False
+    i = 0
+  
+    # handle if we need to sort in reverse
+    if method == "right-to-left" or method == "bottom-to-top":
+        reverse = True
+  
+    # handle if we are sorting against the y-coordinate rather than
+    # the x-coordinate of the bounding box
+    if method == "top-to-bottom" or method == "bottom-to-top":
+        i = 1
+  
+    # construct the list of bounding boxes and sort them from top to
+    # bottom
+    boundingBoxes = [cv2.boundingRect(c) for c in cnts]
+    (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
+        key=lambda b:b[1][i], reverse=reverse))
+  
+    # return the list of sorted contours and bounding boxes
+    return (cnts, boundingBoxes)
+
+
+def closest_node(pt, pt_list):
+    
+    min_dist_index = np.argmin(np.sum((np.array(pt_list) - np.array(pt))**2, axis=1))
+    
+    return min_dist_index
+    
+    
 
 def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, min_size):
     
@@ -352,7 +382,6 @@ def medial_axis_image(thresh):
     
     #convert an image from OpenCV to skimage
     thresh_sk = img_as_float(thresh)
-
     image_bw = img_as_bool((thresh_sk))
     
     image_medial_axis = medial_axis(image_bw)
@@ -381,7 +410,6 @@ def sticker_detect(img_ori, save_path):
     mkpath = os.path.dirname(abs_path) +'/cropped'
     mkdir(mkpath)
     save_path = mkpath + '/'
-
     print ("results_folder: " + save_path)
     '''
    
@@ -441,7 +469,6 @@ def sticker_detect(img_ori, save_path):
 def comp_external_contour(orig, thresh, save_path):
     
     #find contours and get the external one
-    #find contours and get the external one
     contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
    
     img_height, img_width, img_channels = orig.shape
@@ -449,7 +476,7 @@ def comp_external_contour(orig, thresh, save_path):
     index = 1
     
     
-    print("contour length {}".format(len(contours)))
+    print("Number of contours: {}".format(len(contours)))
     
     '''
     list_of_pts = []
@@ -472,7 +499,6 @@ def comp_external_contour(orig, thresh, save_path):
         
         
         kernel = np.ones((size_kernel,size_kernel), np.uint8)
-
         dilation = cv2.dilate(thresh.copy(), kernel, iterations = 1)
         
         closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
@@ -481,16 +507,43 @@ def comp_external_contour(orig, thresh, save_path):
     '''
 
     
-    #trait_img = cv2.drawContours(thresh, contours_joined, -1, (0,255,255), -1)
+    #grid initialization
+    ####################################################################
+    #number of rows
+    nRows = args['nRows']
+    #nRows = 6
+    # Number of columns
+    mCols = args['mCols']
+    #mCols = 5
     
-    #x, y, w, h = cv2.boundingRect(contours_joined)
+    #Dimensions of the image
+    sizeX = img_width
+    sizeY = img_height
+    #print(img.shape)
+
+    grid_center_label = []
+    grid_center_coord = []
     
-    #trait_img = cv2.rectangle(thresh, (x, y), (x+w, y+h), (255, 255, 0), 3)
+    for i in range(0, nRows):
+        
+        for j in range(0, mCols):
+            
+            #roi = orig[int(i*sizeY/nRows):int(i*sizeY/nRows) + int(sizeY/nRows), int(j*sizeX/mCols):int(j*sizeX/mCols) + int(sizeX/mCols)]
+            
+            x_center = int(j*sizeX/mCols) + int(sizeX/mCols/2)
+            
+            y_center = int(i*sizeY/nRows) + int(sizeY/nRows/2)
+            
+            #trait_img = cv2.putText(trait_img_bk, "#{}{}".format(i,j), (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+            
+            label = (i+1,j+1)
+            grid_center_label.append(label)
+            
+            coord = (x_center, y_center)
+            grid_center_coord.append(coord)
+            
     
-    #contours, hier = cv2.findContours(trait_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    #print("contour length {}".format(len(contours)))
-    
+    ####################################################################
     trait_img_bk = orig.copy()
     
     trait_img = orig.copy()
@@ -519,7 +572,6 @@ def comp_external_contour(orig, thresh, save_path):
         
         # cv2.approxPloyDP() function to approximate the shape
         approx = cv2.approxPolyDP(c, 0.01 * cv2.arcLength(c, True), True)
-
         # using drawContours() function
         #trait_img = cv2.drawContours(orig, [c], 0, (0, 0, 255), 10)
   
@@ -560,6 +612,20 @@ def comp_external_contour(orig, thresh, save_path):
         L, A, B = cv2.split(cv2.cvtColor(masked_fg_contour.copy(), cv2.COLOR_BGR2LAB))
         '''
         
+        #finding center point of shape
+        M = cv2.moments(c)
+            
+        if M['m00'] != 0.0:
+            x_c_center = int(M['m10']/M['m00'])
+            y_c_center = int(M['m01']/M['m00'])
+
+        #finding closest point among the grid points list ot the M coordinates
+        idx_closest = closest_node((x_c_center,y_c_center), grid_center_coord)
+        
+        print("idx_closest = {}  {}\n".format(idx_closest, grid_center_label[idx_closest]))
+        
+        
+        
         color = cl.label(lab, c)
 
         
@@ -582,9 +648,9 @@ def comp_external_contour(orig, thresh, save_path):
         box_coord_rec.append(box_coord)
         
         
-        if w>0 and h>0:
+        #if w>img_width*0.05 and h>img_height*0.05:
             
-        #if w>0 and h>0 and color == 'green':
+        if w>0 and h>0 and color == 'green':
             
             offset_w = int(w*0.25)
             offset_h = int(h*0.25)
@@ -614,11 +680,16 @@ def comp_external_contour(orig, thresh, save_path):
             
             #roi = masked_fg_contour[start_y : end_y, start_x : end_x]
             
-            print("ROI {} detected ...".format(index))
             
-            result_file = (save_path +  str(format(index, "02")) + '.' + ext)
+            grid_label_str = ''.join([str(value) for value in grid_center_label[idx_closest]])
             
-            #print(result_file)
+            print("ROI {} detected ...".format(grid_label_str))
+            
+            #print("ROI {} detected ...".format(index))
+            
+            #result_file = (save_path +  str(format(index, "02")) + '.' + ext)
+            
+            result_file = (save_path +  str(format(grid_label_str)) + '.' + ext)
             
             cv2.imwrite(result_file, roi)
             
@@ -628,7 +699,8 @@ def comp_external_contour(orig, thresh, save_path):
             
             trait_img = cv2.rectangle(trait_img_bk, (x, y), (x+w, y+h), (255, 255, 0), 3)
             
-            trait_img = cv2.putText(trait_img_bk, "#{}".format(index), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+            #trait_img = cv2.putText(trait_img_bk, "#{}".format(color), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+            trait_img = cv2.putText(trait_img_bk, "#{}".format(grid_label_str), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
             
             index+= 1
      
@@ -730,7 +802,6 @@ def segmentation(image_file):
     sheet = wb.active
     
     sheet_leaf = wb.create_sheet()
-
     sheet.cell(row = 1, column = 1).value = 'c1x'
     sheet.cell(row = 1, column = 2).value = 'c1y'
     sheet.cell(row = 1, column = 3).value = 'c2x'
@@ -774,7 +845,6 @@ def segmentation(image_file):
     trait_img_sticker = comp_external_contour(sticker_crop_img.copy(), thresh_sticker, save_path_sticker)
     result_file_sticker = save_path_sticker +  '_label.' + ext
     cv2.imwrite(result_file_sticker, trait_img_sticker)
-
     # save segmentation result
     result_file = (save_path_sticker + base_name + '_sticker_match.' + args['filetype'])
     #print(result_file)
@@ -801,6 +871,8 @@ if __name__ == '__main__':
     ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, default = 100,  help = 'min size of object to be segmented.')
     ap.add_argument('-max', '--max_size', type = int, default = 10000000,  help = 'max size of object to be segmented.')
+    ap.add_argument("-nr", "--nRows", required = False,  type = int,  default = 6, help="number of rows")
+    ap.add_argument("-nc", "--mCols", required = False,  type = int,  default = 5, help="number of columns")
     args = vars(ap.parse_args())
     
     
@@ -823,7 +895,7 @@ if __name__ == '__main__':
     imgList = sorted(glob.glob(image_file_path))
     
     
-    size_kernel = 10
+    size_kernel = 3
     
     
    
@@ -890,4 +962,5 @@ if __name__ == '__main__':
 
     
 
-    
+ 
+
