@@ -524,6 +524,10 @@ def comp_external_contour(orig, thresh, save_path):
     grid_center_label = []
     grid_center_coord = []
     
+        # sort contours by area size in descending order
+    #cntsSorted = sorted(contours, key=lambda x: cv2.contourArea(x), reverse = True)
+    grid_center_label_rec = []
+    
     for i in range(0, nRows):
         
         for j in range(0, mCols):
@@ -622,7 +626,7 @@ def comp_external_contour(orig, thresh, save_path):
         #finding closest point among the grid points list ot the M coordinates
         idx_closest = closest_node((x_c_center,y_c_center), grid_center_coord)
         
-        print("idx_closest = {}  {}\n".format(idx_closest, grid_center_label[idx_closest]))
+        print("idx_closest = {}  {}".format(idx_closest, grid_center_label[idx_closest]))
         
         
         
@@ -655,26 +659,12 @@ def comp_external_contour(orig, thresh, save_path):
             offset_w = int(w*0.25)
             offset_h = int(h*0.25)
             
-            if y-offset_h < 0:
-                start_y = 0
-            else:
-                start_y = y-offset_h
-                
-            if y+h+offset_h > img_height:
-                end_y = img_height
-            else:
-                end_y = y+h+offset_h
-                
-            if x-offset_w < 0:
-                start_x = 0
-            else:
-                start_x = x-offset_w
-                
-            if x+w+offset_w > img_width:
-                end_x = img_width
-            else:
-                end_x = x+w+offset_w
+            start_y = 0 if (y-offset_h) < 0 else (y-offset_h)           
+            end_y = img_height if (y+h+offset_h) > img_height else (y+h+offset_h)
+            start_x = 0 if (x-offset_w) < 0 else (x-offset_w)
+            end_x = img_width if (x+w+offset_w > img_width) else (x+w+offset_w)
             
+
             # draw a green rectangle to visualize the bounding rect
             roi = orig[start_y : end_y, start_x : end_x]
             
@@ -683,7 +673,11 @@ def comp_external_contour(orig, thresh, save_path):
             
             grid_label_str = ''.join([str(value) for value in grid_center_label[idx_closest]])
             
-            print("ROI {} detected ...".format(grid_label_str))
+            if (grid_label_str in grid_center_label_rec) and cv2.contourArea(contours[grid_center_label_rec.index(grid_label_str)]) < cv2.contourArea(c):
+                
+                print("Repeat ROI {} detected!".format(grid_label_str))
+            
+            print("ROI {} detected ...\n".format(grid_label_str))
             
             #print("ROI {} detected ...".format(index))
             
@@ -703,6 +697,8 @@ def comp_external_contour(orig, thresh, save_path):
             trait_img = cv2.putText(trait_img_bk, "#{}".format(grid_label_str), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
             
             index+= 1
+            
+            grid_center_label_rec.append(grid_label_str)
      
     
 

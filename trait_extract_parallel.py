@@ -13,7 +13,7 @@ Created: 2018-09-29
 
 USAGE:
 
-time python3 trait_extract_parallel.py -p ~/example/test/ -ft jpg 
+time python3 trait_extract_parallel.py -p ~/example/test/ -ft jpg -min 100 -md 5
 
 '''
 
@@ -214,7 +214,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    #thresh_cleaned = clear_border(thresh)
+    #thresh_cleaned = (thresh)
     
     
     if np.count_nonzero(thresh) > 0:
@@ -222,7 +222,8 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         thresh_cleaned = clear_border(thresh)
     else:
         thresh_cleaned = thresh
-        
+    
+     
     nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
 
     # stats[0], centroids[0] are for the background label. ignore
@@ -245,7 +246,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     nb_components = nb_components - 1
     
-    min_size = 100
+    
     
     max_size = width*height*0.1
     
@@ -287,7 +288,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         
         print("mask contains mutiple non-conected parts, combine them into one\n")
         
-        kernel = np.ones((4,4), np.uint8)
+        kernel = np.ones((10,10), np.uint8)
 
         dilation = cv2.dilate(img_thresh.copy(), kernel, iterations = 1)
         
@@ -1437,7 +1438,7 @@ def extract_traits(image_file):
         else:
             min_distance_value = 5
         '''
-        min_distance_value = 3
+        #min_distance_value = 3
             
         print("min_distance_value = {}\n".format(min_distance_value))
         
@@ -1549,17 +1550,22 @@ if __name__ == '__main__':
     ap.add_argument("-p", "--path", required = True,    help="path to image file")
     ap.add_argument("-ft", "--filetype", required=True,    help="Image filetype")
     ap.add_argument("-r", "--result", required = False,    help="result path")
-    ap.add_argument('-s', '--color-space', type = str, default ='lab', help='Color space to use: BGR (default), HSV, Lab, YCrCb (YCC)')
-    ap.add_argument('-c', '--channels', type = str, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
+    ap.add_argument('-s', '--color-space', type = str, required = False, default ='lab', help='Color space to use: BGR (default), HSV, Lab, YCrCb (YCC)')
+    ap.add_argument('-c', '--channels', type = str, required = False, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
-    ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
+    ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
+    ap.add_argument('-min', '--min_size', type = int, required = False, default = 100,  help = 'min size of object to be segmented.')
+    ap.add_argument('-md', '--min_dist', type = int, required = False, default = 10,  help = 'distance threshold of watershed segmentation.')
     args = vars(ap.parse_args())
     
     
     # setting path to model file
     file_path = args["path"]
     ext = args['filetype']
+    
+    min_size = args['min_size']
+    min_distance_value = args['min_dist']
 
     #accquire image file list
     filetype = '*.' + ext
