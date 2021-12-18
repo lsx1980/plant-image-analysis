@@ -18,9 +18,9 @@ Created: 2019-09-29
 
 USAGE:
 
-python3 color_seg.py -p ~/example/plant_test/ -ft jpg -c 0 -min 100  -max 1500
+python3 color_seg_ev.py -p ~/example/plant_test/ -ft jpg -c 0 -min 100  -max 1500
 
-python3 color_seg.py -p ~/example/plant_test/ -ft jpg -nr 4 -nc 6
+python3 color_seg_ev.py -p ~/example/plant_test/ -ft jpg -nr 4 -nc 6
 
 '''
 
@@ -841,7 +841,7 @@ def segmentation(image_file):
             
     cv2.imwrite(result_file, trait_img)
     
-    '''
+    
     #########################################################
     #validation purpose, can be removed 
     #write out box coordinates for validation
@@ -851,7 +851,16 @@ def segmentation(image_file):
     sheet = wb.active
     
     sheet_leaf = wb.create_sheet()
-  
+    '''
+    sheet.cell(row = 1, column = 1).value = 'c1x'
+    sheet.cell(row = 1, column = 2).value = 'c1y'
+    sheet.cell(row = 1, column = 3).value = 'c2x'
+    sheet.cell(row = 1, column = 4).value = 'c2y'
+    sheet.cell(row = 1, column = 5).value = 'c3x'
+    sheet.cell(row = 1, column = 6).value = 'c3y'
+    sheet.cell(row = 1, column = 7).value = 'c4x'
+    sheet.cell(row = 1, column = 8).value = 'c4y'
+    '''
     for row in box_coord_rec:
         sheet.append(row)
    
@@ -869,10 +878,9 @@ def segmentation(image_file):
         c = csv.writer(f)
         for r in sh.rows: # generator; was sh.rows
             c.writerow([cell.value for cell in r])
+            
+        #################################################################end of validation file
     
-    #end of validation file
-    #################################################################
-    '''
     
     
     
