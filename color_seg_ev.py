@@ -20,7 +20,7 @@ USAGE:
 
 python3 color_seg_ev.py -p ~/example/plant_test/ -ft jpg -c 0 -min 100  -max 1500
 
-python3 color_seg_ev.py -p ~/example/plant_test/ -ft jpg -nr 4 -nc 6
+python3 color_seg_ev.py -p ~/example/plant_test/ -ft png -nr 4 -nc 6
 
 '''
 
@@ -524,7 +524,11 @@ def comp_external_contour(orig, thresh, save_path):
     grid_center_label = []
     grid_center_coord = []
     
-        # sort contours by area size in descending order
+    trait_img_bk = orig.copy()
+    
+    trait_img = orig.copy()
+    
+    # sort contours by area size in descending order
     #cntsSorted = sorted(contours, key=lambda x: cv2.contourArea(x), reverse = True)
     grid_center_label_rec = []
     
@@ -540,6 +544,8 @@ def comp_external_contour(orig, thresh, save_path):
             
             #trait_img = cv2.putText(trait_img_bk, "#{}{}".format(i,j), (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
             
+            trait_img = cv2.circle(trait_img_bk, (int(x_center), int(y_center)), 3, (0, 0, 255), 3)
+            
             label = (i+1,j+1)
             grid_center_label.append(label)
             
@@ -548,9 +554,7 @@ def comp_external_contour(orig, thresh, save_path):
             
     
     ####################################################################
-    trait_img_bk = orig.copy()
     
-    trait_img = orig.copy()
     
     box_coord_rec = []
     
@@ -946,7 +950,7 @@ if __name__ == '__main__':
     imgList = sorted(glob.glob(image_file_path))
     
     
-    size_kernel = 3
+    size_kernel = 1
     
     
    

@@ -9,17 +9,19 @@ Author: suxing liu
 
 Author-email: suxingliu@gmail.com
 
-Created: 2018-05-29
+Created: 2019-04-29
 
 USAGE:
 
-time python3 demo_trait_extract_parallel.py -p ~/example/test/ -ft jpg 
+time python3 demo_trait_extract_parallel_val.py -p ~/example/test/ -ft jpg 
 
-time python3 demo_trait_extract_parallel.py -p ~/plant-image-analysis/demo_test/16-1_6-25/ -ft jpg
+time python3 demo_trait_extract_parallel_val.py -p ~/plant-image-analysis/demo_test/16-1_6-25/ -ft jpg
 
-time python3 demo_trait_extract_parallel.py -p ~/example/pi_images/22-4_6-27/mask_reverse/ -ft jpg -min 500 -tp ~/example/pi_images/marker_template/16-1_6-23_sticker_match.jpg
+time python3 demo_trait_extract_parallel_val.py -p ~/example/pi_images/22-4_6-27/mask_reverse/ -ft jpg -min 500 -tp ~/example/pi_images/marker_template/16-1_6-23_sticker_match.jpg
+
 
 '''
+
 
 # import the necessary packages
 import os
@@ -59,6 +61,8 @@ import cv2
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib as mpl
+import matplotlib.cm as mtpltcm
 
 import math
 import openpyxl
@@ -78,6 +82,7 @@ from contextlib import closing
 from pathlib import Path 
 
 from matplotlib import collections
+from collections import OrderedDict
 
 
 MBFACTOR = float(1<<20)
@@ -129,6 +134,53 @@ class ComputeCurvature:
         return 1 / self.r  # Return the curvature
 
 
+
+class ColorLabeler:
+    def __init__(self):
+        # initialize the colors dictionary, containing the color
+        # name as the key and the RGB tuple as the value
+        colors = OrderedDict({
+            "red": (255, 0, 0),
+            "green": (0, 255, 0),
+            "blue": (0, 0, 255)})
+        # allocate memory for the L*a*b* image, then initialize
+        # the color names list
+        self.lab = np.zeros((len(colors), 1, 3), dtype="uint8")
+        self.colorNames = []
+        # loop over the colors dictionary
+        for (i, (name, rgb)) in enumerate(colors.items()):
+            # update the L*a*b* array and the color names list
+            self.lab[i] = rgb
+            self.colorNames.append(name)
+        # convert the L*a*b* array from the RGB color space
+        # to L*a*b*
+        self.lab = cv2.cvtColor(self.lab, cv2.COLOR_RGB2LAB)
+
+
+    def label(self, image, c):
+        # construct a mask for the contour, then compute the
+        # average L*a*b* value for the masked region
+        mask = np.zeros(image.shape[:2], dtype="uint8")
+        cv2.drawContours(mask, [c], -1, 255, -1)
+        mask = cv2.erode(mask, None, iterations=2)
+        mean = cv2.mean(image, mask=mask)[:3]
+        # initialize the minimum distance found thus far
+        minDist = (np.inf, None)
+        # loop over the known L*a*b* color values
+        for (i, row) in enumerate(self.lab):
+            # compute the distance between the current L*a*b*
+            # color value and the mean of the image
+            d = dist.euclidean(row[0], mean)
+            # if the distance is smaller than the current distance,
+            # then update the bookkeeping variable
+            if d < minDist[0]:
+                minDist = (d, i)
+        # return the name of the color with the smallest distance
+        return self.colorNames[minDist[1]]
+
+
+
+
 # generate foloder to store the output results
 def mkdir(path):
     # import module
@@ -158,6 +210,8 @@ def mkdir(path):
 # color cluster based object segmentation
 def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, min_size):
     
+    orig_image = image.copy
+    
     # Change image color space, if necessary.
     colorSpace = args_colorspace.lower()
 
@@ -184,6 +238,8 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
             image.reshape(image.shape[0], image.shape[1], 1)
             
     (width, height, n_channel) = image.shape
+    
+    
     
     #print("image shape: \n")
     #print(width, height, n_channel)
@@ -221,16 +277,18 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
     
     #thresh_cleaned = clear_border(thresh)
     
-    '''
+    
     if np.count_nonzero(thresh) > 0:
         
         thresh_cleaned = clear_border(thresh)
+        if cv2.countNonZero(thresh_cleaned) == 0:
+            thresh_cleaned = thresh
     else:
         thresh_cleaned = thresh
-    '''
+    
     
     thresh_cleaned = thresh
-    
+
     nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
 
     # stats[0], centroids[0] are for the background label. ignore
@@ -255,13 +313,23 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
     
     #min_size = 2000*1
     
-    max_size = width*height*0.1
     
     img_thresh = np.zeros([width, height], dtype=np.uint8)
     
+    
+    #max_label = 1
+    #max_size = sizes[1]
+    if len(sizes) > 2:
+        max_label = 1
+        max_size = sizes[1]
+    else:
+        max_size = width*height*0.1
+    
+
+    
     #for every component in the image, keep it only if it's above min_size
     for i in range(0, nb_components):
-        
+    
         '''
         #print("{} nb_components found".format(i))
         
@@ -274,12 +342,32 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
             imax = max(enumerate(sizes), key=(lambda x: x[1]))[0] + 1    
             img_thresh[output == imax] = 255
             print("Foreground max found ")
+        
         '''
-        
         if (sizes[i] >= min_size):
-        
+            
             img_thresh[output == i + 1] = 255
+            
+            '''
+            if len(sizes) > 2:
+                max_label = i
+                max_size = sizes[i]
+                img_thresh[output == max_label] = 255
+            else:
+                
+                img_thresh[output == i + 1] = 255
+            '''
+    
+    '''
+    if cv2.countNonZero(clear_border(img_thresh)) == 0:
         
+        img_thresh = img_thresh
+    else:
+        img_thresh = clear_border(img_thresh)
+    '''
+    #max_label, max_size = max([(i, stats[i, cv2.CC_STAT_AREA]) for i in range(1, nb_components)], key=lambda x: x[1])
+    #img_thresh[output == max_label] = 255
+    
     #from skimage import img_as_ubyte
     
     #img_thresh = img_as_ubyte(img_thresh)
@@ -289,9 +377,11 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
     
     contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
+    size_kernel = 10
+    
     if len(contours) > 1:
         
-        kernel = np.ones((4,4), np.uint8)
+        kernel = np.ones((size_kernel,size_kernel), np.uint8)
 
         dilation = cv2.dilate(img_thresh.copy(), kernel, iterations = 1)
         
@@ -299,6 +389,10 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
         
         img_thresh = closing
 
+    if cv2.countNonZero(img_thresh) == 0:
+    
+        img_thresh[:] = 0
+    
     
     #return img_thresh
     return img_thresh
@@ -551,7 +645,7 @@ def comp_external_contour(orig,thresh):
             
             hull = cv2.convexHull(c)
             hull_area = cv2.contourArea(hull)
-            solidity = float(area)/hull_area
+            index = float(area)/hull_area
             
             extLeft = tuple(c[c[:,:,0].argmin()][0])
             extRight = tuple(c[c[:,:,0].argmax()][0])
@@ -575,7 +669,7 @@ def comp_external_contour(orig,thresh):
             
             
             
-    return trait_img, area, solidity, w, h, center_X, center_Y
+    return trait_img, area, index, w, h, center_X, center_Y
 
 # scale contour for tracking
 def scale_contour(cnt, scale):
@@ -961,8 +1055,8 @@ def color_region(image, mask, save_path, num_clusters):
     masked_image_ori = cv2.bitwise_and(image, image, mask = mask)
     
     #define result path for labeled images
-    #result_img_path = save_path + 'masked.png'
-    #cv2.imwrite(result_img_path, masked_image_ori)
+    result_img_path = save_path + 'masked.png'
+    cv2.imwrite(result_img_path, masked_image_ori)
     
     # convert to RGB
     image_RGB = cv2.cvtColor(masked_image_ori, cv2.COLOR_BGR2RGB)
@@ -994,9 +1088,9 @@ def color_region(image, mask, save_path, num_clusters):
 
 
     segmented_image_BRG = cv2.cvtColor(segmented_image, cv2.COLOR_RGB2BGR)
-    #define result path for labeled imagpie_color.pnges
-    #result_img_path = save_path + 'clustered.png'
-    #cv2.imwrite(result_img_path, segmented_image_BRG)
+    #define result path for labeled images
+    result_img_path = save_path + 'clustered.png'
+    cv2.imwrite(result_img_path, segmented_image_BRG)
 
 
     '''
@@ -1115,11 +1209,11 @@ def color_region(image, mask, save_path, num_clusters):
     plt.pie(counts.values(), labels = hex_colors, colors = hex_colors)
 
     #define result path for labeled images
-    #result_img_path = save_path + 'pie_color.png'
-    #plt.savefig(result_img_path)
+    result_img_path = save_path + 'pie_color.png'
+    plt.savefig(result_img_path)
 
    
-    return rgb_colors, counts
+    return rgb_colors, counts, hex_colors
 
 # normalize image data
 def _normalise_image(image, *, image_cmap=None):
@@ -1293,6 +1387,10 @@ def extract_traits(image_file):
     
     image_file_name = Path(image_file).name
    
+    #initialize the colormap
+    colormap = mpl.cm.jet
+    cNorm = mpl.colors.Normalize(vmin=0, vmax=255)
+    scalarMap = mtpltcm.ScalarMappable(norm=cNorm, cmap=colormap)
     
     # make the folder to store the results
     #current_path = abs_path + '/'
@@ -1314,6 +1412,7 @@ def extract_traits(image_file):
     
     #print ("track_save_path: " + track_save_path)
     
+    #coffient = (87.3536191965406, 69.9979422616578, 116.32627374977, 88.0781733017053, 72.6213559207636, 106.200604960711, 93.3387584464954, 96.1746594499645, 98.9824651280326)
     
     
     if isbright(image_file):
@@ -1334,7 +1433,7 @@ def extract_traits(image_file):
         args_channels = args['channels']
         args_num_clusters = args['num_clusters']
         
-        min_size = 200
+        
         
         #color clustering based plant object segmentation
         thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters, min_size)
@@ -1373,9 +1472,9 @@ def extract_traits(image_file):
         
         sticker_thresh = np.zeros([sticker.shape[0], sticker.shape[1]], dtype=np.uint8)
         
-        rgb_colors, counts = color_region(orig, thresh, save_path, num_clusters)
+        (rgb_colors, counts, hex_colors) = color_region(orig, thresh, save_path, num_clusters)
         
-        rgb_colors_sticker, counts_sticker = color_region(sticker, sticker_thresh, save_path, 2)
+        (rgb_colors_sticker, counts_sticker, hex_colors) = color_region(sticker, sticker_thresh, sticker_path, 2)
         
         ref_color = rgb2lab(np.uint8(np.asarray([[rgb_colors_sticker[0]]])))
         
@@ -1482,7 +1581,7 @@ def extract_traits(image_file):
         '''
         
         
-        min_distance_value = 15
+        min_distance_value = 7
         
         
         #watershed based leaf area segmentaiton 
@@ -1569,6 +1668,9 @@ if __name__ == '__main__':
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
+    ap.add_argument('-min', '--min_size', required=False,  type = int, default = 100,  help = 'min size of object to be segmented.')
+    ap.add_argument("-tp", "--temp_path", required = False,  help="template image path")
+    
     args = vars(ap.parse_args())
     
     
@@ -1581,7 +1683,10 @@ if __name__ == '__main__':
     image_file_path = file_path + filetype
     
     #temperature sticker readings
-    sticker_path = file_path + '/sticker/' + '02.jpg'
+    min_size = args['min_size']
+    
+    sticker_path = args['temp_path']
+    
     # Read the template 
     sticker = cv2.imread(sticker_path, 0) 
     print("sticker was found")
@@ -1672,7 +1777,7 @@ if __name__ == '__main__':
         #Get the current Active Sheet
         sheet = wb.active
         
-        #sheet_leaf = wb.create_sheet()
+        sheet.delete_rows(2, sheet.max_row+1) # for entire sheet
 
     else:
         # Keep presets

@@ -18,9 +18,11 @@ Created: 2019-09-29
 
 USAGE:
 
-python3 color_seg.py -p ~/example/plant_test/ -ft jpg -c 0 -min 100  -max 1500
+python3 color_seg_pi.py -p ~/example/plant_test/ -ft jpg -c 0 -min 100  -max 1500
 
-python3 color_seg.py -p ~/example/plant_test/ -ft jpg -nr 4 -nc 6
+python3 color_seg_pi.py -p ~/example/plant_test/ -ft jpg -nr 4 -nc 6 -tp ~/example/pi_images/marker_template/16-1_6-23_sticker_match.jpg
+
+python3 color_seg_pi.py -p ~/example/plant_test/seeds/ -ft png -nr 1 -nc 5
 
 '''
 
@@ -51,6 +53,8 @@ import csv
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib as mpl
+import matplotlib.cm as mtpltcm
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -285,7 +289,8 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    thresh_cleaned = clear_border(thresh)
+    #thresh_cleaned = clear_border(thresh)
+    thresh_cleaned = thresh
     
     if np.count_nonzero(thresh) > 0:
         
@@ -433,7 +438,16 @@ def sticker_detect(img_ori, save_path):
     
     # Specify a threshold 
     threshold = 0.8
-      
+    
+    flag = False
+    
+    if np.amax(res) > threshold:
+        
+        flag = True
+    
+    print(flag)
+    
+
     # Store the coordinates of matched area in a numpy array 
     loc = np.where( res >= threshold)  
     
@@ -443,9 +457,9 @@ def sticker_detect(img_ori, save_path):
     
         (min_val, max_val, min_loc, max_loc) = cv2.minMaxLoc(res)
     
-        print(y,x)
+        #print(y,x)
         
-        print(min_val, max_val, min_loc, max_loc)
+        #print(min_val, max_val, min_loc, max_loc)
         
     
         (startX, startY) = max_loc
@@ -563,198 +577,228 @@ def comp_external_contour(orig, thresh, save_path):
     
     cl = ColorLabeler()
     
+    
+    print("length of contours = {}\n".format(len(contours)))
     #for c in contours:
     
-    for idx, c in enumerate(contours):
-        
-        #shape detection
-        #################################################################
-        '''
-        # here we are ignoring first counter because 
-        # findcontour function detects whole image as shape
-        if i == 0:
-            i = 1
-            continue
-        
-        #hull = cv2.convexHull(c)
-        
-        # cv2.approxPloyDP() function to approximate the shape
-        approx = cv2.approxPolyDP(c, 0.01 * cv2.arcLength(c, True), True)
-        # using drawContours() function
-        #trait_img = cv2.drawContours(orig, [c], 0, (0, 0, 255), 10)
-  
-        # finding center point of shape
-        M = cv2.moments(c)
-        
-        if M['m00'] != 0.0:
-            x = int(M['m10']/M['m00'])
-            y = int(M['m01']/M['m00'])
-  
-        # putting shape name at center of each shape
-        if len(approx) == 3:
-            trait_img = cv2.putText(trait_img_bk, 'Triangle', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
-    
-        elif len(approx) == 4:
-            trait_img = cv2.putText(trait_img_bk, 'Quadrilateral', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
-    
-        elif len(approx) == 5:
-            trait_img = cv2.putText(trait_img_bk, 'Pentagon', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
-    
-        elif len(approx) == 6:
-            trait_img = cv2.putText(trait_img_bk, 'Hexagon', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
-    
-        else:
-            trait_img = cv2.putText(trait_img_bk, 'circle', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
-        '''
-        ############################################################3
-        '''
-        # black image
-        mask = np.zeros((img_height, img_width), dtype=np.uint8)
-        
-        # assign contours in white color
-        mask_contour= cv2.drawContours(mask, [c], 0, 255, -1)
-        
-        masked_fg_contour = cv2.bitwise_and(orig, orig, mask = mask_contour)
-        
-        # Convert color space to LAB space and extract L channel
-        L, A, B = cv2.split(cv2.cvtColor(masked_fg_contour.copy(), cv2.COLOR_BGR2LAB))
-        '''
-        
-        #finding center point of shape
-        M = cv2.moments(c)
+    if args['gd_segmentation'] == 1:
             
-        if M['m00'] != 0.0:
-            x_c_center = int(M['m10']/M['m00'])
-            y_c_center = int(M['m01']/M['m00'])
+        # Dimensions of the image
+        sizeX = img_width
+        sizeY = img_height
+        #print(img.shape)
 
-        #finding closest point among the grid points list ot the M coordinates
-        idx_closest = closest_node((x_c_center,y_c_center), grid_center_coord)
-        
-        print("idx_closest = {}  {}".format(idx_closest, grid_center_label[idx_closest]))
-        
-        
-        grid_label_str = ''.join([str(value) for value in grid_center_label[idx_closest]])
+
+        for i in range(0, nRows):
             
-        if (grid_label_str in grid_center_label_rec):
-        #if (grid_label_str in grid_center_label_rec) and cv2.contourArea(contours[grid_center_label_rec.index(grid_label_str)]) < cv2.contourArea(c):
+            for j in range(0, mCols):
                 
-            print("Repeat ROI {} idx = {} detected!".format(grid_label_str, idx))
-
-            index_c = grid_center_label_rec.index(grid_label_str)
-
-            mergred_c = np.vstack((contours[index_c], c))
-            
-            merged_c_idx.append(idx)
-            
-        else:
-            
-            mergred_c = c
+                roi = orig[int(i*sizeY/nRows):int(i*sizeY/nRows) + int(sizeY/nRows),int(j*sizeX/mCols):int(j*sizeX/mCols) + int(sizeX/mCols)]
                 
-        print("ROI {} detected ...\n".format(grid_label_str))
+                result_file = (save_path +  str(i+1) + str(j+1) + '.' + ext)
+                
+                cv2.imwrite(result_file, roi)
         
+        trait_img = orig
+        box_coord_rec_merged = []
+        grid_center_label_rec_merged = []
         
+        return trait_img, box_coord_rec_merged, grid_center_label_rec_merged
+            
+    else:
         
-        color = cl.label(lab, mergred_c)
+        for idx, c in enumerate(contours):
+            
+            #shape detection
+            #################################################################
+            '''
+            # here we are ignoring first counter because 
+            # findcontour function detects whole image as shape
+            if i == 0:
+                i = 1
+                continue
+            
+            #hull = cv2.convexHull(c)
+            
+            # cv2.approxPloyDP() function to approximate the shape
+            approx = cv2.approxPolyDP(c, 0.01 * cv2.arcLength(c, True), True)
+            # using drawContours() function
+            #trait_img = cv2.drawContours(orig, [c], 0, (0, 0, 255), 10)
+      
+            # finding center point of shape
+            M = cv2.moments(c)
+            
+            if M['m00'] != 0.0:
+                x = int(M['m10']/M['m00'])
+                y = int(M['m01']/M['m00'])
+      
+            # putting shape name at center of each shape
+            if len(approx) == 3:
+                trait_img = cv2.putText(trait_img_bk, 'Triangle', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+        
+            elif len(approx) == 4:
+                trait_img = cv2.putText(trait_img_bk, 'Quadrilateral', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+        
+            elif len(approx) == 5:
+                trait_img = cv2.putText(trait_img_bk, 'Pentagon', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+        
+            elif len(approx) == 6:
+                trait_img = cv2.putText(trait_img_bk, 'Hexagon', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+        
+            else:
+                trait_img = cv2.putText(trait_img_bk, 'circle', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+            '''
+            ############################################################3
+            '''
+            # black image
+            mask = np.zeros((img_height, img_width), dtype=np.uint8)
+            
+            # assign contours in white color
+            mask_contour= cv2.drawContours(mask, [c], 0, 255, -1)
+            
+            masked_fg_contour = cv2.bitwise_and(orig, orig, mask = mask_contour)
+            
+            # Convert color space to LAB space and extract L channel
+            L, A, B = cv2.split(cv2.cvtColor(masked_fg_contour.copy(), cv2.COLOR_BGR2LAB))
+            '''
+            
+            #finding center point of shape
+            M = cv2.moments(c)
+                
+            if M['m00'] != 0.0:
+                x_c_center = int(M['m10']/M['m00'])
+                y_c_center = int(M['m01']/M['m00'])
 
-        
-        #get the bounding rect
-        (x, y, w, h) = cv2.boundingRect(mergred_c)
-        
-        ratio_bbx = min(w,h)/max(w,h)
-        
-        
-        #save bounding box coordinates 
-        '''
-        rect = cv2.minAreaRect(c)
-        box = cv2.boxPoints(rect)
-        box = np.array(box, dtype="int")
-        box_coord_flat = box.flatten()
-        
-        #print("bbox coordinates :{0}".format(box_coord_flat))
-        
-        
-        box_coord = []
-        for item in box_coord_flat:
-            box_coord.append(item)
+            #finding closest point among the grid points list ot the M coordinates
+            idx_closest = closest_node((x_c_center,y_c_center), grid_center_coord)
             
-        box_coord_rec.append(box_coord)
-        '''
-        
+            print("idx_closest = {}  {}".format(idx_closest, grid_center_label[idx_closest]))
+            
+            
+            grid_label_str = ''.join([str(value) for value in grid_center_label[idx_closest]])
+                
+            if (grid_label_str in grid_center_label_rec):
+            #if (grid_label_str in grid_center_label_rec) and cv2.contourArea(contours[grid_center_label_rec.index(grid_label_str)]) < cv2.contourArea(c):
+                    
+                print("Repeat ROI {} idx = {} detected!".format(grid_label_str, idx))
 
-        
-        
-        #if w>img_width*0.05 and h>img_height*0.05:
+                index_c = grid_center_label_rec.index(grid_label_str)
+
+                mergred_c = np.vstack((contours[index_c], c))
+                
+                merged_c_idx.append(idx)
+                
+            else:
+                
+                mergred_c = c
+                    
+            print("ROI {} detected ...\n".format(grid_label_str))
             
-        if w>0 and h>0 and color == 'green':
             
-            offset_w = int(w*0.25)
-            offset_h = int(h*0.25)
             
-            start_y = 0 if (y-offset_h) < 0 else (y-offset_h)           
-            end_y = img_height if (y+h+offset_h) > img_height else (y+h+offset_h)
-            start_x = 0 if (x-offset_w) < 0 else (x-offset_w)
-            end_x = img_width if (x+w+offset_w > img_width) else (x+w+offset_w)
+            color = cl.label(lab, mergred_c)
+
+            
+            #get the bounding rect
+            (x, y, w, h) = cv2.boundingRect(mergred_c)
+            
+            ratio_bbx = min(w,h)/max(w,h)
+            
+            
+            #save bounding box coordinates 
+            '''
+            rect = cv2.minAreaRect(c)
+            box = cv2.boxPoints(rect)
+            box = np.array(box, dtype="int")
+            box_coord_flat = box.flatten()
+            
+            #print("bbox coordinates :{0}".format(box_coord_flat))
+            
+            
+            box_coord = []
+            for item in box_coord_flat:
+                box_coord.append(item)
+                
+            box_coord_rec.append(box_coord)
+            '''
             
 
-            # draw a green rectangle to visualize the bounding rect
-            roi = orig[start_y : end_y, start_x : end_x]
-            
-            #roi = masked_fg_contour[start_y : end_y, start_x : end_x]
             
             
-           
-            
-            #print("ROI {} detected ...".format(index))
-            
-            #result_file = (save_path +  str(format(index, "02")) + '.' + ext)
-            
-            result_file = (save_path +  str(format(grid_label_str)) + '.' + ext)
-            
-            cv2.imwrite(result_file, roi)
-            
-            #trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 3)
-            
-            #trait_img = cv2.drawContours(orig, c, -1, (0,255,255), -1)
-            
-            trait_img = cv2.rectangle(trait_img_bk, (x, y), (x+w, y+h), (255, 255, 0), 3)
-            
-            #trait_img = cv2.putText(trait_img_bk, "#{}".format(color), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
-            trait_img = cv2.putText(trait_img_bk, "#{}".format(grid_label_str), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
-            
-            trait_img = cv2.circle(trait_img_bk, (x, y), 3, (255, 0, 0), 3)
-            
-            trait_img = cv2.circle(trait_img_bk, (x+w, y+h), 3, (255, 0, 0), 3)
-            
-            #index+= 1
-            
-            grid_center_label_rec.append(grid_label_str)
-            
-            box_coord_rec.append((x,y, x,y+w, x+w,y+w, x+w,y))
-        
-            #print(x,y, x,y+w, x+w,y+w, x+w,y)
-     
-    #print(len(grid_center_label_rec))
-    
-    #print(len(box_coord_rec))
-    
-    box_coord_rec_merged = [j for i, j in enumerate(box_coord_rec) if i not in merged_c_idx]
-    
-    grid_center_label_rec_merged = [j for i, j in enumerate(grid_center_label_rec) if i not in merged_c_idx]
-    
-    grid_center_label_rec_merged = list(map(int, grid_center_label_rec_merged))
-    
-    #print((grid_center_label_rec_merged))
-    
-    #print(len(box_coord_rec_merged))
-    
-    sorted_grid_center_label_rec_merged = np.argsort(grid_center_label_rec_merged)
-    
-    #print((sorted_grid_center_label_rec_merged))
-    
-    #sort all lists according to sorted_grid_center_label_rec_merged order index
-    box_coord_rec_merged[:] = [box_coord_rec_merged[i] for i in sorted_grid_center_label_rec_merged] 
+            #if w>img_width*0.05 and h>img_height*0.05:
+                
+            #if w>0 and h>0 and color == 'green':
 
-    return trait_img, box_coord_rec_merged, grid_center_label_rec_merged
+            if w>0 and h>0:
+                
+                offset_w = int(w*0.20)
+                offset_h = int(h*0.20)
+                
+                start_y = 0 if (y-offset_h) < 0 else (y-offset_h)           
+                end_y = img_height if (y+h+offset_h) > img_height else (y+h+offset_h)
+                start_x = 0 if (x-offset_w) < 0 else (x-offset_w)
+                end_x = img_width if (x+w+offset_w > img_width) else (x+w+offset_w)
+                
+
+                # draw a green rectangle to visualize the bounding rect
+                roi = orig[start_y : end_y, start_x : end_x]
+                
+                #roi = masked_fg_contour[start_y : end_y, start_x : end_x]
+                
+                
+               
+                
+                #print("ROI {} detected ...".format(index))
+                
+                #result_file = (save_path +  str(format(index, "02")) + '.' + ext)
+                
+                result_file = (save_path +  str(format(grid_label_str)) + '.' + ext)
+                
+                cv2.imwrite(result_file, roi)
+                
+                #trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 3)
+                
+                #trait_img = cv2.drawContours(orig, c, -1, (0,255,255), -1)
+                
+                trait_img = cv2.rectangle(trait_img_bk, (x, y), (x+w, y+h), (255, 255, 0), 3)
+                
+                #trait_img = cv2.putText(trait_img_bk, "#{}".format(color), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+                trait_img = cv2.putText(trait_img_bk, "#{}".format(grid_label_str), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 255), 10)
+                
+                trait_img = cv2.circle(trait_img_bk, (x, y), 3, (255, 0, 0), 3)
+                
+                trait_img = cv2.circle(trait_img_bk, (x+w, y+h), 3, (255, 0, 0), 3)
+                
+                #index+= 1
+                
+                grid_center_label_rec.append(grid_label_str)
+                
+                box_coord_rec.append((x,y, x,y+w, x+w,y+w, x+w,y))
+            
+                #print(x,y, x,y+w, x+w,y+w, x+w,y)
+         
+        #print(len(grid_center_label_rec))
+        
+        #print(len(box_coord_rec))
+        
+        box_coord_rec_merged = [j for i, j in enumerate(box_coord_rec) if i not in merged_c_idx]
+        
+        grid_center_label_rec_merged = [j for i, j in enumerate(grid_center_label_rec) if i not in merged_c_idx]
+        
+        grid_center_label_rec_merged = list(map(int, grid_center_label_rec_merged))
+        
+        #print((grid_center_label_rec_merged))
+        
+        #print(len(box_coord_rec_merged))
+        
+        sorted_grid_center_label_rec_merged = np.argsort(grid_center_label_rec_merged)
+        
+        #print((sorted_grid_center_label_rec_merged))
+        
+        #sort all lists according to sorted_grid_center_label_rec_merged order index
+        box_coord_rec_merged[:] = [box_coord_rec_merged[i] for i in sorted_grid_center_label_rec_merged] 
+
+        return trait_img, box_coord_rec_merged, grid_center_label_rec_merged
 
 
 
@@ -777,6 +821,9 @@ def segmentation(image_file):
     # load original image
     image = cv2.imread(image_file)
     
+    #make backup image
+    orig = image.copy()
+    
     img_height, img_width, img_channels = image.shape
     
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -797,21 +844,32 @@ def segmentation(image_file):
     print("results_folder: {0}\n".format(str(save_path)))  
     
     
+    # Convert color space to LAB space and extract L channel
+    L, A, B = cv2.split(cv2.cvtColor(orig.copy(), cv2.COLOR_BGR2LAB))
+    
+    #initialize the colormap
+    colormap = mpl.cm.jet
+    cNorm = mpl.colors.Normalize(vmin=0, vmax=255)
+    scalarMap = mtpltcm.ScalarMappable(norm=cNorm, cmap=colormap)
+    
+    
+    
     if (file_size > 5.0):
         print("It will take some time due to large file size {0} MB".format(str(int(file_size))))
     else:
         print("Segmenting plant object using automatic color clustering method... ")
     
-    #make backup image
-    orig = image.copy()
+
     
     
-    # Convert color space to LAB space and extract L channel
-    L, A, B = cv2.split(cv2.cvtColor(orig.copy(), cv2.COLOR_BGR2LAB))
+     #assign colormap
+    colors_L = scalarMap.to_rgba(L.copy(), bytes=False)
+    colors_L = cv2.convertScaleAbs(colors_L.copy(), alpha=(255.0))
+    colors_L_gray = cv2.cvtColor(colors_L, cv2.COLOR_BGR2GRAY)
     
     # save Lab result
     result_file = (save_path_mask + base_name + '_L.' + ext)
-    cv2.imwrite(result_file, L)
+    cv2.imwrite(result_file, colors_L_gray)
     
     # save Lab result
     result_file = (save_path_mask + base_name + '_A.' + ext)
@@ -875,24 +933,31 @@ def segmentation(image_file):
     '''
     
     
+    if template_path == 0:
+        
+        print("Skip template matching...")
+    else:
+        
+        (sticker_crop_img) = sticker_detect(image.copy(), save_path)
+        
+        '''
+        # save segmentation result
+        result_file = (save_path + base_name + 'sticker_matched.' + args['filetype'])
+        #print(result_file)
+        cv2.imwrite(result_file, sticker_crop_img)
+        
+        thresh_sticker = color_cluster_seg(sticker_crop_img.copy(), args_colorspace, args_channels, 4, min_size = 1000)
+        trait_img_sticker = comp_external_contour(sticker_crop_img.copy(), thresh_sticker, save_path_sticker)
+        result_file_sticker = save_path_sticker +  '_label.' + ext
+        cv2.imwrite(result_file_sticker, trait_img_sticker)
+        '''
+        
+        
+        # save segmentation result
+        result_file = (save_path_sticker + base_name + '_sticker_match.' + args['filetype'])
+        #print(result_file)
+        cv2.imwrite(result_file, sticker_crop_img)
     
-    '''
-    (sticker_crop_img) = sticker_detect(image.copy(), save_path)
-    
-    # save segmentation result
-    #result_file = (save_path + base_name + 'sticker_matched.' + args['filetype'])
-    #print(result_file)
-    #cv2.imwrite(result_file, sticker_overlay)
-    
-    thresh_sticker = color_cluster_seg(sticker_crop_img.copy(), args_colorspace, args_channels, 4, min_size = 1000)
-    trait_img_sticker = comp_external_contour(sticker_crop_img.copy(), thresh_sticker, save_path_sticker)
-    result_file_sticker = save_path_sticker +  '_label.' + ext
-    cv2.imwrite(result_file_sticker, trait_img_sticker)
-    # save segmentation result
-    result_file = (save_path_sticker + base_name + '_sticker_match.' + args['filetype'])
-    #print(result_file)
-    cv2.imwrite(result_file, sticker_crop_img)
-    '''
     
     return thresh
     #trait_img
@@ -907,8 +972,8 @@ if __name__ == '__main__':
     ap.add_argument("-p", "--path", required = True,    help="path to image file")
     ap.add_argument("-ft", "--filetype", required=True,    help="Image filetype")
     
-    ap.add_argument('-s', '--color-space', type =str, default ='bgr', help='Color space to use: bgr(default), lab,  HSV, YCrCb (YCC)')
-    ap.add_argument('-c', '--channels', type = str, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
+    ap.add_argument('-s', '--color-space', type =str, default ='lab', help='Color space to use: bgr(default), lab,  HSV, YCrCb (YCC)')
+    ap.add_argument('-c', '--channels', type = str, default='2', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
@@ -916,6 +981,8 @@ if __name__ == '__main__':
     ap.add_argument('-max', '--max_size', type = int, default = 10000000,  help = 'max size of object to be segmented.')
     ap.add_argument("-nr", "--nRows", required = False,  type = int,  default = 6, help="number of rows")
     ap.add_argument("-nc", "--mCols", required = False,  type = int,  default = 5, help="number of columns")
+    ap.add_argument("-tp", "--temp_path", required = False,  default = False, help="template image path")
+    ap.add_argument("-gd", "--gd_segmentation", required = False,  type = int, default = 0, help="gd_segmentation")
     args = vars(ap.parse_args())
     
     
@@ -939,16 +1006,32 @@ if __name__ == '__main__':
     
     
     size_kernel = 1
+
     
-    
-   
-    '''
     global  template
-    template_path = "/home/suxing/smart_plant/marker_template/sticker_template.jpg"
-    # Read the template 
-    template = cv2.imread(template_path, 0) 
-    print(template)
-    '''
+    #template_path = "/home/suxing/smart_plant/marker_template/sticker_template.jpg"
+    
+    #template_path = args['temp_path'] + 'sticker_template.jpg'
+    
+    
+    
+    if args['temp_path'] == False:
+    
+        print("No template marker path was defined...")
+        template_path = 0
+    
+    else:
+        
+        template_path = args['temp_path']
+        
+        # Read the template 
+        template = cv2.imread(template_path, 0) 
+        #print(template)
+
+        mkpath_sticker = os.path.dirname(args['temp_path']) 
+        mkdir(mkpath_sticker)
+        save_path_sticker = mkpath_sticker + '/'
+    
     #print((imgList))
     
     #current_img = imgList[0]

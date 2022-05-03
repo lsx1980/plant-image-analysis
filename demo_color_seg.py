@@ -19,8 +19,8 @@ USAGE:
 
 python3 demo_color_seg.py -p ~/plant-image-analysis/test/ -ft JPG
 
-
 '''
+
 
 # import the necessary packages
 import os
@@ -553,7 +553,6 @@ def segmentation(image_file):
     
     #return thresh
     #trait_img
-    
     
     
 
