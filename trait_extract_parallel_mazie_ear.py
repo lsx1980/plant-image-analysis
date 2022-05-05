@@ -45,7 +45,9 @@ from scipy.interpolate import interp1d
 
 from skan import skeleton_to_csgraph, Skeleton, summarize, draw
 
-import networkx as nx
+#from skan import sholl_analysis
+
+#import networkx as nx
 
 import imutils
 from imutils import perspective
@@ -1138,31 +1140,61 @@ def extract_traits(image_file):
         sub_branch_cleaned = sub_branch.drop(sub_branch.index[indices])
 
         #print(outlier_list)
+        
         #print(indices)
+        
         #print(sub_branch)
         
         print(sub_branch_cleaned)
         
-        end_points_coord_x = sub_branch_cleaned["image-coord-src-0"].tolist()
-        
-        end_points_coord_Y = sub_branch_cleaned["image-coord-src-1"].tolist()
+        #print(sub_branch_cleaned.iloc[:, 0])
         
         
-        print("[INFO] There are {} branch end points were found\n".format(end_points_coord_x))
+        end_points_coord_y = sub_branch_cleaned["image-coord-src-0"].tolist()
+        end_points_coord_x = sub_branch_cleaned["image-coord-src-1"].tolist()
         
-        print("[INFO] There are {} branch end points were found\n".format(end_points_coord_Y))
+        #skeleton_id_list = sub_branch_cleaned["skeleton-id"].tolist()
+        
+        maxpos_y = end_points_coord_y.index(max(end_points_coord_y))
+        
+        #print("[INFO] There are {} branch end points were found\n".format(end_points_coord_x))
+        #print("[INFO] There are {} branch end points were found\n".format(end_points_coord_y))
         
         
-        for index, (x,y) in enumerate(zip(end_points_coord_x, end_points_coord_Y)):
+        for index, (x,y) in enumerate(zip(end_points_coord_x, end_points_coord_y)):
             
-            # draw the midpoints on the image
-            end_point_overlay = cv2.circle(orig, (int(y), int(x)), 2, (255, 0, 0), -1)
+            if index == maxpos_y:
+                
+                # draw the endpoints on the image
+                end_point_overlay = cv2.circle(orig, (int(x), int(y)), 3, (0, 0, 255), -1)
+                end_point_overlay = cv2.putText(orig, "{}".format("root point"), (int(x-25), int(y+15)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 0, 255), 2)
+            
+            else:
+            
+                # draw the endpoints on the image
+                end_point_overlay = cv2.circle(orig, (int(x), int(y)), 2, (255, 0, 0), -1)
+                end_point_overlay = cv2.putText(orig, "{}".format(index), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 0, 255), 2)
         
         
         result_file = (save_path + base_name + '_end_point_overlay' + file_extension)
         cv2.imwrite(result_file, end_point_overlay)
         
+
+        '''
+        # define the center/soma
+        center = np.array([end_points_coord_x[maxpos_y], end_points_coord_y[maxpos_y]])
         
+        # define radii at which to measure crossings
+        radii = np.arange(4, 45, 4)
+        
+        # perform sholl analysis
+        center, radii, counts = sholl_analysis(Skeleton(image_skeleton), center=center, shells=radii)
+        
+        table = pd.DataFrame({'radius': radii, 'crossings': counts})
+        
+        print(table)
+        '''
+
         
         branch_type_list = sub_branch_cleaned["branch-type"].tolist()
         
@@ -1175,15 +1207,21 @@ def extract_traits(image_file):
         #plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
         #plt.close()
 
-        '''
+        
         fig = plt.plot()
+        
         source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
-        #img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-distance', skeleton_colormap = 'hsv')
-        img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-type', skeleton_colormap = 'hsv')
+        
+        img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-distance', skeleton_colormap = 'hsv')
+        
+        #img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-type', skeleton_colormap = 'hsv')
+        
         result_file = (save_path + base_name + '_euclidean_graph_overlay' + file_extension)
+        
         plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
+        
         plt.close()
-        '''
+        
         
 
         
