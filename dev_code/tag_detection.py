@@ -18,7 +18,7 @@ Created: 2022-05-02
 
 USAGE:
 
-python3 color_seg_mazie_ear.py -p ~/example/plant_test/seeds/ -ft png -nr 1 -nc 5
+python3 tag_detection.py -p ~/example/plant_test/ -ft JPG 
 
 '''
 
@@ -163,6 +163,46 @@ class clockwise_angle_and_distance():
 
 
 
+class ShapeDetector:
+    
+    def __init__(self):
+        pass
+        
+    def detect(self, c):
+        
+        # initialize the shape name and approximate the contour
+        shape = "unidentified"
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+        
+        # if the shape is a triangle, it will have 3 vertices
+        if len(approx) == 3:
+            shape = "triangle"
+            
+        # if the shape has 4 vertices, it is either a square or
+        # a rectangle
+        elif len(approx) == 4:
+            # compute the bounding box of the contour and use the
+            # bounding box to compute the aspect ratio
+            (x, y, w, h) = cv2.boundingRect(approx)
+            ar = w / float(h)
+            # a square will have an aspect ratio that is approximately
+            # equal to one, otherwise, the shape is a rectangle
+            shape = "square" if ar >= 0.95 and ar <= 1.05 else "rectangle"
+            
+        # if the shape is a pentagon, it will have 5 vertices
+        elif len(approx) == 5:
+            shape = "pentagon"
+            
+        # otherwise, we assume the shape is a circle
+        else:
+            shape = "circle"
+            
+        # return the name of the shape
+        return shape
+
+
+
 # generate foloder to store the output results
 def mkdir(path):
     # import module
@@ -187,6 +227,17 @@ def mkdir(path):
         # if exists, return 
         #print path+' path exists!'
         return False
+
+
+def createMask(rows, cols, hull, value):
+    
+    # black image
+    mask = np.zeros((rows, cols), dtype=np.uint8)
+    
+    # assign contours in white color
+    cv2.drawContours(mask, [hull], 0, 255, -1)
+    
+    return mask
 
 
 def sort_contours(contours):
@@ -378,42 +429,12 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters, 
     #return img_thresh
     return img_thresh
     
+
 '''
-def medial_axis_image(thresh):
-    
-    #convert an image from OpenCV to skimage
-    thresh_sk = img_as_float(thresh)
-    image_bw = img_as_bool((thresh_sk))
-    
-    image_medial_axis = medial_axis(image_bw)
-    
-    return image_medial_axis
-'''
-
-
-
-
 
 # Detect stickers in the image
 def sticker_detect(img_ori, save_path):
     
-    '''
-    image_file_name = Path(image_file).name
-    
-    abs_path = os.path.abspath(image_file)
-    
-    filename, file_extension = os.path.splitext(abs_path)
-    base_name = os.path.splitext(os.path.basename(filename))[0]
-    
-    print("Processing image : {0}\n".format(str(image_file)))
-     
-    # save folder construction
-    mkpath = os.path.dirname(abs_path) +'/cropped'
-    mkdir(mkpath)
-    save_path = mkpath + '/'
-    print ("results_folder: " + save_path)
-    '''
-   
 
     # load the image, clone it for output, and then convert it to grayscale
     #img_ori = cv2.imread(image_file)
@@ -461,19 +482,14 @@ def sticker_detect(img_ori, save_path):
         (startX, startY) = max_loc
         endX = startX + template.shape[1]
         endY = startY + template.shape[0]
-        
-        '''
-        # Draw a rectangle around the matched region. 
-        for pt in zip(*loc[::-1]): 
-            sticker_overlay = cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,255,255), 2)
-        '''
+
         
         sticker_crop_img = img_rgb[startY:endY, startX:endX]
 
 
     return  sticker_crop_img
 
-
+'''
 
 
 def comp_external_contour(orig, thresh, save_path):
@@ -576,6 +592,7 @@ def comp_external_contour(orig, thresh, save_path):
     
     cl = ColorLabeler()
     
+
     
     print("length of contours = {}\n".format(len(contours)))
     #for c in contours:
@@ -667,6 +684,10 @@ def comp_external_contour(orig, thresh, save_path):
             if M['m00'] != 0.0:
                 x_c_center = int(M['m10']/M['m00'])
                 y_c_center = int(M['m01']/M['m00'])
+                
+                
+            
+            
 
             #finding closest point among the grid points list ot the M coordinates
             idx_closest = closest_node((x_c_center,y_c_center), grid_center_coord)
@@ -676,7 +697,7 @@ def comp_external_contour(orig, thresh, save_path):
             
             grid_label_str = ''.join([str(value) for value in grid_center_label[idx_closest]])
             
-           
+            
             
             #if (grid_label_str in grid_center_label_rec):
             #and cv2.contourArea(np.vstack((contours[grid_center_label_rec.index(grid_label_str)], c))) < avg_contour_area*1.5 and cv2.contourArea(np.vstack((contours[grid_center_label_rec.index(grid_label_str)], c))) > avg_contour_area*0.8 :
@@ -791,16 +812,19 @@ def comp_external_contour(orig, thresh, save_path):
         return trait_img, box_coord_rec_merged, grid_center_label_rec_merged
 
 
+
+
+
 def center_crop(image, thresh, path, ext):
     
      #find contours and get the external one
     contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-    print(len(contours))
+    #print(len(contours))
 
     avg_contour_area = sum([cv2.contourArea(cnt) for cnt in sorted(contours, key=cv2.contourArea, reverse=True)])/len(contours)
     
-    contours = sorted(contours, key=cv2.contourArea, reverse = True)[:10]  # get largest five contour area
+    #contours = sorted(contours, key=cv2.contourArea, reverse = True)[:5]  # get largest five contour area
     
     contours = sorted(contours, key=lambda ctr: cv2.boundingRect(ctr)[1])
     
@@ -809,7 +833,7 @@ def center_crop(image, thresh, path, ext):
     #(contours, boundingBoxes) = zip(*sorted(zip(contours, boundingBoxes),key=lambda b:b[1][1], reverse=False))
     
     
-    print(len(contours))
+    #print(len(contours))
    
     img_height, img_width = thresh.shape
     
@@ -819,17 +843,55 @@ def center_crop(image, thresh, path, ext):
     
     centered_thresh = thresh
     
+    contour_center_overlay = image
+    
+    masked_fg_contour = image
+    
     avg_cx = 0
     avg_cy = 0
     
     rec_cx = []
     rec_cy = []
     
+    sd = ShapeDetector()
+    
+    
+    
     for idx, c in enumerate(contours):
 
         if cv2.contourArea(c) > avg_contour_area * 0.75:
             
             M = cv2.moments(c)
+            
+            shape = sd.detect(c)
+            
+            
+            #get average color
+            linewidth = 10
+
+            hull = cv2.convexHull(c)
+
+            mask_hull = createMask(img_height, img_width, hull, 0)
+
+            kernel = np.ones((10,10), np.uint8)
+
+            mask_hull_dilation = cv2.dilate(mask_hull, kernel, iterations=1)
+
+            # apply individual object mask
+            masked_fg = cv2.bitwise_and(image, image, mask = mask_hull_dilation)
+
+            masked_bk = cv2.bitwise_and(image, image, mask = ~ mask_hull_dilation)
+
+            masked_bk_gray = cv2.cvtColor(masked_bk, cv2.COLOR_BGR2GRAY)
+
+            avg_color_per_row = np.average(masked_bk_gray, axis=0)
+
+            avg_color = int(np.average(avg_color_per_row, axis=0))
+            
+            
+            print("average_color = {}\n".format(avg_color))
+            
+            
             
             #get the bounding rect
             (x, y, w, h) = cv2.boundingRect(c)
@@ -839,20 +901,30 @@ def center_crop(image, thresh, path, ext):
                 cx = int(M['m10']/M['m00'])
                 cy = int(M['m01']/M['m00'])
                 
-                contour_center_overlay = cv2.drawContours(image, [c], -1, (0, 255, 0), 5)
+                if (shape == "rectangle" or "square") and cx < img_width*0.49:
                 
-                contour_center_overlay = cv2.circle(image, (cx, cy), 24, (0, 0, 255), -1)
+                    mask_contour = createMask(img_height, img_width, c, avg_color)
+        
+                    masked_fg_contour = cv2.bitwise_and(image, image, mask = ~ mask_contour)
+                    
+                    
+                    
+                    contour_center_overlay = cv2.drawContours(image, [c], -1, (0, 255, 0), 5)
+                    
+                    contour_center_overlay = cv2.circle(image, (cx, cy), 24, (0, 0, 255), -1)
+                    
+                    #contour_center_overlay = cv2.putText(image, "center", (cx - 20, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 2)
+                    
+                    contour_center_overlay = cv2.rectangle(image, (x, y), (x+w, y+h), (255, 255, 0), 3)
+                    
+                    #contour_center_overlay = cv2.putText(image, str(format(idx, "02")), (cx - 20, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 2)
+                    
+                    contour_center_overlay = cv2.putText(image, shape, (cx - 20, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 2)
+                    
+                    rec_cx.append(cx)
+                    rec_cy.append(cy)
                 
-                #contour_center_overlay = cv2.putText(image, "center", (cx - 20, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 2)
-                
-                contour_center_overlay = cv2.rectangle(image, (x, y), (x+w, y+h), (255, 255, 0), 3)
-                
-                contour_center_overlay = cv2.putText(image, str(format(idx, "02")), (cx - 20, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 2)
-                
-                rec_cx.append(cx)
-                rec_cy.append(cy)
-                
-                
+                '''
                 if w>0 and h>0:
                 
                     offset_w = int(w*0.20)
@@ -872,7 +944,11 @@ def center_crop(image, thresh, path, ext):
                     #print(result_file)
                     
                     cv2.imwrite(result_file, roi)
-                
+                 '''
+                 
+
+    '''
+    
     # average point of centers
     avg_cx = int(sum(rec_cx) / len(rec_cx))
     avg_cy = int(sum(rec_cy) / len(rec_cy))
@@ -902,10 +978,12 @@ def center_crop(image, thresh, path, ext):
     centered_thresh = thresh[start_y : img_height, int(start_x) : int(end_x)]
     
     contour_center_overlay = contour_center_overlay[start_y : img_height, int(start_x) : int(end_x)]
+    
+    '''
 
 
     
-    return centered_image, centered_thresh, contour_center_overlay
+    return centered_image, centered_thresh, contour_center_overlay, masked_fg_contour
 
 
 
@@ -1019,12 +1097,12 @@ def segmentation(image_file):
     
     result_mask = save_path_mask + base_name + '_masked.' + ext
     
-    cv2.imwrite(result_mask, masked_orig)
+    #cv2.imwrite(result_mask, masked_orig)
     
     
     
     # crop image based on average contour center
-    (centered_image, centered_thresh, contour_center_overlay) = center_crop(image.copy(), opening_res, save_path_mask, ext)
+    (centered_image, centered_thresh, contour_center_overlay, masked_fg_contour) = center_crop(image.copy(), opening_res, save_path_mask, ext)
     
     result_contour_center_overlay = save_path_mask + base_name + '_center_overlay_image.' + ext
     cv2.imwrite(result_contour_center_overlay, centered_image)
@@ -1035,8 +1113,10 @@ def segmentation(image_file):
     result_contour_center_overlay = save_path_mask + base_name + '_center_overlay.' + ext
     cv2.imwrite(result_contour_center_overlay, contour_center_overlay)
     
+    result_contour_center_overlay = save_path_mask + base_name + '_masked_fg_contour.' + ext
+    cv2.imwrite(result_contour_center_overlay, masked_fg_contour)
     
-    
+    '''
     #find external contour and segment image into small ROI based on each plant
     (trait_img, box_coord_rec, grid_center_label_rec) = comp_external_contour(centered_image.copy(), centered_thresh, save_path)
     
@@ -1045,7 +1125,7 @@ def segmentation(image_file):
     result_file = save_path_mask + base_name + '_label.' + ext
             
     cv2.imwrite(result_file, trait_img)
-    
+    '''
     
     '''
     #########################################################
@@ -1080,7 +1160,7 @@ def segmentation(image_file):
     #################################################################
     '''
     
-    
+    '''
     if template_path == 0:
         
         print("Skip template matching...")
@@ -1088,24 +1168,11 @@ def segmentation(image_file):
         
         (sticker_crop_img) = sticker_detect(image.copy(), save_path)
         
-        '''
-        # save segmentation result
-        result_file = (save_path + base_name + 'sticker_matched.' + args['filetype'])
-        #print(result_file)
-        cv2.imwrite(result_file, sticker_crop_img)
-        
-        thresh_sticker = color_cluster_seg(sticker_crop_img.copy(), args_colorspace, args_channels, 4, min_size = 1000)
-        trait_img_sticker = comp_external_contour(sticker_crop_img.copy(), thresh_sticker, save_path_sticker)
-        result_file_sticker = save_path_sticker +  '_label.' + ext
-        cv2.imwrite(result_file_sticker, trait_img_sticker)
-        '''
-        
-        
         # save segmentation result
         result_file = (save_path_sticker + base_name + '_sticker_match.' + args['filetype'])
         #print(result_file)
         cv2.imwrite(result_file, sticker_crop_img)
-    
+    '''
     
     return thresh
     #trait_img
@@ -1121,14 +1188,14 @@ if __name__ == '__main__':
     ap.add_argument("-ft", "--filetype", required=True,    help="Image filetype")
     
     ap.add_argument('-s', '--color-space', type =str, default ='lab', help='Color space to use: bgr(default), lab,  HSV, YCrCb (YCC)')
-    ap.add_argument('-c', '--channels', type = str, default='2', help='Channel indices to use for clustering, where 0 is the first channel,' 
+    ap.add_argument('-c', '--channels', type = str, default='0', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
-    ap.add_argument('-min', '--min_size', type = int, default = 100,  help = 'min size of object to be segmented.')
+    ap.add_argument('-min', '--min_size', type = int, default = 100000,  help = 'min size of object to be segmented.')
     ap.add_argument('-max', '--max_size', type = int, default = 10000000,  help = 'max size of object to be segmented.')
-    ap.add_argument("-nr", "--nRows", required = False,  type = int,  default = 6, help="number of rows")
-    ap.add_argument("-nc", "--mCols", required = False,  type = int,  default = 5, help="number of columns")
+    ap.add_argument("-nr", "--nRows", required = False,  type = int,  default = 1, help="number of rows")
+    ap.add_argument("-nc", "--mCols", required = False,  type = int,  default = 1, help="number of columns")
     ap.add_argument("-tp", "--temp_path", required = False,  default = False, help="template image path")
     ap.add_argument("-gd", "--gd_segmentation", required = False,  type = int, default = 0, help="gd_segmentation")
     args = vars(ap.parse_args())
@@ -1156,13 +1223,13 @@ if __name__ == '__main__':
     size_kernel = 1
 
     
-    global  template
+    #global  template
     #template_path = "/home/suxing/smart_plant/marker_template/sticker_template.jpg"
     
     #template_path = args['temp_path'] + 'sticker_template.jpg'
     
     
-    
+    '''
     if args['temp_path'] == False:
     
         print("No template marker path was defined...")
@@ -1179,7 +1246,7 @@ if __name__ == '__main__':
         mkpath_sticker = os.path.dirname(args['temp_path']) 
         mkdir(mkpath_sticker)
         save_path_sticker = mkpath_sticker + '/'
-    
+    '''
     #print((imgList))
     
     #current_img = imgList[0]

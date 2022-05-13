@@ -525,7 +525,7 @@ def comp_external_contour(orig,thresh):
             
             area_holes = cv2.contourArea(c)
             
-            print("Current contourcindex = {} area = {}...\n".format(index, area_holes))
+            print("Current contour index = {} area = {}...\n".format(index, area_holes))
             
             area_holes_sum = area_holes_sum+ area_holes
             
