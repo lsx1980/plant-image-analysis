@@ -1,0 +1,7 @@
+04202020_test_scripts
+
+cd ~/temp_val/04202020_test_scripts
+
+python3 demo_color_seg_val.py -p ~/temp_val/test/ -ft jpg
+
+time python3 demo_temp_val_set1.py -p ~/temp_val/test/-2021-04-16-17-24-40_crop/ -ft jpg -min 20000 -tp ~/temp_val/mark_template/0420_marker.jpg
