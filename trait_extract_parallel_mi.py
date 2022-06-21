@@ -75,6 +75,7 @@ from pathlib import Path
 
 from matplotlib import collections
 
+import matplotlib.colors
 
 
 MBFACTOR = float(1<<20)
@@ -909,6 +910,12 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
 
 def RGB2HEX(color):
     return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
+    
+
+def RGB2FLOAT(color):
+    return "{:.2f}{:.2f}{:.2f}".format(int(color[0]/255.0), int(color[1]/255.0), int(color[2]/255.0))
+
+
 
 '''
 def color_quantization(image, mask, save_path, num_clusters):
@@ -1173,7 +1180,7 @@ def color_region(image, mask, save_path, num_clusters):
     # We get ordered colors by iterating through the keys
     ordered_colors = [center_colors[i] for i in counts.keys()]
     hex_colors = [RGB2HEX(ordered_colors[i]) for i in counts.keys()]
-    rgb_colors = [ordered_colors[i] for i in counts.keys()]
+    rgb_colors = [RGB2FLOAT(ordered_colors[i]) for i in counts.keys()]
 
     #print(hex_colors)
     
@@ -1318,7 +1325,9 @@ def isbright(image_file):
     
     print("np.mean(L) < thresh = {}".format(np.mean(L)))
     
-    return np.mean(L) < thresh
+    #return np.mean(L) < thresh
+    
+    return 1.0 < thresh
 
 
 def extract_traits(image_file):
@@ -1368,7 +1377,7 @@ def extract_traits(image_file):
     if isbright(image_file):
     
         if (file_size > 5.0):
-            print("It will take some time due to larger file size {0} MB".format(str(int(file_size))))
+            print("It will take some time due to file size {0} MB".format(str(int(file_size))))
         else:
             print("Segmentaing plant object using automatic color clustering method... ")
         
@@ -1402,18 +1411,21 @@ def extract_traits(image_file):
         cv2.imwrite(result_file, thresh)
         
         
-        #find external contour 
-        (trait_img, area, solidity, max_width, max_height) = comp_external_contour(orig,thresh)
-        # save segmentation result
-        result_file = (save_path + base_name + '_excontour' + file_extension)
-        #print(filename)
-        cv2.imwrite(result_file, trait_img)   
+       
         
         
         num_clusters = 5
         #save color quantization result
         #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
         (rgb_colors, counts, hex_colors) = color_region(orig, thresh, save_path, num_clusters)
+        
+        
+         #find external contour 
+        (trait_img, area, solidity, max_width, max_height) = comp_external_contour(orig, thresh)
+        # save segmentation result
+        result_file = (save_path + base_name + '_excontour' + file_extension)
+        #print(filename)
+        cv2.imwrite(result_file, trait_img)   
         
 
         #print("hex_colors = {} {}\n".format(hex_colors, type(hex_colors)))
@@ -1442,7 +1454,7 @@ def extract_traits(image_file):
         
         
         
-        selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
+        #selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
         
         ####################################################
 
@@ -1584,13 +1596,15 @@ if __name__ == '__main__':
         
         (filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec) = extract_traits(image)
         
-        result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
+        #result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        #print(leaf_color_value_rec)
+        result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], str(matplotlib.colors.to_rgb(hex_colors[0])), str(matplotlib.colors.to_rgb(hex_colors[1])), str(matplotlib.colors.to_rgb(hex_colors[2])), str(matplotlib.colors.to_rgb(hex_colors[3]))])
         
         for i in range(len(leaf_index_rec)):
             
-            result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], leaf_color_value_rec[i][0],leaf_color_value_rec[i][1],leaf_color_value_rec[i][2],leaf_color_value_rec[i][3]])
+            #result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], leaf_color_value_rec[i][0],leaf_color_value_rec[i][1],leaf_color_value_rec[i][2],leaf_color_value_rec[i][3]])
+            
+            result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][0])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][1])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][2])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][3]))])
     '''
     
     #print(result_list)
@@ -1655,7 +1669,13 @@ if __name__ == '__main__':
         #Get the current Active Sheet
         sheet = wb.active
         
+        sheet.delete_rows(2, sheet.max_row+1) # for entire sheet
+        
         sheet_leaf = wb.create_sheet()
+        
+        #sheet_leaf.delete_rows(2, sheet_leaf.max_row+1) # for entire sheet
+        
+        
 
     else:
         # Keep presets
@@ -1675,10 +1695,10 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 9).value = 'color distribution cluster 2'
         sheet.cell(row = 1, column = 10).value = 'color distribution cluster 3'
         sheet.cell(row = 1, column = 11).value = 'color distribution cluster 4'
-        sheet.cell(row = 1, column = 12).value = 'color cluster 1 hex value'
-        sheet.cell(row = 1, column = 13).value = 'color cluster 2 hex value'
-        sheet.cell(row = 1, column = 14).value = 'color cluster 3 hex value'
-        sheet.cell(row = 1, column = 15).value = 'color cluster 4 hex value'        
+        sheet.cell(row = 1, column = 12).value = 'color cluster 1 RGB value'
+        sheet.cell(row = 1, column = 13).value = 'color cluster 2 RGB value'
+        sheet.cell(row = 1, column = 14).value = 'color cluster 3 RGB value'
+        sheet.cell(row = 1, column = 15).value = 'color cluster 4 RGB value'        
         
     
         
@@ -1693,10 +1713,10 @@ if __name__ == '__main__':
         sheet_leaf.cell(row = 1, column = 9).value = 'color distribution cluster 2'
         sheet_leaf.cell(row = 1, column = 10).value = 'color distribution cluster 3'
         sheet_leaf.cell(row = 1, column = 11).value = 'color distribution cluster 4'
-        sheet_leaf.cell(row = 1, column = 12).value = 'color cluster 1 hex value'
-        sheet_leaf.cell(row = 1, column = 13).value = 'color cluster 2 hex value'
-        sheet_leaf.cell(row = 1, column = 14).value = 'color cluster 3 hex value'
-        sheet_leaf.cell(row = 1, column = 15).value = 'color cluster 4 hex value'
+        sheet_leaf.cell(row = 1, column = 12).value = 'color cluster 1 RGB value'
+        sheet_leaf.cell(row = 1, column = 13).value = 'color cluster 2 RGB value'
+        sheet_leaf.cell(row = 1, column = 14).value = 'color cluster 3 RGB value'
+        sheet_leaf.cell(row = 1, column = 15).value = 'color cluster 4 RGB value'
         
         
         

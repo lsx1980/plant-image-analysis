@@ -214,6 +214,42 @@ def sort_contours(contours):
     return (cnts, boundingBoxes)
 
 
+
+# Convert it to LAB color space to access the luminous channel which is independent of colors.
+def isbright(orig):
+    
+    # Set up threshold value for luminous channel, can be adjusted and generalized 
+    thresh = 0.265
+    
+    # Load image file 
+    #orig = cv2.imread(image_file)
+    
+    # Make backup image
+    image = orig.copy()
+    
+    # Get file name
+    #abs_path = os.path.abspath(image_file)
+    
+    #filename, file_extension = os.path.splitext(abs_path)
+    #base_name = os.path.splitext(os.path.basename(filename))[0]
+
+    #image_file_name = Path(image_file).name
+    
+    # Convert color space to LAB format and extract L channel
+    L, A, B = cv2.split(cv2.cvtColor(image, cv2.COLOR_BGR2LAB))
+    
+    # Normalize L channel by dividing all pixel values with maximum pixel value
+    L = L/np.max(L)
+    
+    text_bool = "bright" if np.mean(L) < thresh else "dark"
+    
+    #return image_file_name, np.mean(L), text_bool
+    
+    print("np.mean(L) < thresh = {}".format(np.mean(L)))
+    
+    return np.mean(L) < thresh
+
+
 def closest_node(pt, pt_list):
     
     min_dist_index = np.argmin(np.sum((np.array(pt_list) - np.array(pt))**2, axis=1))
@@ -433,7 +469,7 @@ def sticker_detect(img_ori, save_path):
     
     
     # Specify a threshold 
-    threshold = 0.8
+    threshold = 0.5
     
     flag = False
     
@@ -459,8 +495,12 @@ def sticker_detect(img_ori, save_path):
         
     
         (startX, startY) = max_loc
-        endX = startX + template.shape[1] + 1050
-        endY = startY + template.shape[0] + 1050
+        
+        startX = startX + 50
+        startY = startY + 100
+        
+        endX = startX + template.shape[1] + 1050 + 0
+        endY = startY + template.shape[0] + 1050 - 150
         
         '''
         # Draw a rectangle around the matched region. 
@@ -935,9 +975,17 @@ def segmentation(image_file):
     '''
     
     
+    if isbright(orig):
     
-    
-    (sticker_crop_img) = sticker_detect(image.copy(), save_path)
+        (sticker_crop_img) = sticker_detect(image.copy(), save_path)
+        
+        # save segmentation result
+        result_file = (save_path + base_name + '_marker_seg.' + args['filetype'])
+        #print(result_file)
+        cv2.imwrite(result_file, sticker_crop_img)
+
+    else:
+        print("dark image {} deteced!\n".format(base_name))
     
     '''
     # save segmentation result
@@ -952,10 +1000,7 @@ def segmentation(image_file):
     '''
     
     
-    # save segmentation result
-    result_file = (save_path + base_name + '_marker_seg.' + args['filetype'])
-    #print(result_file)
-    cv2.imwrite(result_file, sticker_crop_img)
+
     
     
     #return thresh
