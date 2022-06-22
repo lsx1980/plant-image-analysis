@@ -1401,7 +1401,7 @@ def extract_traits(image_file):
         cv2.imwrite(result_file, sticker_crop_img)
         
         
-        orig = sticker_crop_img
+        orig = sticker_crop_img.copy()
         
         #color clustering based plant object segmentation
         thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
@@ -1504,7 +1504,7 @@ def extract_traits(image_file):
         #plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
         cv2.imwrite(result_file, labeled_img)
         
-        (avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec, box_coord_rec) = leaf_traits_computation(orig, labels, save_path, base_name, file_extension)
+        (avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec, box_coord_rec) = leaf_traits_computation(sticker_crop_img.copy(), labels, save_path, base_name, file_extension)
         
 
         #################################################################end of validation file
