@@ -282,7 +282,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #print(img_thresh.dtype)
     
     
-    size_kernel = 15
+    size_kernel = 5
     
     #if mask contains mutiple non-conected parts, combine them into one. 
     contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -434,9 +434,17 @@ def sticker_detect(img_ori):
         
         #print(min_val, max_val, min_loc, max_loc)
         
-    
+        '''
         (startX, startY) = max_loc
         endX = startX + template.shape[1] + 1050
+        endY = startY + template.shape[0] + 1050
+        '''
+        
+        (startX, startY) = max_loc
+        startX = startX - 100
+        startY = startY
+        
+        endX = startX + template.shape[1] + 1050 + 100
         endY = startY + template.shape[0] + 1050
         
         '''
@@ -1330,6 +1338,22 @@ def isbright(image_file):
     return 1.0 < thresh
 
 
+
+
+def remove_character_string(str_input):
+    
+    return str_input.replace('#', '')
+
+
+def hex_mean_color(color1, color2, color3, color4):
+    
+    average_value = (int(remove_character_string(color1), 16) + int(remove_character_string(color2), 16) + int(remove_character_string(color3), 16) + int(remove_character_string(color4), 16))//4
+       
+    return hex(average_value)
+
+
+
+
 def extract_traits(image_file):
 
 
@@ -1598,13 +1622,18 @@ if __name__ == '__main__':
         
         #result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], str(matplotlib.colors.to_rgb(hex_colors[0])), str(matplotlib.colors.to_rgb(hex_colors[1])), str(matplotlib.colors.to_rgb(hex_colors[2])), str(matplotlib.colors.to_rgb(hex_colors[3]))])
+        result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], 
+                            str(matplotlib.colors.to_rgb(hex_colors[0])), str(matplotlib.colors.to_rgb(hex_colors[1])), str(matplotlib.colors.to_rgb(hex_colors[2])), str(matplotlib.colors.to_rgb(hex_colors[3])),
+                            hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3], hex_mean_color(hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3])])
         
         for i in range(len(leaf_index_rec)):
             
             #result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], leaf_color_value_rec[i][0],leaf_color_value_rec[i][1],leaf_color_value_rec[i][2],leaf_color_value_rec[i][3]])
             
-            result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][0])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][1])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][2])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][3]))])
+            result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], 
+                                    str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][0])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][1])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][2])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][3])),
+                                    str(leaf_color_value_rec[i][0]), str(leaf_color_value_rec[i][1]), str(leaf_color_value_rec[i][2]), str(leaf_color_value_rec[i][3]),
+                                    hex_mean_color(leaf_color_value_rec[i][0], leaf_color_value_rec[i][1], leaf_color_value_rec[i][2], leaf_color_value_rec[i][3])])
     '''
     
     #print(result_list)
@@ -1636,9 +1665,9 @@ if __name__ == '__main__':
     
     #output in command window in a sum table
  
-    table = tabulate(result_list, headers = ['filename', 'area', 'solidity', 'max_width', 'max_height' ,'avg_curv', 'n_leaves', 'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
+    #table = tabulate(result_list, headers = ['filename', 'area', 'solidity', 'max_width', 'max_height' ,'avg_curv', 'n_leaves', 'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
 
-    print(table + "\n")
+    #print(table + "\n")
     
     
     '''
@@ -1698,7 +1727,12 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 12).value = 'color cluster 1 RGB value'
         sheet.cell(row = 1, column = 13).value = 'color cluster 2 RGB value'
         sheet.cell(row = 1, column = 14).value = 'color cluster 3 RGB value'
-        sheet.cell(row = 1, column = 15).value = 'color cluster 4 RGB value'        
+        sheet.cell(row = 1, column = 15).value = 'color cluster 4 RGB value'
+        sheet.cell(row = 1, column = 16).value = 'color cluster 1 HEX value'
+        sheet.cell(row = 1, column = 17).value = 'color cluster 2 HEX value'
+        sheet.cell(row = 1, column = 18).value = 'color cluster 3 HEX value'
+        sheet.cell(row = 1, column = 19).value = 'color cluster 4 HEX value'
+        sheet.cell(row = 1, column = 20).value = 'average HEX value'       
         
     
         
@@ -1717,6 +1751,11 @@ if __name__ == '__main__':
         sheet_leaf.cell(row = 1, column = 13).value = 'color cluster 2 RGB value'
         sheet_leaf.cell(row = 1, column = 14).value = 'color cluster 3 RGB value'
         sheet_leaf.cell(row = 1, column = 15).value = 'color cluster 4 RGB value'
+        sheet_leaf.cell(row = 1, column = 16).value = 'color cluster 1 HEX value'
+        sheet_leaf.cell(row = 1, column = 17).value = 'color cluster 2 HEX value'
+        sheet_leaf.cell(row = 1, column = 18).value = 'color cluster 3 HEX value'
+        sheet_leaf.cell(row = 1, column = 19).value = 'color cluster 4 HEX value'
+        sheet_leaf.cell(row = 1, column = 20).value = 'average HEX value'      
         
         
         
