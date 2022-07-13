@@ -9,11 +9,11 @@ Author: suxing liu
 
 Author-email: suxingliu@gmail.com
 
-Created: 2018-09-29
+Created: 2022-09-29
 
 USAGE:
 
-time python3 trait_extract_parallel.py -p ~/example/plant_test/seeds/image2/ -ft png -min 10 -md 10
+time python3 trait_extract_parallel_mazie_ear.py -p ~/example/plant_test/seeds/image2/ -ft png -min 10 -md 10
 
 '''
 
@@ -940,6 +940,137 @@ def outlier_doubleMAD(data,thresh = 3.5):
 
 
 
+# Detect marker (coin) in the image
+def marker_detect(img_ori):
+    
+    # load the image, clone it for output
+    img_rgb = img_ori.copy()
+      
+    # Convert it to grayscale 
+    img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY) 
+      
+    # Store width and height of template in w and h 
+    w, h = template.shape[::-1] 
+      
+    # Perform match operations. 
+    res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
+    
+    #(minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(res)
+    
+    
+    # Specify a threshold for template detection, can be adjusted
+    threshold = 0.8
+      
+    # Store the coordinates of matched area in a numpy array 
+    #loc = np.where( res >= threshold)
+    loc = np.where( res >= 0.8)   
+    
+    if len(loc):
+    
+        (y,x) = np.unravel_index(res.argmax(), res.shape)
+    
+        (min_val, max_val, min_loc, max_loc) = cv2.minMaxLoc(res)
+
+        (startX, startY) = max_loc
+        endX = startX + template.shape[1]
+        endY = startY + template.shape[0]
+        
+        
+        marker_img = img_ori[startY:endY, startX:endX]
+        
+        # Draw a rectangle around the matched region. 
+        #for pt in zip(*loc[::-1]): 
+            
+            #marker_overlay = cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,255,0), 1)
+
+    
+        # load the marker image, convert it to grayscale
+        marker_img_gray = cv2.cvtColor(marker_img, cv2.COLOR_BGR2GRAY) 
+    
+       
+        # load the image and perform pyramid mean shift filtering to aid the thresholding step
+        shifted = cv2.pyrMeanShiftFiltering(marker_img, 21, 51)
+        
+        # convert the mean shift image to grayscale, then apply Otsu's thresholding
+        gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
+        
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        
+        # detect contours in the mask and grab the largest one
+        cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        cnts = imutils.grab_contours(cnts)
+        
+        largest_cnt = max(cnts, key=cv2.contourArea)
+        
+        print("[INFO] {} unique contours found in marker_img".format(len(cnts)))
+        
+        # compute the radius of the detected coin
+        # calculate the center of the contour
+        M = cv2.moments(largest_cnt )
+        x = int(M["m10"] / M["m00"])
+        y = int(M["m01"] / M["m00"])
+
+        # calculate the radius of the contour from area (I suppose it's a circle)
+        area = cv2.contourArea(largest_cnt)
+        radius = np.sqrt(area/math.pi)
+        coins_width = 2* radius
+    
+        print("coins_width in the marker image is {}".format(coins_width))
+        
+        
+        # draw a circle enclosing the object
+        ((x, y), radius) = cv2.minEnclosingCircle(largest_cnt) 
+        coins_width = 2* radius
+        
+        print("coins_width marker image is {}".format(coins_width))
+        
+        
+        box = cv2.minAreaRect(largest_cnt)
+        
+        box = cv2.cv.BoxPoints(box) if imutils.is_cv2() else cv2.boxPoints(box)
+        
+        box = np.array(box, dtype="int")
+        
+        # order the points in the contour such that they appear in top-left, top-right, bottom-right, and bottom-left
+        # order, then draw the outline of the rotated bounding box
+        box = perspective.order_points(box)
+        
+        marker_overlay = cv2.drawContours(marker_img, [box.astype("int")], -1, (0, 255, 0), 2)
+        
+        # loop over the original points and draw them
+        for (x, y) in box:
+            marker_overlay = cv2.circle(marker_img, (int(x), int(y)), 5, (0, 0, 255), -1)
+        
+        # unpack the ordered bounding box, then compute the midpoint
+        # between the top-left and top-right coordinates, followed by
+        # the midpoint between bottom-left and bottom-right coordinates
+        (tl, tr, br, bl) = box
+        (tltrX, tltrY) = midpoint(tl, tr)
+        (blbrX, blbrY) = midpoint(bl, br)
+        # compute the midpoint between the top-left and top-right points,
+        # followed by the midpoint between the top-righ and bottom-right
+        (tlblX, tlblY) = midpoint(tl, bl)
+        (trbrX, trbrY) = midpoint(tr, br)
+        # draw the midpoints on the image
+        marker_overlay = cv2.circle(marker_img, (int(tltrX), int(tltrY)), 5, (255, 0, 0), -1)
+        marker_overlay = cv2.circle(marker_img, (int(blbrX), int(blbrY)), 5, (255, 0, 0), -1)
+        marker_overlay = cv2.circle(marker_img, (int(tlblX), int(tlblY)), 5, (255, 0, 0), -1)
+        marker_overlay = cv2.circle(marker_img, (int(trbrX), int(trbrY)), 5, (255, 0, 0), -1)
+        # draw lines between the midpoints
+        marker_overlay = cv2.line(marker_img, (int(tltrX), int(tltrY)), (int(blbrX), int(blbrY)), (255, 0, 255), 2)
+        marker_overlay = cv2.line(marker_img, (int(tlblX), int(tlblY)), (int(trbrX), int(trbrY)), (255, 0, 255), 2)
+
+        # draw the object sizes on the image
+        marker_overlay = cv2.putText(marker_img, "{:.1f}in".format(coins_width), (int(tltrX - 15), int(tltrY - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+        marker_overlay = cv2.putText(marker_img, "{:.1f}in".format(coins_width), (int(trbrX + 10), int(trbrY)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+    
+
+    return  marker_img, thresh, coins_width
+
+
+
+
 # Convert it to LAB color space to access the luminous channel which is independent of colors.
 def isbright(image_file):
     
@@ -1004,13 +1135,17 @@ def extract_traits(image_file):
         mkdir(mkpath)
         save_path = mkpath + '/'
         
-        track_save_path = os.path.dirname(abs_path) + '/trace/'
-        mkdir(track_save_path)
+        #track_save_path = os.path.dirname(abs_path) + '/trace/'
+        #mkdir(track_save_path)
 
     print ("results_folder: " + save_path)
     
     #print ("track_save_path: " + track_save_path)
     
+    
+    
+    
+   
     
         
     if isbright(image_file):
@@ -1224,8 +1359,18 @@ def extract_traits(image_file):
         
         
 
-        
-        
+        (marker_img, thresh, coins_width) = marker_detect(image.copy())
+
+
+        # save segmentation result
+        result_file = (save_path + base_name + '_marker_deteced.' + file_extension)
+        #print(result_file)
+        cv2.imwrite(result_file, marker_img)
+    
+        # save segmentation result
+        result_file = (save_path + base_name + '_marker_thresh.' + file_extension)
+        #print(result_file)
+        cv2.imwrite(result_file, thresh)
         ############################################## leaf number computation
         '''
         #min_distance_value = 3
@@ -1321,7 +1466,7 @@ def extract_traits(image_file):
     
     else:
         
-        area=kernel_area_ratio=max_width=max_height=avg_curv=n_leaves=0
+        area = kernel_area_ratio = max_width = max_height = avg_curv = n_leaves = 0
         
     #print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
     
@@ -1343,8 +1488,9 @@ def extract_traits(image_file):
 if __name__ == '__main__':
     
     ap = argparse.ArgumentParser()
-    ap.add_argument("-p", "--path", required = True,    help="path to image file")
-    ap.add_argument("-ft", "--filetype", required=True,    help="Image filetype")
+    ap.add_argument("-p", "--path", required = True,    help = "path to image file")
+    ap.add_argument("-ft", "--filetype", required = True,    help = "Image filetype")
+    ap.add_argument('-mk', '--marker', required = False,  default ='/marker_template/marker.png',  help = "Marker file name")
     ap.add_argument("-r", "--result", required = False,    help="result path")
     ap.add_argument('-s', '--color-space', type = str, required = False, default ='lab', help='Color space to use: BGR (default), HSV, Lab, YCrCb (YCC)')
     ap.add_argument('-c', '--channels', type = str, required = False, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
@@ -1353,6 +1499,8 @@ if __name__ == '__main__':
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 100,  help = 'min size of object to be segmented.')
     ap.add_argument('-md', '--min_dist', type = int, required = False, default = 10,  help = 'distance threshold of watershed segmentation.')
+    
+    
     args = vars(ap.parse_args())
     
     
@@ -1360,8 +1508,36 @@ if __name__ == '__main__':
     file_path = args["path"]
     ext = args['filetype']
     
+    marker_path = args["marker"]
+    
     min_size = args['min_size']
     min_distance_value = args['min_dist']
+    
+    
+    
+    global  template
+    # path of the marker (coin), default path will be '/marker_template/marker.png'
+    # can be changed based on requirement
+    template_path = file_path + marker_path
+    
+    try:
+        # check to see if file is readable
+        with open(template_path) as tempFile:
+
+            # Read the template 
+            template = cv2.imread(template_path, 0)
+            print("Template loaded successfully")
+            
+    except IOError as err:
+        
+        print("Error reading the file {0}: {1}".format(template_path, err))
+        
+        exit(0)
+
+    
+    
+    
+    
 
     #accquire image file list
     filetype = '*.' + ext
