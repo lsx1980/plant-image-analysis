@@ -423,7 +423,7 @@ def comp_external_contour(orig,thresh):
     #for c in contours:
         
         #get the bounding rect
-        x, y, w, h = cv2.boundingRect(c)
+        (x, y, w, h) = cv2.boundingRect(c)
         
         if index == 0:
             
@@ -464,15 +464,14 @@ def comp_external_contour(orig,thresh):
             #trait_img = cv2.putText(orig, "center", (cX - 20, cY - 20),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
             
-            # compute the rotated bounding box of the contour
-            #get the min area rect
+            # compute the (rotated) bounding box of the contour to get the min area rect
             rect = cv2.minAreaRect(c)
             box = cv2.boxPoints(rect)
             
             # convert all coordinates floating point values to int
             box = np.int0(box)
             
-            #draw a red 'nghien' rectangle
+            #draw a blue 'nghien' rectangle
             trait_img = cv2.drawContours(orig, [box], -1, (255, 0, 0), 3)
             
             # unpack the ordered bounding box, then compute the midpoint
@@ -1014,16 +1013,17 @@ def marker_detect(img_ori):
         # calculate the radius of the contour from area (I suppose it's a circle)
         area = cv2.contourArea(largest_cnt)
         radius = np.sqrt(area/math.pi)
-        coins_width = 2* radius
+        coins_width_contour = 2* radius
     
-        print("coins_width in the marker image is {}".format(coins_width))
+        print("The width of Brazil 1 Real coin in the marker image is {:.0f} pixels\n".format(coins_width_contour))
         
         
         # draw a circle enclosing the object
         ((x, y), radius) = cv2.minEnclosingCircle(largest_cnt) 
-        coins_width = 2* radius
+        coins_width_circle = 2* radius
         
-        print("coins_width marker image is {}".format(coins_width))
+        # Brazil 1 Real coin dimension is 27 × 27 mm
+        print("The width of Brazil 1 Real coin in the marker image is {:.0f} pixels\n".format(coins_width_circle))
         
         
         box = cv2.minAreaRect(largest_cnt)
@@ -1048,25 +1048,28 @@ def marker_detect(img_ori):
         (tl, tr, br, bl) = box
         (tltrX, tltrY) = midpoint(tl, tr)
         (blbrX, blbrY) = midpoint(bl, br)
+        
         # compute the midpoint between the top-left and top-right points,
         # followed by the midpoint between the top-righ and bottom-right
         (tlblX, tlblY) = midpoint(tl, bl)
         (trbrX, trbrY) = midpoint(tr, br)
+        
         # draw the midpoints on the image
         marker_overlay = cv2.circle(marker_img, (int(tltrX), int(tltrY)), 5, (255, 0, 0), -1)
         marker_overlay = cv2.circle(marker_img, (int(blbrX), int(blbrY)), 5, (255, 0, 0), -1)
         marker_overlay = cv2.circle(marker_img, (int(tlblX), int(tlblY)), 5, (255, 0, 0), -1)
         marker_overlay = cv2.circle(marker_img, (int(trbrX), int(trbrY)), 5, (255, 0, 0), -1)
+        
         # draw lines between the midpoints
         marker_overlay = cv2.line(marker_img, (int(tltrX), int(tltrY)), (int(blbrX), int(blbrY)), (255, 0, 255), 2)
         marker_overlay = cv2.line(marker_img, (int(tlblX), int(tlblY)), (int(trbrX), int(trbrY)), (255, 0, 255), 2)
 
         # draw the object sizes on the image
-        marker_overlay = cv2.putText(marker_img, "{:.1f}in".format(coins_width), (int(tltrX - 15), int(tltrY - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
-        marker_overlay = cv2.putText(marker_img, "{:.1f}in".format(coins_width), (int(trbrX + 10), int(trbrY)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+        marker_overlay = cv2.putText(marker_img, "{:.0f} pixels".format(coins_width_contour), (int(tltrX - 15), int(tltrY - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+        marker_overlay = cv2.putText(marker_img, "{:.0f} pixels".format(coins_width_circle), (int(trbrX - 80), int(trbrY -10)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
     
 
-    return  marker_img, thresh, coins_width
+    return  marker_img, thresh, coins_width_contour, coins_width_circle
 
 
 
@@ -1359,18 +1362,16 @@ def extract_traits(image_file):
         
         
 
-        (marker_img, thresh, coins_width) = marker_detect(image.copy())
+        (marker_img, thresh_marker, coins_width_contour, coins_width_circle) = marker_detect(image.copy())
 
 
         # save segmentation result
         result_file = (save_path + base_name + '_marker_deteced.' + file_extension)
-        #print(result_file)
         cv2.imwrite(result_file, marker_img)
     
         # save segmentation result
-        result_file = (save_path + base_name + '_marker_thresh.' + file_extension)
-        #print(result_file)
-        cv2.imwrite(result_file, thresh)
+        #result_file = (save_path + base_name + '_marker_thresh.' + file_extension)
+        #cv2.imwrite(result_file, thresh_marker)
         ############################################## leaf number computation
         '''
         #min_distance_value = 3
