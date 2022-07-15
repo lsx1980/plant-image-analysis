@@ -14,11 +14,11 @@ Author: suxing liu
 
 Author-email: suxingliu@gmail.com
 
-Created: 2022-05-02
+Created: 2022-09-02
 
 USAGE:
 
-python3 color_seg_mazie_ear.py -p ~/example/plant_test/seeds/ -ft png -nr 1 -nc 5
+python3 color_seg_mazie_ear.py -p ~/example/plant_test/seeds/ -ft png -nr 1 -nc 2
 
 '''
 

@@ -31,6 +31,8 @@ From: ubuntu:18.04
     libxext6 \
     libfontconfig1 \
     libxrender1 \
+    libzbar-dev \
+    libzbar0 \
     python3-pandas
     
   pip3 install numpy \
@@ -47,7 +49,8 @@ From: ubuntu:18.04
                 networkx \
                 pandas \
                 numba \
-                psutil
+                psutil \
+                pyzbar
 
   pip3 install -U scikit-learn
   

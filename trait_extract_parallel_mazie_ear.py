@@ -939,8 +939,61 @@ def outlier_doubleMAD(data,thresh = 3.5):
 
 
 
-# Detect marker (coin) in the image
-def marker_detect(img_ori):
+
+# Detect barcode in the image
+def barcode_detect(img_ori):
+    
+    # load the image, clone it for output
+    img_rgb = img_ori.copy()
+      
+    # Convert it to grayscale 
+    gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY) 
+      
+
+    # compute the Scharr gradient magnitude representation of the images
+    # in both the x and y direction using OpenCV 2.4
+    ddepth = cv2.cv.CV_32F if imutils.is_cv2() else cv2.CV_32F
+    gradX = cv2.Sobel(gray, ddepth=ddepth, dx=1, dy=0, ksize=-1)
+    gradY = cv2.Sobel(gray, ddepth=ddepth, dx=0, dy=1, ksize=-1)
+    
+    # subtract the y-gradient from the x-gradient
+    gradient = cv2.subtract(gradX, gradY)
+    gradient = cv2.convertScaleAbs(gradient)
+    
+    # blur and threshold the image
+    blurred = cv2.blur(gradient, (9, 9))
+    (_, thresh) = cv2.threshold(blurred, 225, 255, cv2.THRESH_BINARY)
+    
+    # construct a closing kernel and apply it to the thresholded image
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 7))
+    closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+    
+    # perform a series of erosions and dilations
+    closed = cv2.erode(closed, None, iterations = 4)
+    closed = cv2.dilate(closed, None, iterations = 4)
+    
+    # find the contours in the thresholded image, then sort the contours
+    # by their area, keeping only the largest one
+    cnts = cv2.findContours(closed.copy(), cv2.RETR_EXTERNAL,
+    cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
+    c = sorted(cnts, key = cv2.contourArea, reverse = True)[0]
+    # compute the rotated bounding box of the largest contour
+    rect = cv2.minAreaRect(c)
+    box = cv2.cv.BoxPoints(rect) if imutils.is_cv2() else cv2.boxPoints(rect)
+    box = np.int0(box)
+    
+    # draw a bounding box arounded the detected barcode and display the
+    # image
+    barcode_detection = cv2.drawContours(img_rgb, [box], -1, (0, 255, 0), 3)
+    
+    return barcode_detection
+
+
+
+
+# Detect marker in the image
+def marker_detect(img_ori, template, selection_threshold):
     
     # load the image, clone it for output
     img_rgb = img_ori.copy()
@@ -958,11 +1011,11 @@ def marker_detect(img_ori):
     
     
     # Specify a threshold for template detection, can be adjusted
-    threshold = 0.8
+    #threshold = 0.8
       
     # Store the coordinates of matched area in a numpy array 
     #loc = np.where( res >= threshold)
-    loc = np.where( res >= 0.8)   
+    loc = np.where( res >= selection_threshold)   
     
     if len(loc):
     
@@ -1107,6 +1160,9 @@ def isbright(image_file):
     print("np.mean(L) < thresh = {}".format(np.mean(L)))
     
     return np.mean(L) < thresh
+
+
+
 
 
 
@@ -1361,17 +1417,29 @@ def extract_traits(image_file):
         plt.close()
         
         
-
-        (marker_img, thresh_marker, coins_width_contour, coins_width_circle) = marker_detect(image.copy())
-
+        # detect the coin based on the template image
+        (marker_coin_img, thresh_coin, coins_width_contour, coins_width_circle) = marker_detect(image.copy(), tp_coin, 0.8)
+        
+        # save segmentation result
+        result_file = (save_path + base_name + '_coin_deteced.' + file_extension)
+        cv2.imwrite(result_file, marker_coin_img)
+        
+        
+        # detect the barcode based on the template image
+        (marker_barcode_img, thresh_barcode, barcode_width_contour, barcode_width_circle) = marker_detect(image.copy(), tp_barcode, 0.6)
 
         # save segmentation result
-        result_file = (save_path + base_name + '_marker_deteced.' + file_extension)
-        cv2.imwrite(result_file, marker_img)
-    
+        result_file = (save_path + base_name + '_barcode_deteced.' + file_extension)
+        cv2.imwrite(result_file, marker_barcode_img)
+        
+        
+        
+        barcode_img = barcode_detect(image.copy())
+        
         # save segmentation result
-        #result_file = (save_path + base_name + '_marker_thresh.' + file_extension)
-        #cv2.imwrite(result_file, thresh_marker)
+        result_file = (save_path + base_name + '_barcode_detection.' + file_extension)
+        cv2.imwrite(result_file, barcode_img)
+        
         ############################################## leaf number computation
         '''
         #min_distance_value = 3
@@ -1492,6 +1560,7 @@ if __name__ == '__main__':
     ap.add_argument("-p", "--path", required = True,    help = "path to image file")
     ap.add_argument("-ft", "--filetype", required = True,    help = "Image filetype")
     ap.add_argument('-mk', '--marker', required = False,  default ='/marker_template/marker.png',  help = "Marker file name")
+    ap.add_argument('-bc', '--barcode', required = False,  default ='/marker_template/barcode.png',  help = "Barcode file name")
     ap.add_argument("-r", "--result", required = False,    help="result path")
     ap.add_argument('-s', '--color-space', type = str, required = False, default ='lab', help='Color space to use: BGR (default), HSV, Lab, YCrCb (YCC)')
     ap.add_argument('-c', '--channels', type = str, required = False, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
@@ -1509,34 +1578,49 @@ if __name__ == '__main__':
     file_path = args["path"]
     ext = args['filetype']
     
-    marker_path = args["marker"]
+    coin_path = args["marker"]
+    barcode_path = args["barcode"]
     
     min_size = args['min_size']
     min_distance_value = args['min_dist']
     
     
     
-    global  template
-    # path of the marker (coin), default path will be '/marker_template/marker.png'
+    global  tp_coin, tp_barcode
+    # path of the marker (coin), default path will be '/marker_template/marker.png' and '/marker_template/barcode.png'
     # can be changed based on requirement
-    template_path = file_path + marker_path
+    
+    template_path = file_path + coin_path
+    barcode_path = file_path + barcode_path
     
     try:
         # check to see if file is readable
         with open(template_path) as tempFile:
 
             # Read the template 
-            template = cv2.imread(template_path, 0)
+            tp_coin = cv2.imread(template_path, 0)
             print("Template loaded successfully")
             
     except IOError as err:
         
-        print("Error reading the file {0}: {1}".format(template_path, err))
+        print("Error reading the Template file {0}: {1}".format(template_path, err))
         
         exit(0)
 
     
-    
+    try:
+        # check to see if file is readable
+        with open(barcode_path) as tempFile:
+
+            # Read the template 
+            tp_barcode = cv2.imread(barcode_path, 0)
+            print("Barcode loaded successfully")
+            
+    except IOError as err:
+        
+        print("Error reading the Barcode file {0}: {1}".format(barcode_path, err))
+        
+        exit(0)
     
     
 
