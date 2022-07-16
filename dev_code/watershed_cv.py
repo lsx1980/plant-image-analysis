@@ -69,24 +69,99 @@ def image_label(image_file):
 
     #load the image and perform pyramid mean shift filtering to aid the thresholding step
     image = cv2.imread(image_file)
+    
+    orig = image.copy()
+    
+    img_width, img_height, img_channels = image.shape
 
-    #imgcolor = ~imgcolor
+    shifted = cv2.pyrMeanShiftFiltering(image, 21, 70)
 
     #accquire image dimensions 
     height, width, channels = image.shape
      
     # convert the mean shift image to grayscale, then apply
     # Otsu's thresholding
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
+    gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
+    
     thresh = cv2.threshold(gray, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-    #cv2.imshow("Thresh", thresh)
+    
+    # Taking a matrix of size 5 as the kernel
+    kernel = np.ones((25,25), np.uint8)
+    
+    thresh_dilation = cv2.dilate(thresh, kernel, iterations=1)
+    
+    thresh_erosion = cv2.erode(thresh, kernel, iterations=1)
+    
+    #define result path for labeled images
+    result_img_path = save_path_label + str(filename[0:-4]) + '_thresh.jpg'
+    cv2.imwrite(result_img_path, thresh_erosion)
+    
+    '''
+    ##############################################################################################
+    # find contours in the thresholded image
+    cnts = cv2.findContours(thresh_erosion.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    cnts = imutils.grab_contours(cnts)
+    
+    cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)
 
+    
+    #c = max(cnts, key=cv2.contourArea)
+    center_locX = []
+    center_locY = []
+    
+    for c in cnts_sorted[0:2]:
+        
+        # compute the center of the contour
+        M = cv2.moments(c)
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+        
+        center_locX.append(cX)
+        center_locY.append(cY)
+        
+        # draw the contour and center of the shape on the image
+        center_result = cv2.drawContours(image, [c], -1, (0, 255, 0), 2)
+        center_result = cv2.circle(image, (cX, cY), 14, (0, 0, 255), -1)
+        center_result = cv2.putText(image, "center", (cX - 20, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            
+    
+    print(center_locX, center_locY)
+    
+    divide_X = int(sum(center_locX) / len(center_locX))
+    divide_Y = int(sum(center_locY) / len(center_locY))
+    
+    print(divide_X, divide_Y)
+    
+    
+    center_result = cv2.circle(image, (divide_X, divide_Y), 14, (0, 255, 0), -1)
+    
+    
+    #define result path for labeled images
+    result_img_path = save_path_label + str(filename[0:-4]) + '_center.jpg'
+    cv2.imwrite(result_img_path, center_result)
+    
+    
+    
+    left_img = orig[0:height, 0:divide_X]
+    #define result path for labeled images
+    result_img_path = save_path_label + str(filename[0:-4]) + '_left.jpg'
+    cv2.imwrite(result_img_path, left_img)
+    
+    
+    right_img = orig[0:height, divide_X:img_width]
+    #define result path for labeled images
+    result_img_path = save_path_label + str(filename[0:-4]) + '_right.jpg'
+    cv2.imwrite(result_img_path, right_img)
+    ##########################################################################
+    '''
     # compute the exact Euclidean distance from every binary
     # pixel to the nearest zero pixel, then find peaks in this
     # distance map
     D = ndimage.distance_transform_edt(thresh)
-    localMax = peak_local_max(D, indices=False, min_distance = 20, labels=thresh)
+    localMax = peak_local_max(D, indices=False, min_distance = 120, labels=thresh)
+    
+    #localMax = peak_local_max(D, min_distance = 120, labels=thresh)
     
      
     # perform a connected component analysis on the local peaks,
@@ -147,9 +222,13 @@ def image_label(image_file):
 
     #define result path for simplified segmentation result
     result_img_path = save_path_ac + str(filename[0:-4]) + '_ac.jpg'
+    
+    
 
     #write out results
     cv2.imwrite(result_img_path,image)
+    
+    
 
 
 

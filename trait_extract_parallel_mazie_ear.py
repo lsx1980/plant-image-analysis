@@ -81,6 +81,10 @@ from pathlib import Path
 
 from matplotlib import collections
 
+from dbr import *
+from pyzbar import pyzbar
+
+
 
 
 MBFACTOR = float(1<<20)
@@ -156,6 +160,104 @@ def mkdir(path):
         #print path+' path exists!'
         return False
         
+
+
+def mutilple_objects_seg(orig):
+    
+    # load the image and perform pyramid mean shift filtering
+    # to aid the thresholding step
+    #Parse image path  and create result image path
+    #path, filename = os.path.split(image_file)
+
+    #print("processing image : {0} \n".format(str(filename)))
+
+    #load the image and perform pyramid mean shift filtering to aid the thresholding step
+    #image = cv2.imread(image_file)
+    
+    #orig = image.copy()
+    
+    img_width, img_height, img_channels = orig.shape
+
+    shifted = cv2.pyrMeanShiftFiltering(orig, 21, 70)
+
+    height, width, channels = orig.shape
+
+    # convert the mean shift image to grayscale, then apply
+    # Otsu's thresholding
+    gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
+    
+    thresh = cv2.threshold(gray, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    
+    # Taking a matrix of size 5 as the kernel
+    kernel = np.ones((25,25), np.uint8)
+    
+    thresh_dilation = cv2.dilate(thresh, kernel, iterations=1)
+    
+    thresh_erosion = cv2.erode(thresh, kernel, iterations=1)
+    
+    #define result path for labeled images
+    #result_img_path = save_path_label + str(filename[0:-4]) + '_thresh.jpg'
+    #cv2.imwrite(result_img_path, thresh_erosion)
+    
+    # find contours in the thresholded image
+    cnts = cv2.findContours(thresh_erosion.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    cnts = imutils.grab_contours(cnts)
+    
+    cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)
+
+    
+    #c = max(cnts, key=cv2.contourArea)
+    center_locX = []
+    center_locY = []
+    
+    for c in cnts_sorted[0:2]:
+        
+        # compute the center of the contour
+        M = cv2.moments(c)
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+        
+        center_locX.append(cX)
+        center_locY.append(cY)
+        '''
+        # draw the contour and center of the shape on the image
+        center_result = cv2.drawContours(image, [c], -1, (0, 255, 0), 2)
+        center_result = cv2.circle(image, (cX, cY), 14, (0, 0, 255), -1)
+        center_result = cv2.putText(image, "center", (cX - 20, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        '''
+    
+    #print(center_locX, center_locY)
+    
+    divide_X = int(sum(center_locX) / len(center_locX))
+    divide_Y = int(sum(center_locY) / len(center_locY))
+    
+    #print(divide_X, divide_Y)
+    
+    
+    #center_result = cv2.circle(image, (divide_X, divide_Y), 14, (0, 255, 0), -1)
+    
+    
+    #define result path for labeled images
+    #result_img_path = save_path_label + str(filename[0:-4]) + '_center.jpg'
+    #cv2.imwrite(result_img_path, center_result)
+    
+    
+    
+    left_img = orig[0:height, 0:divide_X]
+    #define result path for labeled images
+    #result_img_path = save_path_label + str(filename[0:-4]) + '_left.jpg'
+    #cv2.imwrite(result_img_path, left_img)
+    
+    
+    right_img = orig[0:height, divide_X:img_width]
+    #define result path for labeled images
+    #result_img_path = save_path_label + str(filename[0:-4]) + '_right.jpg'
+    #cv2.imwrite(result_img_path, right_img)
+    
+    return left_img, right_img
+
+
 
 def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
@@ -941,53 +1043,96 @@ def outlier_doubleMAD(data,thresh = 3.5):
 
 
 # Detect barcode in the image
-def barcode_detect(img_ori):
+def barcode_detect(img_ori, marker_barcode_img_path):
     
-    # load the image, clone it for output
-    img_rgb = img_ori.copy()
-      
-    # Convert it to grayscale 
-    gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY) 
-      
+    '''
+    qrCodeDetector = cv2.QRCodeDetector()
+     
+    decodedText, points, _ = qrCodeDetector.detectAndDecode(img_ori.copy())
+     
+    if points is not None:
+     
+        nrOfPoints = len(points)
+     
+        for i in range(nrOfPoints):
+            nextPointIndex = (i+1) % nrOfPoints
+            barcode_detection = cv2.line(img_ori.copy(), tuple(points[i][0]), tuple(points[nextPointIndex][0]), (255,0,0), 5)
+     
+        #print(decodedText)
+        
+        print("QR code info: {}\n".format(decodedText))
+     
+    else:
+        print("QR code not detected")
+        barcode_detection = img_ori
+    '''
+    
+    
+    barcode_detection = img_ori
+    
+    
+    reader = BarcodeReader()
+    
+    '''
+    settings = reader.get_runtime_settings()
+    settings.barcode_format_ids = EnumBarcodeFormat.BF_ALL
+    settings.barcode_format_ids_2 = EnumBarcodeFormat_2.BF2_POSTALCODE | EnumBarcodeFormat_2.BF2_DOTCODE
+    settings.excepted_barcodes_count = 32
+    reader.update_runtime_settings(settings)
+    '''
 
-    # compute the Scharr gradient magnitude representation of the images
-    # in both the x and y direction using OpenCV 2.4
-    ddepth = cv2.cv.CV_32F if imutils.is_cv2() else cv2.CV_32F
-    gradX = cv2.Sobel(gray, ddepth=ddepth, dx=1, dy=0, ksize=-1)
-    gradY = cv2.Sobel(gray, ddepth=ddepth, dx=0, dy=1, ksize=-1)
+
+    try:
+    #image = r"[INSTALLATION FOLDER]/Images/AllSupportedBarcodeTypes.png"
+        text_results = reader.decode_file(marker_barcode_img_path)
+        
+        if text_results != None:
+          for text_result in text_results:
+             print("Barcode Format : " + text_result.barcode_format_string)
+             if len(text_result.barcode_format_string) == 0:
+                print("Barcode Format : " + text_result.barcode_format_string_2)
+             else:
+                print("Barcode Format : " + text_result.barcode_format_string)
+             print("Barcode Text : " + text_result.barcode_text)
     
-    # subtract the y-gradient from the x-gradient
-    gradient = cv2.subtract(gradX, gradY)
-    gradient = cv2.convertScaleAbs(gradient)
+    except BarcodeReaderError as bre:
+        print(bre)
     
-    # blur and threshold the image
-    blurred = cv2.blur(gradient, (9, 9))
-    (_, thresh) = cv2.threshold(blurred, 225, 255, cv2.THRESH_BINARY)
+    del reader
     
-    # construct a closing kernel and apply it to the thresholded image
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 7))
-    closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
     
-    # perform a series of erosions and dilations
-    closed = cv2.erode(closed, None, iterations = 4)
-    closed = cv2.dilate(closed, None, iterations = 4)
+    ######################################################################
+    image = cv2.imread(marker_barcode_img_path)
     
-    # find the contours in the thresholded image, then sort the contours
-    # by their area, keeping only the largest one
-    cnts = cv2.findContours(closed.copy(), cv2.RETR_EXTERNAL,
-    cv2.CHAIN_APPROX_SIMPLE)
-    cnts = imutils.grab_contours(cnts)
-    c = sorted(cnts, key = cv2.contourArea, reverse = True)[0]
-    # compute the rotated bounding box of the largest contour
-    rect = cv2.minAreaRect(c)
-    box = cv2.cv.BoxPoints(rect) if imutils.is_cv2() else cv2.boxPoints(rect)
-    box = np.int0(box)
+    #find the barcodes in the image and decode each of the barcodes
+    barcodes = pyzbar.decode(image)
     
-    # draw a bounding box arounded the detected barcode and display the
-    # image
-    barcode_detection = cv2.drawContours(img_rgb, [box], -1, (0, 255, 0), 3)
+    print(barcodes)
+    
+    # loop over the detected barcodes
+    for barcode in barcodes:
+        # extract the bounding box location of the barcode and draw the
+        # bounding box surrounding the barcode on the image
+        (x, y, w, h) = barcode.rect
+        barcode_detection = cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+        # the barcode data is a bytes object so if we want to draw it on
+        # our output image we need to convert it to a string first
+        barcodeData = barcode.data.decode("utf-8")
+        barcodeType = barcode.type
+        # draw the barcode data and barcode type on the image
+        text = "{} ({})".format(barcodeData, barcodeType)
+        cv2.putText(image, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
+            0.5, (0, 0, 255), 2)
+        # print the barcode type and data to the terminal
+        print("[INFO] Found {} barcode: {}".format(barcodeType, barcodeData))
+    ######################################################################
+    
+    
     
     return barcode_detection
+    
+    
+
 
 
 
@@ -1030,6 +1175,10 @@ def marker_detect(img_ori, template, selection_threshold):
         
         marker_img = img_ori[startY:endY, startX:endX]
         
+        marker_overlay = marker_img
+        
+        
+        
         # Draw a rectangle around the matched region. 
         #for pt in zip(*loc[::-1]): 
             
@@ -1047,6 +1196,7 @@ def marker_detect(img_ori, template, selection_threshold):
         gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
         
         thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        
         
         # detect contours in the mask and grab the largest one
         cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -1078,7 +1228,7 @@ def marker_detect(img_ori, template, selection_threshold):
         # Brazil 1 Real coin dimension is 27 × 27 mm
         print("The width of Brazil 1 Real coin in the marker image is {:.0f} pixels\n".format(coins_width_circle))
         
-        
+        '''
         box = cv2.minAreaRect(largest_cnt)
         
         box = cv2.cv.BoxPoints(box) if imutils.is_cv2() else cv2.boxPoints(box)
@@ -1120,7 +1270,8 @@ def marker_detect(img_ori, template, selection_threshold):
         # draw the object sizes on the image
         marker_overlay = cv2.putText(marker_img, "{:.0f} pixels".format(coins_width_contour), (int(tltrX - 15), int(tltrY - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
         marker_overlay = cv2.putText(marker_img, "{:.0f} pixels".format(coins_width_circle), (int(trbrX - 80), int(trbrY -10)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-    
+        '''
+        
 
     return  marker_img, thresh, coins_width_contour, coins_width_circle
 
@@ -1220,6 +1371,18 @@ def extract_traits(image_file):
         orig = image.copy()
         
         source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
+        
+        
+        (left_img, right_img) = mutilple_objects_seg(orig)
+        # save segmentation result
+        result_file = (save_path + base_name + '_left' + file_extension)
+        cv2.imwrite(result_file, left_img)
+        
+         # save segmentation result
+        result_file = (save_path + base_name + '_right' + file_extension)
+
+        cv2.imwrite(result_file, right_img)
+        
          
         args_colorspace = args['color_space']
         args_channels = args['channels']
@@ -1433,8 +1596,8 @@ def extract_traits(image_file):
         cv2.imwrite(result_file, marker_barcode_img)
         
         
-        
-        barcode_img = barcode_detect(image.copy())
+        marker_barcode_img_path = (save_path + base_name + '_barcode_deteced.' + file_extension)
+        barcode_img = barcode_detect(marker_barcode_img, marker_barcode_img_path)
         
         # save segmentation result
         result_file = (save_path + base_name + '_barcode_detection.' + file_extension)
