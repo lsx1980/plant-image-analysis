@@ -562,6 +562,9 @@ def comp_external_contour(orig, thresh, img_overlay):
     
     cnt_area = []
     
+    cnt_width = []
+    cnt_height = []
+    
     orig = img_overlay
     ###########################################################################
     for index, c in enumerate(contours_sorted):
@@ -655,6 +658,9 @@ def comp_external_contour(orig, thresh, img_overlay):
             print("Max contour area = {0:.2f}... \n".format(area_c_cmax))
             
             cnt_area.append(area_c_cmax)
+            cnt_width.append(w)
+            cnt_height.append(h)
+            
             
             hull = cv2.convexHull(c)
             
@@ -693,7 +699,7 @@ def comp_external_contour(orig, thresh, img_overlay):
     print("Width and height are {0:.2f},{1:.2f}... \n".format(dA, dB))
     
             
-    return trait_img, area, kernel_area_ratio, dA, dB, crop_img, cnt_area
+    return trait_img, area, kernel_area_ratio, dA, dB, crop_img, cnt_area, cnt_width, cnt_height
     
 
 
@@ -1417,7 +1423,7 @@ def extract_traits(image_file):
         source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
         
         
-        (left_img, right_img, mask_seg, img_overlay, cnts_area_internal) = mutilple_objects_seg(orig)
+        (left_img, right_img, mask_seg, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig)
         # save segmentation result
         result_file = (save_path + base_name + '_left' + file_extension)
         cv2.imwrite(result_file, left_img)
@@ -1479,7 +1485,7 @@ def extract_traits(image_file):
         
         
         #find external contour 
-        (trait_img, area, kernel_area_ratio, max_width, max_height, crop_img, cnts_area_external) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
+        (trait_img, area, kernel_area_ratio, max_width, max_height, crop_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
         
         # save segmentation result
         result_file = (save_path + base_name + '_excontour' + file_extension)
@@ -1487,13 +1493,17 @@ def extract_traits(image_file):
         cv2.imwrite(result_file, trait_img)
         
         
-        print(cnts_area_internal)
+        print(cnt_area_internal)
         
-        print(cnts_area_external)
+        print(cnt_area_external)
         
-        area_ratio = (cnts_area_internal[0]/cnts_area_external[0], cnts_area_internal[1]/cnts_area_external[1])
+        area_ratio = (cnt_area_internal[0]/cnt_area_external[0], cnt_area_internal[1]/cnt_area_external[1])
         
         print(area_ratio)
+        
+        print(cnt_width)
+        
+        print(cnt_height)
         ################################################################################################
         '''
         num_clusters = 5
