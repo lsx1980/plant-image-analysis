@@ -162,6 +162,27 @@ def mkdir(path):
         
 
 
+def sort_contours(cnts, method="left-to-right"):
+    
+    # initialize the reverse flag and sort index
+    reverse = False
+    i = 0
+    # handle if we need to sort in reverse
+    if method == "right-to-left" or method == "bottom-to-top":
+        reverse = True
+    # handle if we are sorting against the y-coordinate rather than
+    # the x-coordinate of the bounding box
+    if method == "top-to-bottom" or method == "bottom-to-top":
+        i = 1
+    # construct the list of bounding boxes and sort them from top to
+    # bottom
+    boundingBoxes = [cv2.boundingRect(c) for c in cnts]
+    (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes), key=lambda b:b[1][i], reverse=reverse))
+    # return the list of sorted contours and bounding boxes
+    return cnts
+
+
+
 def mutilple_objects_seg(orig):
     
     # load the image and perform pyramid mean shift filtering
@@ -176,7 +197,7 @@ def mutilple_objects_seg(orig):
     
     #orig = image.copy()
     
-    img_width, img_height, img_channels = orig.shape
+    #img_width, img_height, img_channels = orig.shape
 
     shifted = cv2.pyrMeanShiftFiltering(orig, 21, 70)
 
@@ -188,7 +209,7 @@ def mutilple_objects_seg(orig):
     
     thresh = cv2.threshold(gray, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     
-    # Taking a matrix of size 5 as the kernel
+    # Taking a matrix of size 25 as the kernel
     kernel = np.ones((25,25), np.uint8)
     
     thresh_dilation = cv2.dilate(thresh, kernel, iterations=1)
@@ -204,14 +225,23 @@ def mutilple_objects_seg(orig):
     
     cnts = imutils.grab_contours(cnts)
     
-    cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)
+    cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)[0:2]
 
+    cnts_sorted = sort_contours(cnts_sorted, method="left-to-right")
+    
     
     #c = max(cnts, key=cv2.contourArea)
     center_locX = []
     center_locY = []
+    cnt_area = []
     
-    for c in cnts_sorted[0:2]:
+    img_thresh = np.zeros(orig.shape, np.uint8)
+    
+    img_overlay_bk = orig
+    
+    
+    
+    for idx, c in enumerate(cnts_sorted):
         
         # compute the center of the contour
         M = cv2.moments(c)
@@ -220,12 +250,15 @@ def mutilple_objects_seg(orig):
         
         center_locX.append(cX)
         center_locY.append(cY)
-        '''
+        
+        cnt_area.append(cv2.contourArea(c))
+        
         # draw the contour and center of the shape on the image
-        center_result = cv2.drawContours(image, [c], -1, (0, 255, 0), 2)
-        center_result = cv2.circle(image, (cX, cY), 14, (0, 0, 255), -1)
-        center_result = cv2.putText(image, "center", (cX - 20, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-        '''
+        img_overlay = cv2.drawContours(img_overlay_bk, [c], -1, (0, 255, 0), 2)
+        mask_seg = cv2.drawContours(img_thresh, [c], -1, (255,255,255),-1)
+        #center_result = cv2.circle(img_thresh, (cX, cY), 14, (0, 0, 255), -1)
+        img_overlay = cv2.putText(img_overlay_bk, "{}".format(idx +1), (cX - 20, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 5.5, (255, 0, 0), 5)
+        
     
     #print(center_locX, center_locY)
     
@@ -250,12 +283,17 @@ def mutilple_objects_seg(orig):
     #cv2.imwrite(result_img_path, left_img)
     
     
-    right_img = orig[0:height, divide_X:img_width]
+    right_img = orig[0:height, divide_X:width]
     #define result path for labeled images
     #result_img_path = save_path_label + str(filename[0:-4]) + '_right.jpg'
     #cv2.imwrite(result_img_path, right_img)
     
-    return left_img, right_img
+    mask_seg_gray = cv2.cvtColor(mask_seg, cv2.COLOR_BGR2GRAY)
+    
+    #(mask_seg_binary, im_bw) = cv2.threshold(mask_seg_gray, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    
+    
+    return left_img, right_img, mask_seg_gray, img_overlay, cnt_area
 
 
 
@@ -487,7 +525,7 @@ def midpoint(ptA, ptB):
 
 
 
-def comp_external_contour(orig,thresh):
+def comp_external_contour(orig, thresh, img_overlay):
     
     #find contours and get the external one
     #contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -514,20 +552,25 @@ def comp_external_contour(orig,thresh):
     
     contours = sorted(contours, key = cv2.contourArea, reverse = True)
     
+    contours_sorted = sort_contours(contours, method="left-to-right")
+    
     #c_max = max(contours, key = cv2.contourArea)
     
     area_c_cmax = 0
     
     area_holes_sum = 0
     
+    cnt_area = []
+    
+    orig = img_overlay
     ###########################################################################
-    for index, c in enumerate(contours):
+    for index, c in enumerate(contours_sorted):
     #for c in contours:
         
         #get the bounding rect
         (x, y, w, h) = cv2.boundingRect(c)
         
-        if index == 0:
+        if index == 0 or index == 1:
             
             trait_img = cv2.drawContours(orig, c, -1, (255, 255, 0), 1)
             
@@ -611,6 +654,7 @@ def comp_external_contour(orig,thresh):
             area_c_cmax = cv2.contourArea(c)
             print("Max contour area = {0:.2f}... \n".format(area_c_cmax))
             
+            cnt_area.append(area_c_cmax)
             
             hull = cv2.convexHull(c)
             
@@ -649,7 +693,7 @@ def comp_external_contour(orig,thresh):
     print("Width and height are {0:.2f},{1:.2f}... \n".format(dA, dB))
     
             
-    return trait_img, area, kernel_area_ratio, dA, dB, crop_img
+    return trait_img, area, kernel_area_ratio, dA, dB, crop_img, cnt_area
     
 
 
@@ -1373,15 +1417,22 @@ def extract_traits(image_file):
         source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
         
         
-        (left_img, right_img) = mutilple_objects_seg(orig)
+        (left_img, right_img, mask_seg, img_overlay, cnts_area_internal) = mutilple_objects_seg(orig)
         # save segmentation result
         result_file = (save_path + base_name + '_left' + file_extension)
         cv2.imwrite(result_file, left_img)
         
-         # save segmentation result
+        # save segmentation result
         result_file = (save_path + base_name + '_right' + file_extension)
-
         cv2.imwrite(result_file, right_img)
+        
+        # save segmentation result
+        result_file = (save_path + base_name + '_mask_seg' + file_extension)
+        cv2.imwrite(result_file, mask_seg)
+        
+        # save segmentation result
+        result_file = (save_path + base_name + '_overlay' + file_extension)
+        cv2.imwrite(result_file, img_overlay)
         
          
         args_colorspace = args['color_space']
@@ -1389,29 +1440,66 @@ def extract_traits(image_file):
         args_num_clusters = args['num_clusters']
         
         #color clustering based plant object segmentation
-        thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
+        thresh = color_cluster_seg(image.copy(), args_colorspace, args_channels, args_num_clusters)
         # save segmentation result
         result_file = (save_path + base_name + '_seg' + file_extension)
         #print(filename)
         cv2.imwrite(result_file, thresh)
         
         
+       
+        #combine two masks
+        combined_mask = mask_seg | thresh
+        
+        # Taking a matrix of size 25 as the kernel
+        kernel = np.ones((25,25), np.uint8)
+        combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
+        
+        result_file = (save_path + base_name + '_combined_mask' + file_extension)
+        #print(filename)
+        cv2.imwrite(result_file, combined_mask)
+        
+        
+        thresh_combined_mask = cv2.threshold(combined_mask, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        
+        # find contours in the thresholded image
+        cnts = cv2.findContours(thresh_combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts = imutils.grab_contours(cnts)
+
+        cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)
+        
+        for c in cnts_sorted[0:2]:
+
+            # draw the contour and center of the shape on the image
+            img_overlay = cv2.drawContours(img_overlay, [c], -1, (0, 255, 0), 2)
+        
+        # save segmentation result
+        result_file = (save_path + base_name + '_overlay_combined' + file_extension)
+        cv2.imwrite(result_file, img_overlay)
+        
+        
         #find external contour 
-        (trait_img, area, kernel_area_ratio, max_width, max_height, crop_img) = comp_external_contour(image.copy(),thresh)
+        (trait_img, area, kernel_area_ratio, max_width, max_height, crop_img, cnts_area_external) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
+        
         # save segmentation result
         result_file = (save_path + base_name + '_excontour' + file_extension)
         #print(filename)
-        cv2.imwrite(result_file, trait_img)   
+        cv2.imwrite(result_file, trait_img)
         
         
-        #result_img_path = track_save_path + base_name + '_seg' + file_extension
-        #cv2.imwrite(result_img_path, crop_img)
+        print(cnts_area_internal)
         
+        print(cnts_area_external)
         
+        area_ratio = (cnts_area_internal[0]/cnts_area_external[0], cnts_area_internal[1]/cnts_area_external[1])
+        
+        print(area_ratio)
+        ################################################################################################
+        '''
         num_clusters = 5
         
         #save color analysisi/quantization result
-        (rgb_colors, counts, hex_colors) = color_region(orig, thresh, save_path, num_clusters)
+        (rgb_colors, counts, hex_colors) = color_region(left_img.copy(), thresh, save_path, num_clusters)
         
 
         #print("hex_colors = {} {}\n".format(hex_colors, type(hex_colors)))
@@ -1441,6 +1529,7 @@ def extract_traits(image_file):
         
         
         selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
+        '''
         
         ####################################################
         '''
@@ -1460,7 +1549,7 @@ def extract_traits(image_file):
             print(index, value, diff) 
         
         '''
-        
+        '''
         ###############################################
         
         #accquire medial axis of segmentation mask
@@ -1502,7 +1591,7 @@ def extract_traits(image_file):
         
         #print(sub_branch)
         
-        print(sub_branch_cleaned)
+        #print(sub_branch_cleaned)
         
         #print(sub_branch_cleaned.iloc[:, 0])
         
@@ -1535,7 +1624,7 @@ def extract_traits(image_file):
         
         result_file = (save_path + base_name + '_end_point_overlay' + file_extension)
         cv2.imwrite(result_file, end_point_overlay)
-        
+        '''
 
         '''
         # define the center/soma
@@ -1552,7 +1641,7 @@ def extract_traits(image_file):
         print(table)
         '''
 
-        
+        '''
         branch_type_list = sub_branch_cleaned["branch-type"].tolist()
         
         #print(branch_type_list.count(1))
@@ -1578,7 +1667,7 @@ def extract_traits(image_file):
         plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
         
         plt.close()
-        
+        '''
         
         # detect the coin based on the template image
         (marker_coin_img, thresh_coin, coins_width_contour, coins_width_circle) = marker_detect(image.copy(), tp_coin, 0.8)
@@ -1710,7 +1799,9 @@ def extract_traits(image_file):
     
     #return image_file_name, area, kernel_area_ratio, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, kernel_area_ratio_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec
     
-    return image_file_name, area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
+    #return image_file_name, area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
+    
+    return image_file_name, area, kernel_area_ratio, max_width, max_height
     
 
 
@@ -1807,10 +1898,14 @@ if __name__ == '__main__':
     #loop execute
     for image in imgList:
         
-        (filename, area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
+        #(filename, area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
         
-        result_list.append([filename, area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
+        (filename, area, kernel_area_ratio, max_width, max_height) = extract_traits(image)
         
+        #result_list.append([filename, area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
+        
+        result_list.append([filename, area, kernel_area_ratio, max_width, max_height])
+
         #print(leaf_color_value_rec)
         
         #for i in range(len(leaf_index_rec)):
@@ -1847,8 +1942,9 @@ if __name__ == '__main__':
     
     #output in command window in a sum table
  
-    table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
-
+    #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ], tablefmt = 'orgtbl')
+    
     print(table + "\n")
     
     
@@ -1887,6 +1983,8 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 3).value = 'kernel_area_ratio'
         sheet.cell(row = 1, column = 4).value = 'max_width'
         sheet.cell(row = 1, column = 5).value = 'max_height'
+        
+        '''
         sheet.cell(row = 1, column = 6).value = 'color distribution cluster 1'
         sheet.cell(row = 1, column = 7).value = 'color distribution cluster 2'
         sheet.cell(row = 1, column = 8).value = 'color distribution cluster 3'
@@ -1895,7 +1993,7 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 11).value = 'color cluster 2 hex value'
         sheet.cell(row = 1, column = 12).value = 'color cluster 3 hex value'
         sheet.cell(row = 1, column = 13).value = 'color cluster 4 hex value'        
-        
+        '''
     
        
         
