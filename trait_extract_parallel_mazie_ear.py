@@ -313,6 +313,9 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         
     else:
         colorSpace = 'bgr'  # set for file naming purposes
+        
+        
+    #image = cv2.pyrMeanShiftFiltering(image, 21, 70)
 
     # Keep only the selected channels for K-means clustering.
     if args_channels != 'all':
@@ -329,7 +332,8 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #print("image shape: \n")
     #print(width, height, n_channel)
     
- 
+    
+    
     # Flatten the 2D image array into an MxN feature vector, where M is the number of pixels and N is the dimension (number of channels).
     reshaped = image.reshape(image.shape[0] * image.shape[1], image.shape[2])
     
@@ -692,14 +696,14 @@ def comp_external_contour(orig, thresh, img_overlay):
     
     #kernel_area_ratio = 1.0 - float(area_holes_sum)/area_c_cmax
     
-    kernel_area_ratio = (area_c_cmax - area_holes_sum)/hull_area
+    #kernel_area_ratio = (area_c_cmax - area_holes_sum)/hull_area
     
-    print("kernel_area_ratio = {0:.2f}... \n".format(kernel_area_ratio))
+    #print("kernel_area_ratio = {0:.2f}... \n".format(kernel_area_ratio))
 
-    print("Width and height are {0:.2f},{1:.2f}... \n".format(dA, dB))
+    #print("Width and height are {0:.2f},{1:.2f}... \n".format(cnt_width, cnt_height))
     
             
-    return trait_img, area, kernel_area_ratio, dA, dB, crop_img, cnt_area, cnt_width, cnt_height
+    return trait_img, area, dA, dB, crop_img, cnt_area, cnt_width, cnt_height
     
 
 
@@ -1457,10 +1461,11 @@ def extract_traits(image_file):
         #combine two masks
         combined_mask = mask_seg | thresh
         
+        '''
         # Taking a matrix of size 25 as the kernel
         kernel = np.ones((25,25), np.uint8)
         combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
-        
+        '''
         result_file = (save_path + base_name + '_combined_mask' + file_extension)
         #print(filename)
         cv2.imwrite(result_file, combined_mask)
@@ -1485,7 +1490,7 @@ def extract_traits(image_file):
         
         
         #find external contour 
-        (trait_img, area, kernel_area_ratio, max_width, max_height, crop_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
+        (trait_img, area, max_width, max_height, crop_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
         
         # save segmentation result
         result_file = (save_path + base_name + '_excontour' + file_extension)
@@ -1497,13 +1502,40 @@ def extract_traits(image_file):
         
         print(cnt_area_external)
         
+
+        
+        area_max_external = max(cnt_area_external)
+        
+        sum_area_internal = sum(cnt_area_internal)
+        
+        if (cnt_area_internal[0] >= cnt_area_external[0])  or  (cnt_area_internal[1] >= cnt_area_external[1]):
+            
+            if sum_area_internal < area_max_external:
+                
+                cnt_area_external[0] = cnt_area_external[1] = np.mean(cnt_area_external)
+            else:
+                cnt_area_external[0] = cnt_area_external[1] = area_max_external
+            
         area_ratio = (cnt_area_internal[0]/cnt_area_external[0], cnt_area_internal[1]/cnt_area_external[1])
+        
+        
+        area_ratio  = [ elem for elem in area_ratio if elem < 1]
         
         print(area_ratio)
         
         print(cnt_width)
         
         print(cnt_height)
+        
+        kernel_area_ratio = np.mean(area_ratio)
+        
+        kernel_area = sum(cnt_area_internal) / len(cnt_area_internal)
+        
+        max_width = sum(cnt_width) / len(cnt_width)
+        
+        max_height = sum(cnt_height) / len(cnt_height)
+        
+        
         ################################################################################################
         '''
         num_clusters = 5
@@ -1811,7 +1843,7 @@ def extract_traits(image_file):
     
     #return image_file_name, area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
     
-    return image_file_name, area, kernel_area_ratio, max_width, max_height
+    return image_file_name, kernel_area, kernel_area_ratio, max_width, max_height
     
 
 
@@ -1910,11 +1942,11 @@ if __name__ == '__main__':
         
         #(filename, area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
         
-        (filename, area, kernel_area_ratio, max_width, max_height) = extract_traits(image)
+        (filename, kernel_area, kernel_area_ratio, max_width, max_height) = extract_traits(image)
         
         #result_list.append([filename, area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        result_list.append([filename, area, kernel_area_ratio, max_width, max_height])
+        result_list.append([filename, kernel_area, kernel_area_ratio, max_width, max_height])
 
         #print(leaf_color_value_rec)
         
@@ -1953,7 +1985,7 @@ if __name__ == '__main__':
     #output in command window in a sum table
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
-    table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height' ], tablefmt = 'orgtbl')
     
     print(table + "\n")
     
@@ -1989,10 +2021,10 @@ if __name__ == '__main__':
         sheet_leaf = wb.create_sheet()
 
         sheet.cell(row = 1, column = 1).value = 'filename'
-        sheet.cell(row = 1, column = 2).value = 'mazie_ear_area'
-        sheet.cell(row = 1, column = 3).value = 'kernel_area_ratio'
-        sheet.cell(row = 1, column = 4).value = 'max_width'
-        sheet.cell(row = 1, column = 5).value = 'max_height'
+        sheet.cell(row = 1, column = 2).value = 'avg_kernel_area'
+        sheet.cell(row = 1, column = 3).value = 'avg_kernel_area_ratio'
+        sheet.cell(row = 1, column = 4).value = 'avg_width'
+        sheet.cell(row = 1, column = 5).value = 'avg_height'
         
         '''
         sheet.cell(row = 1, column = 6).value = 'color distribution cluster 1'
