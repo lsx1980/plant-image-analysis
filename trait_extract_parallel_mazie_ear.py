@@ -81,10 +81,9 @@ from pathlib import Path
 
 from matplotlib import collections
 
-from dbr import *
-from pyzbar import pyzbar
+from pylibdmtx.pylibdmtx import decode
 
-
+import re
 
 
 MBFACTOR = float(1<<20)
@@ -1098,100 +1097,35 @@ def outlier_doubleMAD(data,thresh = 3.5):
 
 
 
-
-# Detect barcode in the image
-def barcode_detect(img_ori, marker_barcode_img_path):
+# Read barcode in the imageand decode barcode info
+def barcode_detect(img_ori):
     
-    '''
-    qrCodeDetector = cv2.QRCodeDetector()
-     
-    decodedText, points, _ = qrCodeDetector.detectAndDecode(img_ori.copy())
-     
-    if points is not None:
-     
-        nrOfPoints = len(points)
-     
-        for i in range(nrOfPoints):
-            nextPointIndex = (i+1) % nrOfPoints
-            barcode_detection = cv2.line(img_ori.copy(), tuple(points[i][0]), tuple(points[nextPointIndex][0]), (255,0,0), 5)
-     
-        #print(decodedText)
+    height, width = img_ori.shape[:2]
+    
+    barcode_info = decode((img_ori.tobytes(), width, height))
+    
+    if len(barcode_info) > 0:
+    
+        barcode_str = " ".join(str(x) for x in barcode_info)
         
-        print("QR code info: {}\n".format(decodedText))
-     
+        #print((barcode_str))
+            
+        tag_info = re.findall(r"'(.*?)'", barcode_str, re.DOTALL)
+        
+        tag_info = " ".join(str(x) for x in tag_info)
+        
+        tag_info = tag_info.replace("'", "")
+        
+        print("Tag info: {}\n".format(tag_info))
+    
     else:
-        print("QR code not detected")
-        barcode_detection = img_ori
-    '''
-    
-    
-    barcode_detection = img_ori
-    
-    
-    reader = BarcodeReader()
-    
-    '''
-    settings = reader.get_runtime_settings()
-    settings.barcode_format_ids = EnumBarcodeFormat.BF_ALL
-    settings.barcode_format_ids_2 = EnumBarcodeFormat_2.BF2_POSTALCODE | EnumBarcodeFormat_2.BF2_DOTCODE
-    settings.excepted_barcodes_count = 32
-    reader.update_runtime_settings(settings)
-    '''
-
-
-    try:
-    #image = r"[INSTALLATION FOLDER]/Images/AllSupportedBarcodeTypes.png"
-        text_results = reader.decode_file(marker_barcode_img_path)
         
-        if text_results != None:
-          for text_result in text_results:
-             print("Barcode Format : " + text_result.barcode_format_string)
-             if len(text_result.barcode_format_string) == 0:
-                print("Barcode Format : " + text_result.barcode_format_string_2)
-             else:
-                print("Barcode Format : " + text_result.barcode_format_string)
-             print("Barcode Text : " + text_result.barcode_text)
-    
-    except BarcodeReaderError as bre:
-        print(bre)
-    
-    del reader
+        print("barcode inforamation was not readable!\n")
+        tag_info = 'Unreadable'
+        
+    return tag_info
     
     
-    ######################################################################
-    image = cv2.imread(marker_barcode_img_path)
-    
-    #find the barcodes in the image and decode each of the barcodes
-    barcodes = pyzbar.decode(image)
-    
-    print(barcodes)
-    
-    # loop over the detected barcodes
-    for barcode in barcodes:
-        # extract the bounding box location of the barcode and draw the
-        # bounding box surrounding the barcode on the image
-        (x, y, w, h) = barcode.rect
-        barcode_detection = cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-        # the barcode data is a bytes object so if we want to draw it on
-        # our output image we need to convert it to a string first
-        barcodeData = barcode.data.decode("utf-8")
-        barcodeType = barcode.type
-        # draw the barcode data and barcode type on the image
-        text = "{} ({})".format(barcodeData, barcodeType)
-        cv2.putText(image, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
-            0.5, (0, 0, 255), 2)
-        # print the barcode type and data to the terminal
-        print("[INFO] Found {} barcode: {}".format(barcodeType, barcodeData))
-    ######################################################################
-    
-    
-    
-    return barcode_detection
-    
-    
-
-
-
 
 
 # Detect marker in the image
@@ -1686,14 +1620,9 @@ def extract_traits(image_file):
         result_file = (save_path + base_name + '_barcode_deteced.' + file_extension)
         cv2.imwrite(result_file, marker_barcode_img)
         
+        tag_info = barcode_detect(marker_barcode_img)
         
-        marker_barcode_img_path = (save_path + base_name + '_barcode_deteced.' + file_extension)
-        barcode_img = barcode_detect(marker_barcode_img, marker_barcode_img_path)
-        
-        # save segmentation result
-        #result_file = (save_path + base_name + '_barcode_detection.' + file_extension)
-        #cv2.imwrite(result_file, barcode_img)
-        
+
         ############################################## leaf number computation
         '''
         #min_distance_value = 3
@@ -1803,7 +1732,7 @@ def extract_traits(image_file):
     
     #return image_file_name, area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
     
-    return image_file_name, kernel_area, kernel_area_ratio, max_width, max_height
+    return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height
     
 
 
@@ -1902,11 +1831,11 @@ if __name__ == '__main__':
         
         #(filename, area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
         
-        (filename, kernel_area, kernel_area_ratio, max_width, max_height) = extract_traits(image)
+        (filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height) = extract_traits(image)
         
         #result_list.append([filename, area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        result_list.append([filename, kernel_area, kernel_area_ratio, max_width, max_height])
+        result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height])
 
         #print(leaf_color_value_rec)
         
@@ -1945,7 +1874,7 @@ if __name__ == '__main__':
     #output in command window in a sum table
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
-    table = tabulate(result_list, headers = ['filename', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height' ], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height' ], tablefmt = 'orgtbl')
     
     print(table + "\n")
     
@@ -1981,10 +1910,11 @@ if __name__ == '__main__':
         sheet_leaf = wb.create_sheet()
 
         sheet.cell(row = 1, column = 1).value = 'filename'
-        sheet.cell(row = 1, column = 2).value = 'avg_kernel_area'
-        sheet.cell(row = 1, column = 3).value = 'avg_kernel_area_ratio'
-        sheet.cell(row = 1, column = 4).value = 'avg_width'
-        sheet.cell(row = 1, column = 5).value = 'avg_height'
+        sheet.cell(row = 1, column = 2).value = 'tag_info'
+        sheet.cell(row = 1, column = 3).value = 'avg_kernel_area'
+        sheet.cell(row = 1, column = 4).value = 'avg_kernel_area_ratio'
+        sheet.cell(row = 1, column = 5).value = 'avg_width'
+        sheet.cell(row = 1, column = 6).value = 'avg_height'
         
         '''
         sheet.cell(row = 1, column = 6).value = 'color distribution cluster 1'

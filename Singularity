@@ -33,7 +33,8 @@ From: ubuntu:18.04
     libxrender1 \
     libzbar-dev \
     libzbar0 \
-    python3-pandas
+    python3-pandas \
+    libdmtx0b
     
   pip3 install numpy \
                 Pillow \
@@ -50,7 +51,8 @@ From: ubuntu:18.04
                 pandas \
                 numba \
                 psutil \
-                pyzbar
+                pylibdmtx
+
 
   pip3 install -U scikit-learn
   
