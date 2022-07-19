@@ -233,7 +233,7 @@ def mutilple_objects_seg(orig):
     #c = max(cnts, key=cv2.contourArea)
     center_locX = []
     center_locY = []
-    cnt_area = []
+    cnt_area = [0] * 2
     
     img_thresh = np.zeros(orig.shape, np.uint8)
     
@@ -251,7 +251,9 @@ def mutilple_objects_seg(orig):
         center_locX.append(cX)
         center_locY.append(cY)
         
-        cnt_area.append(cv2.contourArea(c))
+        #cnt_area.append(cv2.contourArea(c))
+        
+        cnt_area[idx] = cv2.contourArea(c)
         
         # draw the contour and center of the shape on the image
         img_overlay = cv2.drawContours(img_overlay_bk, [c], -1, (0, 255, 0), 2)
@@ -532,9 +534,9 @@ def midpoint(ptA, ptB):
 def comp_external_contour(orig, thresh, img_overlay):
     
     #find contours and get the external one
-    #contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
    
-    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    #contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
     
     img_height, img_width, img_channels = orig.shape
    
@@ -545,12 +547,10 @@ def comp_external_contour(orig, thresh, img_overlay):
     crop_img = orig.copy()
     
     area = 0
-    
     kernel_area_ratio = 0
-    
     w=h=0
     
-    
+    print("length of contours = {}\n".format(len(contours)))
     ####################################################################################
     
     
@@ -564,7 +564,7 @@ def comp_external_contour(orig, thresh, img_overlay):
     
     area_holes_sum = 0
     
-    cnt_area = []
+    cnt_area = [0] * 2
     
     cnt_width = []
     cnt_height = []
@@ -573,21 +573,23 @@ def comp_external_contour(orig, thresh, img_overlay):
     ###########################################################################
     for index, c in enumerate(contours_sorted):
     #for c in contours:
-        
-        #get the bounding rect
-        (x, y, w, h) = cv2.boundingRect(c)
-        
-        if index == 0 or index == 1:
+
+        if index < 2:
+            
+            #get the bounding rect
+            (x, y, w, h) = cv2.boundingRect(c)
             
             trait_img = cv2.drawContours(orig, c, -1, (255, 255, 0), 1)
             
+            
+            #roi = orig[y:y+h, x:x+w]
+            
+            print("ROI {} detected ...\n".format(index+1))
+            
             # draw a green rectangle to visualize the bounding rect
-            roi = orig[y:y+h, x:x+w]
+            trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 4)
             
-            print("ROI {} detected ...\n".format(index))
-
-            trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 1)
-            
+            '''
             ####################################################################
             margin = 150
 
@@ -603,7 +605,7 @@ def comp_external_contour(orig, thresh, img_overlay):
             crop_img = crop_img[start_y:crop_height, start_x:crop_width]
 
             ######################################################################
-            
+            '''
             
             # compute the center of the contour
             M = cv2.moments(c)
@@ -615,7 +617,8 @@ def comp_external_contour(orig, thresh, img_overlay):
             #trait_img = cv2.circle(orig, (cX, cY), 7, (255, 255, 255), -1)
             #trait_img = cv2.putText(orig, "center", (cX - 20, cY - 20),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
-            
+            #################################################################################
+            '''
             # compute the (rotated) bounding box of the contour to get the min area rect
             rect = cv2.minAreaRect(c)
             box = cv2.boxPoints(rect)
@@ -656,54 +659,54 @@ def comp_external_contour(orig, thresh, img_overlay):
             # draw the object sizes on the image
             #cv2.putText(orig, "{:.0f} pixels".format(dA), (int(tltrX), int(tltrY)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
             #cv2.putText(orig, "{:.0f} pixels".format(dB), (int(trbrX), int(trbrY)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+            '''
+            ###############################################################################
 
+            # the midpoint between bottom-left and bottom-right coordinates
+            #(tl, tr, br, bl) = box
+            
+            tl = (x, y+h*0.5)
+            tr = (x+w, y+h*0.5)
+            br = (x+w*0.5, y)
+            bl = (x+w*0.5, y+h)
+            
+            # compute the midpoint between bottom-left and bottom-right coordinates
+            (tltrX, tltrY) = midpoint(tl, tr)
+            (blbrX, blbrY) = midpoint(bl, br)
+            
+             # compute the midpoint between the top-left and top-right points,
+            # followed by the midpoint between the top-righ and bottom-right
+            #(tlblX, tlblY) = midpoint(tl, bl)
+            #(trbrX, trbrY) = midpoint(tr, br)
+
+            # draw the midpoints on the image
+            trait_img = cv2.circle(orig, (int(tltrX), int(tltrY)), 15, (255, 0, 0), -1)
+            trait_img = cv2.circle(orig, (int(blbrX), int(blbrY)), 15, (255, 0, 0), -1)
+            #trait_img = cv2.circle(orig, (int(tlblX), int(tlblY)), 5, (255, 0, 0), -1)
+            #trait_img = cv2.circle(orig, (int(trbrX), int(trbrY)), 5, (255, 0, 0), -1)
+            
+            # draw lines between the midpoints
+            trait_img = cv2.line(orig, (int(x), int(y+h*0.5)), (int(x+w), int(y+h*0.5)), (255, 0, 255), 6)
+            trait_img = cv2.line(orig, (int(x+w*0.5), int(y)), (int(x+w*0.5), int(y+h)), (255, 0, 255), 6)
+            
+
+            hull = cv2.convexHull(c)
+            
+            # draw convexhull in red color
+            trait_img = cv2.drawContours(orig, [hull], -1, (0, 0, 255), 2)
             
             area_c_cmax = cv2.contourArea(c)
-            print("Max contour area = {0:.2f}... \n".format(area_c_cmax))
+            #hull_area = cv2.contourArea(hull)
             
-            cnt_area.append(area_c_cmax)
+            cnt_area[index] = (area_c_cmax)
             cnt_width.append(w)
             cnt_height.append(h)
             
             
-            hull = cv2.convexHull(c)
+            print("Contour {0} shape info: Width = {1:.2f}, height= {2:.2f}, area = {3:.2f}\n".format(index+1, w, h, area_c_cmax))
+   
             
-            # draw it in red color
-            trait_img = cv2.drawContours(orig, [hull], -1, (0, 0, 255), 2)
-            
-            hull_area = cv2.contourArea(hull)
-            
-        
-        else:
-            
-            trait_img = cv2.drawContours(orig, c, -1, (255, 255, 0), 1)
-            
-            area_holes = cv2.contourArea(c)
-            
-            print("Current contour index = {} area = {}...\n".format(index, area_holes))
-            
-            area_holes_sum = area_holes_sum+ area_holes
-            
-            # compute the center of the contour
-            M = cv2.moments(c)
-            
-            cX = int(M["m10"] / M["m00"])
-            cY = int(M["m01"] / M["m00"])
-            
-            
-            trait_img = cv2.putText(orig, "{}".format(index), (cX - 2, cY - 2),cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-    
-    
-    #kernel_area_ratio = 1.0 - float(area_holes_sum)/area_c_cmax
-    
-    #kernel_area_ratio = (area_c_cmax - area_holes_sum)/hull_area
-    
-    #print("kernel_area_ratio = {0:.2f}... \n".format(kernel_area_ratio))
-
-    #print("Width and height are {0:.2f},{1:.2f}... \n".format(cnt_width, cnt_height))
-    
-            
-    return trait_img, area, dA, dB, crop_img, cnt_area, cnt_width, cnt_height
+    return trait_img, cnt_area, cnt_width, cnt_height
     
 
 
@@ -1282,49 +1285,7 @@ def marker_detect(img_ori, template, selection_threshold):
         # Brazil 1 Real coin dimension is 27 × 27 mm
         print("The width of Brazil 1 Real coin in the marker image is {:.0f} pixels\n".format(coins_width_circle))
         
-        '''
-        box = cv2.minAreaRect(largest_cnt)
-        
-        box = cv2.cv.BoxPoints(box) if imutils.is_cv2() else cv2.boxPoints(box)
-        
-        box = np.array(box, dtype="int")
-        
-        # order the points in the contour such that they appear in top-left, top-right, bottom-right, and bottom-left
-        # order, then draw the outline of the rotated bounding box
-        box = perspective.order_points(box)
-        
-        marker_overlay = cv2.drawContours(marker_img, [box.astype("int")], -1, (0, 255, 0), 2)
-        
-        # loop over the original points and draw them
-        for (x, y) in box:
-            marker_overlay = cv2.circle(marker_img, (int(x), int(y)), 5, (0, 0, 255), -1)
-        
-        # unpack the ordered bounding box, then compute the midpoint
-        # between the top-left and top-right coordinates, followed by
-        # the midpoint between bottom-left and bottom-right coordinates
-        (tl, tr, br, bl) = box
-        (tltrX, tltrY) = midpoint(tl, tr)
-        (blbrX, blbrY) = midpoint(bl, br)
-        
-        # compute the midpoint between the top-left and top-right points,
-        # followed by the midpoint between the top-righ and bottom-right
-        (tlblX, tlblY) = midpoint(tl, bl)
-        (trbrX, trbrY) = midpoint(tr, br)
-        
-        # draw the midpoints on the image
-        marker_overlay = cv2.circle(marker_img, (int(tltrX), int(tltrY)), 5, (255, 0, 0), -1)
-        marker_overlay = cv2.circle(marker_img, (int(blbrX), int(blbrY)), 5, (255, 0, 0), -1)
-        marker_overlay = cv2.circle(marker_img, (int(tlblX), int(tlblY)), 5, (255, 0, 0), -1)
-        marker_overlay = cv2.circle(marker_img, (int(trbrX), int(trbrY)), 5, (255, 0, 0), -1)
-        
-        # draw lines between the midpoints
-        marker_overlay = cv2.line(marker_img, (int(tltrX), int(tltrY)), (int(blbrX), int(blbrY)), (255, 0, 255), 2)
-        marker_overlay = cv2.line(marker_img, (int(tlblX), int(tlblY)), (int(trbrX), int(trbrY)), (255, 0, 255), 2)
 
-        # draw the object sizes on the image
-        marker_overlay = cv2.putText(marker_img, "{:.0f} pixels".format(coins_width_contour), (int(tltrX - 15), int(tltrY - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        marker_overlay = cv2.putText(marker_img, "{:.0f} pixels".format(coins_width_circle), (int(trbrX - 80), int(trbrY -10)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        '''
         
 
     return  marker_img, thresh, coins_width_contour, coins_width_circle
@@ -1429,16 +1390,16 @@ def extract_traits(image_file):
         
         (left_img, right_img, mask_seg, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig)
         # save segmentation result
-        result_file = (save_path + base_name + '_left' + file_extension)
-        cv2.imwrite(result_file, left_img)
+        #result_file = (save_path + base_name + '_left' + file_extension)
+        #cv2.imwrite(result_file, left_img)
         
         # save segmentation result
-        result_file = (save_path + base_name + '_right' + file_extension)
-        cv2.imwrite(result_file, right_img)
+        #result_file = (save_path + base_name + '_right' + file_extension)
+        #cv2.imwrite(result_file, right_img)
         
         # save segmentation result
-        result_file = (save_path + base_name + '_mask_seg' + file_extension)
-        cv2.imwrite(result_file, mask_seg)
+        #result_file = (save_path + base_name + '_mask_seg' + file_extension)
+        #cv2.imwrite(result_file, mask_seg)
         
         # save segmentation result
         result_file = (save_path + base_name + '_overlay' + file_extension)
@@ -1452,20 +1413,19 @@ def extract_traits(image_file):
         #color clustering based plant object segmentation
         thresh = color_cluster_seg(image.copy(), args_colorspace, args_channels, args_num_clusters)
         # save segmentation result
-        result_file = (save_path + base_name + '_seg' + file_extension)
-        #print(filename)
-        cv2.imwrite(result_file, thresh)
+        #result_file = (save_path + base_name + '_color_cluster_seg' + file_extension)
+        #cv2.imwrite(result_file, thresh)
         
         
-       
+       ###############################################################################################
         #combine two masks
         combined_mask = mask_seg | thresh
         
-        '''
+        
         # Taking a matrix of size 25 as the kernel
         kernel = np.ones((25,25), np.uint8)
         combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
-        '''
+        
         result_file = (save_path + base_name + '_combined_mask' + file_extension)
         #print(filename)
         cv2.imwrite(result_file, combined_mask)
@@ -1488,9 +1448,9 @@ def extract_traits(image_file):
         result_file = (save_path + base_name + '_overlay_combined' + file_extension)
         cv2.imwrite(result_file, img_overlay)
         
-        
+        ################################################################################################################################
         #find external contour 
-        (trait_img, area, max_width, max_height, crop_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
+        (trait_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
         
         # save segmentation result
         result_file = (save_path + base_name + '_excontour' + file_extension)
@@ -1498,16 +1458,16 @@ def extract_traits(image_file):
         cv2.imwrite(result_file, trait_img)
         
         
-        print(cnt_area_internal)
-        
-        print(cnt_area_external)
+        #print(cnt_area_internal)
+        #print(cnt_area_external)
         
 
-        
+        #compute the area ratio of interal contour verse external contour, kernal area ratio
         area_max_external = max(cnt_area_external)
         
         sum_area_internal = sum(cnt_area_internal)
         
+
         if (cnt_area_internal[0] >= cnt_area_external[0])  or  (cnt_area_internal[1] >= cnt_area_external[1]):
             
             if sum_area_internal < area_max_external:
@@ -1515,18 +1475,18 @@ def extract_traits(image_file):
                 cnt_area_external[0] = cnt_area_external[1] = np.mean(cnt_area_external)
             else:
                 cnt_area_external[0] = cnt_area_external[1] = area_max_external
-            
+
+        
         area_ratio = (cnt_area_internal[0]/cnt_area_external[0], cnt_area_internal[1]/cnt_area_external[1])
         
         
         area_ratio  = [ elem for elem in area_ratio if elem < 1]
         
-        print(area_ratio)
-        
-        print(cnt_width)
-        
-        print(cnt_height)
-        
+        '''
+        print("[INFO]: The two kernel_area = {}".format(area_ratio))
+        print("[INFO]: The two width = {}".format(cnt_width))
+        print("[INFO]: The two height = {}".format(cnt_height))
+        '''
         kernel_area_ratio = np.mean(area_ratio)
         
         kernel_area = sum(cnt_area_internal) / len(cnt_area_internal)
@@ -1731,8 +1691,8 @@ def extract_traits(image_file):
         barcode_img = barcode_detect(marker_barcode_img, marker_barcode_img_path)
         
         # save segmentation result
-        result_file = (save_path + base_name + '_barcode_detection.' + file_extension)
-        cv2.imwrite(result_file, barcode_img)
+        #result_file = (save_path + base_name + '_barcode_detection.' + file_extension)
+        #cv2.imwrite(result_file, barcode_img)
         
         ############################################## leaf number computation
         '''
