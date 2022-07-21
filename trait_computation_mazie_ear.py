@@ -1190,7 +1190,7 @@ if __name__ == '__main__':
     result_list = []
 
     '''
-    
+    ######################################################################################
     #loop execute
     for image in imgList:
         
@@ -1202,6 +1202,10 @@ if __name__ == '__main__':
         result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height])
 
     '''
+    
+    ####################################################################################
+    # parallel processing
+    
     # get cpu number for parallel processing
     agents = psutil.cpu_count()   
     #agents = multiprocessing.cpu_count() 
@@ -1227,7 +1231,7 @@ if __name__ == '__main__':
     for i, (v0,v1,v2,v3,v4,v5) in enumerate(zip(filename, tag_info, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height)):
 
         result_list.append([v0,v1,v2,v3,v4,v5])
-    
+    ############################################################################################
     
     
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')

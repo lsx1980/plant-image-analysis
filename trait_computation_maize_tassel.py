@@ -112,7 +112,7 @@ def mkdir(path):
         #print path+' path exists!'
         return False
         
-
+'''
 # sort contoures based on method
 def sort_contours(cnts, method="left-to-right"):
     
@@ -132,8 +132,11 @@ def sort_contours(cnts, method="left-to-right"):
     (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes), key=lambda b:b[1][i], reverse=reverse))
     # return the list of sorted contours and bounding boxes
     return cnts
+'''
 
 
+
+'''
 # segment mutiple objects in image, for maize ear image, based on the protocal, shoudl be two objects. 
 def mutilple_objects_seg(orig):
     
@@ -234,7 +237,7 @@ def mutilple_objects_seg(orig):
     
     
     return left_img, right_img, mask_seg_gray, img_overlay, cnt_area
-
+'''
 
 # color clustering based object segmentation
 def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
@@ -396,82 +399,69 @@ def midpoint(ptA, ptB):
 
 
 
-def comp_external_contour(orig, thresh, img_overlay):
+def comp_external_contour(orig, thresh):
     
-    #find contours and get the external one
-    contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-   
-    #contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+
     
     img_height, img_width, img_channels = orig.shape
    
-    index = 1
+    #index = 1
     
     trait_img = orig.copy()
     
-    crop_img = orig.copy()
+    #crop_img = orig.copy()
     
     area = 0
-    kernel_area_ratio = 0
+
     w=h=0
     
-    #print("length of contours = {}\n".format(len(contours)))
+
     ####################################################################################
     
     
-    contours = sorted(contours, key = cv2.contourArea, reverse = True)
+    #find contours and get the external one
+    #contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+   
+    #RETR_CCOMP
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+
+    contours_sorted = sorted(contours, key = cv2.contourArea, reverse = True)
     
-    contours_sorted = sort_contours(contours, method="left-to-right")
+    #print("length of contours = {}\n".format(len(contours)))
     
-    #c_max = max(contours, key = cv2.contourArea)
+    c_max = max(contours, key = cv2.contourArea)
     
-    area_c_cmax = 0
+    area_c_max = cv2.contourArea(c_max)
     
-    area_holes_sum = 0
+    (x, y, w, h) = cv2.boundingRect(c_max)
     
-    cnt_area = [0] * 2
+    hull = cv2.convexHull(c_max)
     
-    cnt_width = []
-    cnt_height = []
+    convex_hull_area = cv2.contourArea(hull)
     
-    orig = img_overlay
+
+    
+    cnt_width = w
+    
+    cnt_height = h
+    
+    area_c = 0
+    
+    area_child_contour_sum = []
+    
+    
     ###########################################################################
     for index, c in enumerate(contours_sorted):
-    #for c in contours:
+       
 
-        if index < 2:
+        # visualize external contour and its bounding box
+        if index < 1:
             
-            #get the bounding rect
-            (x, y, w, h) = cv2.boundingRect(c)
-            
-            trait_img = cv2.drawContours(orig, c, -1, (255, 255, 0), 1)
-            
-            
-            #roi = orig[y:y+h, x:x+w]
-            
-            print("ROI {} detected ...\n".format(index+1))
+            trait_img = cv2.drawContours(orig, [c], -1, (0, 255, 0), 2)
             
             # draw a green rectangle to visualize the bounding rect
             trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 4)
-            
-            '''
-            ####################################################################
-            margin = 150
 
-            # define crop region
-            start_y = int((y - margin) if (y - margin )> 0 else 0)
-
-            start_x = int((x - margin) if (x - margin )> 0 else 0)
-
-            crop_width = int((x + margin + w) if (x + margin + w) < img_width else (img_width))
-
-            crop_height = int((y + margin + h) if (y + margin + h) < img_height else (img_height))
-
-            crop_img = crop_img[start_y:crop_height, start_x:crop_width]
-
-            ######################################################################
-            '''
-            
             # compute the center of the contour
             M = cv2.moments(c)
             
@@ -482,49 +472,7 @@ def comp_external_contour(orig, thresh, img_overlay):
             #trait_img = cv2.circle(orig, (cX, cY), 7, (255, 255, 255), -1)
             #trait_img = cv2.putText(orig, "center", (cX - 20, cY - 20),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
-            #################################################################################
-            '''
-            # compute the (rotated) bounding box of the contour to get the min area rect
-            rect = cv2.minAreaRect(c)
-            box = cv2.boxPoints(rect)
-            
-            # convert all coordinates floating point values to int
-            box = np.int0(box)
-            
-            #draw a blue 'nghien' rectangle
-            trait_img = cv2.drawContours(orig, [box], -1, (255, 0, 0), 3)
-            
-            # unpack the ordered bounding box, then compute the midpoint
-            # between the top-left and top-right coordinates, followed by
-            # the midpoint between bottom-left and bottom-right coordinates
-            (tl, tr, br, bl) = box
-            (tltrX, tltrY) = midpoint(tl, tr)
-            (blbrX, blbrY) = midpoint(bl, br)
-            
-            # compute the midpoint between the top-left and top-right points,
-            # followed by the midpoint between the top-righ and bottom-right
-            (tlblX, tlblY) = midpoint(tl, bl)
-            (trbrX, trbrY) = midpoint(tr, br)
-            
-            # draw the midpoints on the image
-            trait_img = cv2.circle(orig, (int(tltrX), int(tltrY)), 5, (255, 0, 0), -1)
-            trait_img = cv2.circle(orig, (int(blbrX), int(blbrY)), 5, (255, 0, 0), -1)
-            trait_img = cv2.circle(orig, (int(tlblX), int(tlblY)), 5, (255, 0, 0), -1)
-            trait_img = cv2.circle(orig, (int(trbrX), int(trbrY)), 5, (255, 0, 0), -1)
-            
-            # draw lines between the midpoints
-            trait_img = cv2.line(orig, (int(tltrX), int(tltrY)), (int(blbrX), int(blbrY)), (255, 0, 255), 2)
-            trait_img = cv2.line(orig, (int(tlblX), int(tlblY)), (int(trbrX), int(trbrY)), (255, 0, 255), 2)
-            
-            
-            # compute the Euclidean distance between the midpoints
-            dA = dist.euclidean((tltrX, tltrY), (blbrX, blbrY))
-            dB = dist.euclidean((tlblX, tlblY), (trbrX, trbrY))
-
-            # draw the object sizes on the image
-            #cv2.putText(orig, "{:.0f} pixels".format(dA), (int(tltrX), int(tltrY)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
-            #cv2.putText(orig, "{:.0f} pixels".format(dB), (int(trbrX), int(trbrY)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
-            '''
+ 
             ###############################################################################
 
             # the midpoint between bottom-left and bottom-right coordinates
@@ -553,18 +501,26 @@ def comp_external_contour(orig, thresh, img_overlay):
             # draw convexhull in red color
             trait_img = cv2.drawContours(orig, [hull], -1, (0, 0, 255), 2)
             
-            area_c_cmax = cv2.contourArea(c)
-            #hull_area = cv2.contourArea(hull)
             
-            cnt_area[index] = (area_c_cmax)
-            cnt_width.append(w)
-            cnt_height.append(h)
+        else:
+            trait_img = cv2.drawContours(orig, [c], -1, (0, 255, 0), 2)
             
+            area_c = cv2.contourArea(c)
+                
+            area_child_contour_sum.append(area_c)
             
-            print("Contour {0} shape info: Width = {1:.2f}, height= {2:.2f}, area = {3:.2f}\n".format(index+1, w, h, area_c_cmax))
+    
+    #print(area_c_max, sum(area_child_contour_sum))
+    
+    tassel_area = area_c_max - sum(area_child_contour_sum)
+    
+    #compute the area ratio of tassel area verse its convex hull area
+    tassel_area_ratio = tassel_area/convex_hull_area
+    
+    print("Tassel shape info: Width = {0}, height= {1}, area = {2}\n".format(w, h, tassel_area))
    
             
-    return trait_img, cnt_area, cnt_width, cnt_height
+    return trait_img, tassel_area, cnt_width, cnt_height, tassel_area_ratio
     
 
 
@@ -925,7 +881,7 @@ def extract_traits(image_file):
     
 
     # initialize all the traits output 
-    area = kernel_area_ratio = max_width = max_height = avg_curv = n_leaves = 0
+    tag_info = tassel_area = tassel_area_ratio = cnt_width = cnt_height = 0
     
     if (file_size > 5.0):
         print("It will take some time due to larger file size {0} MB\n".format(str(int(file_size))))
@@ -941,107 +897,28 @@ def extract_traits(image_file):
     
     source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
     
-    '''
-    # segment mutiple objects in image using thresh method to accquire internal contours
-    (left_img, right_img, mask_seg, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig)
-    
-    # save segmentation result
-    result_file = (save_path + base_name + '_mask_seg' + file_extension)
-    cv2.imwrite(result_file, mask_seg)
-    
-    # save segmentation result
-    result_file = (save_path + base_name + '_overlay' + file_extension)
-    cv2.imwrite(result_file, img_overlay)
-    '''
+
      
     args_colorspace = args['color_space']
     args_channels = args['channels']
     args_num_clusters = args['num_clusters']
     
     #color clustering based object segmentation to accquire external contours
-    thresh = color_cluster_seg(image.copy(), args_colorspace, args_channels, args_num_clusters)
+    image_mask = color_cluster_seg(image.copy(), args_colorspace, args_channels, args_num_clusters)
     
     # save segmentation result
-    result_file = (save_path + base_name + '_thresh' + file_extension)
-    cv2.imwrite(result_file, thresh)
-   ###############################################################################################
-    #combine external contours and internal contoures to compute object mask
-    combined_mask = thresh
+    result_file = (save_path + base_name + '_image_mask' + file_extension)
+    cv2.imwrite(result_file, image_mask)
     
-    
-    # Taking a matrix of size 25 as the kernel
-    kernel = np.ones((25,25), np.uint8)
-    combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
-    
-    result_file = (save_path + base_name + '_combined_mask' + file_extension)
-    #print(filename)
-    cv2.imwrite(result_file, combined_mask)
-    
-    
-    thresh_combined_mask = cv2.threshold(combined_mask, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-    
-    # find contours in the thresholded image
-    cnts = cv2.findContours(thresh_combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cnts = imutils.grab_contours(cnts)
 
-    cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)
-    
-    for c in cnts_sorted[0:1]:
-
-        # draw the contour and center of the shape on the image
-        img_overlay = cv2.drawContours(image.copy(), [c], -1, (0, 255, 0), 2)
-    
-    # save segmentation result
-    result_file = (save_path + base_name + '_overlay_combined' + file_extension)
-    cv2.imwrite(result_file, img_overlay)
-    
     ################################################################################################################################
     #compute external traits
-    (trait_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
+    (trait_img, tassel_area, cnt_width, cnt_height, tassel_area_ratio) = comp_external_contour(image.copy(), image_mask)
     
     # save segmentation result
     result_file = (save_path + base_name + '_excontour' + file_extension)
     #print(filename)
     cv2.imwrite(result_file, trait_img)
-    
-
-    
-    #################################################################################################################################
-    #compute the area ratio of interal contour verse external contour, kernal area ratio
-    
-    cnt_area_internal = cnt_area_external
-    
-    area_max_external = max(cnt_area_external)
-    
-    sum_area_internal = sum(cnt_area_internal)
-    
-
-    if (cnt_area_internal[0] >= cnt_area_external[0])  or  (cnt_area_internal[1] >= cnt_area_external[1]):
-        
-        if sum_area_internal < area_max_external:
-            
-            cnt_area_external[0] = cnt_area_external[1] = np.mean(cnt_area_external)
-        else:
-            cnt_area_external[0] = cnt_area_external[1] = area_max_external
-
-    
-    area_ratio = (cnt_area_internal[0]/cnt_area_external[0], cnt_area_internal[1]/cnt_area_external[1])
-    
-    
-    area_ratio  = [ elem for elem in area_ratio if elem < 1]
-    
-    '''
-    print("[INFO]: The two kernel_area = {}".format(area_ratio))
-    print("[INFO]: The two width = {}".format(cnt_width))
-    print("[INFO]: The two height = {}".format(cnt_height))
-    '''
-    # compute traits needed
-    kernel_area_ratio = np.mean(area_ratio)
-    kernel_area = sum(cnt_area_internal) / len(cnt_area_internal)
-    max_width = sum(cnt_width) / len(cnt_width)
-    max_height = sum(cnt_height) / len(cnt_height)
-    
-    
     
     ###################################################################################################
     # detect coin and bracode uisng template mathcing method
@@ -1117,7 +994,7 @@ def extract_traits(image_file):
     
     #return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
     
-    return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height
+    return image_file_name, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height
     
 
 
@@ -1133,7 +1010,7 @@ if __name__ == '__main__':
     ap.add_argument('-bc', '--barcode', required = False,  default ='/marker_template/barcode.png',  help = "Barcode file name")
     ap.add_argument("-r", "--result", required = False,    help="result path")
     ap.add_argument('-s', '--color-space', type = str, required = False, default ='lab', help='Color space to use: BGR, HSV, Lab (default), YCrCb (YCC)')
-    ap.add_argument('-c', '--channels', type = str, required = False, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
+    ap.add_argument('-c', '--channels', type = str, required = False, default='2', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
@@ -1204,21 +1081,20 @@ if __name__ == '__main__':
     
     result_list = []
 
-    
-    
+   
     #loop execute
     for image in imgList:
         
         #(filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
         #result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        (filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height) = extract_traits(image)
+        (filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height) = extract_traits(image)
 
-        result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height])
+        result_list.append([filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height])
 
     '''
     # get cpu number for parallel processing
-    agents = psutil.cpu_count()   
+    agents = psutil.cpu_count() - 2 
     #agents = multiprocessing.cpu_count() 
     #agents = 8
     
@@ -1239,7 +1115,7 @@ if __name__ == '__main__':
     #output in command window in a sum table
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
-    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value' ], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'tag_info', 'tassel_area', 'tassel_area_ratio', 'avg_width', 'avg_height'], tablefmt = 'orgtbl')
     
     print(table + "\n")
     
@@ -1276,8 +1152,8 @@ if __name__ == '__main__':
 
         sheet.cell(row = 1, column = 1).value = 'filename'
         sheet.cell(row = 1, column = 2).value = 'tag_info'
-        sheet.cell(row = 1, column = 3).value = 'avg_kernel_area'
-        sheet.cell(row = 1, column = 4).value = 'avg_kernel_area_ratio'
+        sheet.cell(row = 1, column = 3).value = 'tassel_area'
+        sheet.cell(row = 1, column = 4).value = 'tassel_area_ratio'
         sheet.cell(row = 1, column = 5).value = 'avg_width'
         sheet.cell(row = 1, column = 6).value = 'avg_height'
 
