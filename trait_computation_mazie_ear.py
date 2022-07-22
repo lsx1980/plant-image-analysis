@@ -3,7 +3,7 @@ Name: trait_extract_parallel.py
 
 Version: 1.0
 
-Summary: Extract plant shoot traits (larea, kernel_area_ratio, max_width, max_height, avg_curv, color_cluster) by paralell processing 
+Summary: Extract maize ear traits 
     
 Author: suxing liu
 
@@ -86,10 +86,21 @@ warnings.filterwarnings("ignore")
 MBFACTOR = float(1<<20)
 
 
-# generate foloder to store the output results
+
 def mkdir(path):
-    # import module
-    import os
+    
+    """create folder and path to store the output results
+    
+    Inputs: 
+    
+        path: result path
+        
+       
+    Returns:
+    
+        create path and folder if not exist  
+        
+    """   
  
     # remove space at the beginning
     path=path.strip()
@@ -112,36 +123,75 @@ def mkdir(path):
         return False
         
 
-# sort contoures based on method
-def sort_contours(cnts, method="left-to-right"):
+
+def sort_contours(cnts, method = "left-to-right"):
+    
+    """sort contours based on user defined method
+    
+    Inputs: 
+    
+        cnts: contours extracted from mask image
+        
+        method: user defined method, default was "left-to-right"
+        
+
+    Returns:
+    
+        sorted_cnts: list of sorted contours 
+        
+    """   
+    
     
     # initialize the reverse flag and sort index
     reverse = False
     i = 0
+    
     # handle if we need to sort in reverse
     if method == "right-to-left" or method == "bottom-to-top":
         reverse = True
+        
     # handle if we are sorting against the y-coordinate rather than
     # the x-coordinate of the bounding box
     if method == "top-to-bottom" or method == "bottom-to-top":
         i = 1
-    # construct the list of bounding boxes and sort them from top to
-    # bottom
+        
+    # construct the list of bounding boxes and sort them from top to bottom
     boundingBoxes = [cv2.boundingRect(c) for c in cnts]
-    (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes), key=lambda b:b[1][i], reverse=reverse))
+    
+    (sorted_cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes), key=lambda b:b[1][i], reverse=reverse))
+    
     # return the list of sorted contours and bounding boxes
-    return cnts
+    return sorted_cnts
+
 
 
 # segment mutiple objects in image, for maize ear image, based on the protocal, shoudl be two objects. 
 def mutilple_objects_seg(orig):
+
+    """segment mutiple objects in image, for maize ear image, based on the protocal, should be only two objects.
     
+    Inputs: 
+    
+        orig: image of plant object
+        
+    Returns:
+    
+        left_img, right_img: left/right image contains an maize ear on the left/right side 
+        
+        mask_seg_gray: 
+        
+        img_overlay:
+        
+        cnt_area: 
+        
+    """   
+    # apply smooth filtering of the image at the color level.
     shifted = cv2.pyrMeanShiftFiltering(orig, 21, 70)
 
+    # get the dimension of the image
     height, width, channels = orig.shape
 
-    # convert the mean shift image to grayscale, then apply
-    # Otsu's thresholding
+    # convert the mean shift image to grayscale, then apply Otsu's thresholding
     gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
     
     thresh = cv2.threshold(gray, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
@@ -149,35 +199,37 @@ def mutilple_objects_seg(orig):
     # Taking a matrix of size 25 as the kernel
     kernel = np.ones((25,25), np.uint8)
     
+    # apply morphological operations to remove noise
     thresh_dilation = cv2.dilate(thresh, kernel, iterations=1)
     
     thresh_erosion = cv2.erode(thresh, kernel, iterations=1)
     
-    #define result path for labeled images
-    #result_img_path = save_path_label + str(filename[0:-4]) + '_thresh.jpg'
-    #cv2.imwrite(result_img_path, thresh_erosion)
+
     
     # find contours in the thresholded image
     cnts = cv2.findContours(thresh_erosion.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     cnts = imutils.grab_contours(cnts)
     
-    cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)[0:2]
+    # sort the contour based on area size from largest to smallest, and get the first two max contours
+    cnts_sorted = sorted(cnts, key = cv2.contourArea, reverse = True)[0:2]
 
-    cnts_sorted = sort_contours(cnts_sorted, method="left-to-right")
+    # sort the contours from left to right
+    cnts_sorted = sort_contours(cnts_sorted, method = "left-to-right")
     
     
-    #c = max(cnts, key=cv2.contourArea)
+    # initialize variables to record the centera, area of contours
     center_locX = []
     center_locY = []
     cnt_area = [0] * 2
     
+    # initialize empty mask image
     img_thresh = np.zeros(orig.shape, np.uint8)
     
+    # initialize background image to draw the contours
     img_overlay_bk = orig
     
-    
-    
+    # loop over the selected contours
     for idx, c in enumerate(cnts_sorted):
         
         # compute the center of the contour
@@ -185,11 +237,11 @@ def mutilple_objects_seg(orig):
         cX = int(M["m10"] / M["m00"])
         cY = int(M["m01"] / M["m00"])
         
+        # record the center coordinates
         center_locX.append(cX)
         center_locY.append(cY)
-        
-        #cnt_area.append(cv2.contourArea(c))
-        
+
+        # get the contour area
         cnt_area[idx] = cv2.contourArea(c)
         
         # draw the contour and center of the shape on the image
@@ -199,33 +251,16 @@ def mutilple_objects_seg(orig):
         img_overlay = cv2.putText(img_overlay_bk, "{}".format(idx +1), (cX - 20, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 5.5, (255, 0, 0), 5)
         
     
-    #print(center_locX, center_locY)
-    
+    # get the middle point coordinate of the two centers of the contours
     divide_X = int(sum(center_locX) / len(center_locX))
     divide_Y = int(sum(center_locY) / len(center_locY))
     
-    #print(divide_X, divide_Y)
-    
-    
-    #center_result = cv2.circle(image, (divide_X, divide_Y), 14, (0, 255, 0), -1)
-    
-    
-    #define result path for labeled images
-    #result_img_path = save_path_label + str(filename[0:-4]) + '_center.jpg'
-    #cv2.imwrite(result_img_path, center_result)
-    
-    
-    
+    # get the left and right segmentation of the image 
     left_img = orig[0:height, 0:divide_X]
-
-    
-    
     right_img = orig[0:height, divide_X:width]
 
-    
+    # convert the mask image to gray format
     mask_seg_gray = cv2.cvtColor(mask_seg, cv2.COLOR_BGR2GRAY)
-    
-    #(mask_seg_binary, im_bw) = cv2.threshold(mask_seg_gray, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
     
     return left_img, right_img, mask_seg_gray, img_overlay, cnt_area
@@ -233,6 +268,24 @@ def mutilple_objects_seg(orig):
 
 # color clustering based object segmentation
 def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
+    
+    """color clustering based object segmentation
+    
+    Inputs: 
+    
+        image: image contains the plant objects
+        
+        args_colorspace: user-defined color space for clustering 
+        
+        args_channels: user-defined color channel for clustering 
+        
+        args_num_clusters: number of clustering
+        
+    Returns:
+    
+        img_thresh: mask image with the segmentation of the plant object 
+        
+    """   
     
     # Change image color space, if necessary.
     colorSpace = args_colorspace.lower()
@@ -261,18 +314,13 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         image = image[:,:,channelIndices]
         if len(image.shape) == 2:
             image.reshape(image.shape[0], image.shape[1], 1)
-            
+    
+    # get the dimension of image 
     (width, height, n_channel) = image.shape
-    
-    #print("image shape: \n")
-    #print(width, height, n_channel)
-    
-    
-    
+
     # Flatten the 2D image array into an MxN feature vector, where M is the number of pixels and N is the dimension (number of channels).
     reshaped = image.reshape(image.shape[0] * image.shape[1], image.shape[2])
     
-
     # Perform K-means clustering.
     if args_num_clusters < 2:
         print('Warning: num-clusters < 2 invalid. Using num-clusters = 2')
@@ -299,42 +347,27 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    #thresh_cleaned = (thresh)
-    
-    
+
+    # clean the border of mask image
     if np.count_nonzero(thresh) > 0:
         
         thresh_cleaned = clear_border(thresh)
     else:
         thresh_cleaned = thresh
     
-     
+    # get the connected Components in the mask image
     nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
 
     # stats[0], centroids[0] are for the background label. ignore
     # cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT
+    
+    # get all connected Components's area value
     sizes = stats[1:, cv2.CC_STAT_AREA]
-    
-    Coord_left = stats[1:, cv2.CC_STAT_LEFT]
-    
-    Coord_top = stats[1:, cv2.CC_STAT_TOP]
-    
-    Coord_width = stats[1:, cv2.CC_STAT_WIDTH]
-    
-    Coord_height = stats[1:, cv2.CC_STAT_HEIGHT]
-    
-    Coord_centroids = centroids
-    
-    #print("Coord_centroids {}\n".format(centroids[1][1]))
-    
-    #print("[width, height] {} {}\n".format(width, height))
-    
+
+    # remove background component
     nb_components = nb_components - 1
     
-    
-    
-    max_size = width*height*0.1
-    
+    # create an empty mask image and fill the detected connected components
     img_thresh = np.zeros([width, height], dtype=np.uint8)
     
     #for every component in the image, keep it only if it's above min_size
@@ -344,13 +377,6 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         
             img_thresh[output == i + 1] = 255
         
-    #from skimage import img_as_ubyte
-    
-    #img_thresh = img_as_ubyte(img_thresh)
-    
-    #print("img_thresh.dtype")
-    #print(img_thresh.dtype)
-    
     
     #if mask contains mutiple non-conected parts, combine them into one. 
     contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -359,24 +385,37 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         
         print("mask contains mutiple non-conected parts, combine them into one\n")
         
+        # create an size 10 kernel
         kernel = np.ones((10,10), np.uint8)
-
+        
+        # image dilation
         dilation = cv2.dilate(img_thresh.copy(), kernel, iterations = 1)
         
+        # image closing
         closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
         
+        # use the final closing result as mask
         img_thresh = closing
 
-    
-    #return img_thresh
+
     return img_thresh
     
-    #return thresh_cleaned
-    
 
-# compute percentage vale 
+
 def percentage(part, whole):
-  
+
+    """compute percentage value
+    
+    Inputs: 
+    
+        part, whole: the part and whole value
+        
+       
+    Returns:
+    
+        string type of the percentage in decimals 
+        
+    """   
   #percentage = "{:.0%}".format(float(part)/float(whole))
   
   percentage = "{:.2f}".format(float(part)/float(whole))
@@ -385,87 +424,100 @@ def percentage(part, whole):
 
 
 
-# compute middle points of two points in 2D 
+ 
 def midpoint(ptA, ptB):
+
+    """compute middle point of two points in 2D coordinates
+    
+    Inputs: 
+    
+        ptA, ptB: coordinates of two points
+        
+    Returns:
+    
+        coordinates of the middle point
+        
+    """   
+    
     return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
 
 
 
 def comp_external_contour(orig, thresh, img_overlay):
+
+    """compute the parameters of the external contour of the plant object 
     
-    #find contours and get the external one
-    contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    Inputs: 
+    
+        orig: image contains the plant objects
+        
+        thresh: mask of the plant object
+        
+    Returns:
+        
+        trait_img: input image overlayed with external contour and bouding box
+        
+        cnt_area: area occupied by the maize ear in the image
+        
+        cnt_width, cnt_height: width and height of the tassel
+        
+    """   
+    
+
    
     #contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-    
+    # get the dimension and color channel of the input image  
     img_height, img_width, img_channels = orig.shape
    
-    index = 1
-    
+    # initialize parameters
     trait_img = orig.copy()
-    
-    crop_img = orig.copy()
-    
+
     area = 0
     kernel_area_ratio = 0
     w=h=0
     
-    #print("length of contours = {}\n".format(len(contours)))
+
     ####################################################################################
+    #find contours and get the external one
+    contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-    
+    # sort the contours based on area from largest to smallest
     contours = sorted(contours, key = cv2.contourArea, reverse = True)
     
+    # sort the contours from left to right
     contours_sorted = sort_contours(contours, method="left-to-right")
     
-    #c_max = max(contours, key = cv2.contourArea)
-    
+
+    # initialize parameters
     area_c_cmax = 0
-    
     area_holes_sum = 0
-    
     cnt_area = [0] * 2
     
     cnt_width = []
     cnt_height = []
     
+    # initialize background image to draw the contours
     orig = img_overlay
     ###########################################################################
+    # compute all the contours and their areas 
+    
     for index, c in enumerate(contours_sorted):
-    #for c in contours:
-
+        
+        # visualize only the two external contours and its bounding box
         if index < 2:
             
             #get the bounding rect
             (x, y, w, h) = cv2.boundingRect(c)
             
+            # draw a rectangle to visualize the bounding rect
             trait_img = cv2.drawContours(orig, c, -1, (255, 255, 0), 1)
+
             
-            
-            #roi = orig[y:y+h, x:x+w]
-            
-            print("ROI {} detected ...\n".format(index+1))
+            #print("ROI {} detected ...\n".format(index+1))
             
             # draw a green rectangle to visualize the bounding rect
             trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 4)
-            
-            '''
-            ####################################################################
-            margin = 150
-
-            # define crop region
-            start_y = int((y - margin) if (y - margin )> 0 else 0)
-
-            start_x = int((x - margin) if (x - margin )> 0 else 0)
-
-            crop_width = int((x + margin + w) if (x + margin + w) < img_width else (img_width))
-
-            crop_height = int((y + margin + h) if (y + margin + h) < img_height else (img_height))
-
-            crop_img = crop_img[start_y:crop_height, start_x:crop_width]
-
-            ######################################################################
-            '''
+ 
             
             # compute the center of the contour
             M = cv2.moments(c)
@@ -478,53 +530,8 @@ def comp_external_contour(orig, thresh, img_overlay):
             #trait_img = cv2.putText(orig, "center", (cX - 20, cY - 20),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
             #################################################################################
-            '''
-            # compute the (rotated) bounding box of the contour to get the min area rect
-            rect = cv2.minAreaRect(c)
-            box = cv2.boxPoints(rect)
-            
-            # convert all coordinates floating point values to int
-            box = np.int0(box)
-            
-            #draw a blue 'nghien' rectangle
-            trait_img = cv2.drawContours(orig, [box], -1, (255, 0, 0), 3)
-            
-            # unpack the ordered bounding box, then compute the midpoint
-            # between the top-left and top-right coordinates, followed by
-            # the midpoint between bottom-left and bottom-right coordinates
-            (tl, tr, br, bl) = box
-            (tltrX, tltrY) = midpoint(tl, tr)
-            (blbrX, blbrY) = midpoint(bl, br)
-            
-            # compute the midpoint between the top-left and top-right points,
-            # followed by the midpoint between the top-righ and bottom-right
-            (tlblX, tlblY) = midpoint(tl, bl)
-            (trbrX, trbrY) = midpoint(tr, br)
-            
-            # draw the midpoints on the image
-            trait_img = cv2.circle(orig, (int(tltrX), int(tltrY)), 5, (255, 0, 0), -1)
-            trait_img = cv2.circle(orig, (int(blbrX), int(blbrY)), 5, (255, 0, 0), -1)
-            trait_img = cv2.circle(orig, (int(tlblX), int(tlblY)), 5, (255, 0, 0), -1)
-            trait_img = cv2.circle(orig, (int(trbrX), int(trbrY)), 5, (255, 0, 0), -1)
-            
-            # draw lines between the midpoints
-            trait_img = cv2.line(orig, (int(tltrX), int(tltrY)), (int(blbrX), int(blbrY)), (255, 0, 255), 2)
-            trait_img = cv2.line(orig, (int(tlblX), int(tlblY)), (int(trbrX), int(trbrY)), (255, 0, 255), 2)
-            
-            
-            # compute the Euclidean distance between the midpoints
-            dA = dist.euclidean((tltrX, tltrY), (blbrX, blbrY))
-            dB = dist.euclidean((tlblX, tlblY), (trbrX, trbrY))
 
-            # draw the object sizes on the image
-            #cv2.putText(orig, "{:.0f} pixels".format(dA), (int(tltrX), int(tltrY)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
-            #cv2.putText(orig, "{:.0f} pixels".format(dB), (int(trbrX), int(trbrY)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
-            '''
-            ###############################################################################
-
-            # the midpoint between bottom-left and bottom-right coordinates
-            #(tl, tr, br, bl) = box
-            
+            # compute the four coordinates to get the center of bounding box
             tl = (x, y+h*0.5)
             tr = (x+w, y+h*0.5)
             br = (x+w*0.5, y)
@@ -542,7 +549,7 @@ def comp_external_contour(orig, thresh, img_overlay):
             trait_img = cv2.line(orig, (int(x), int(y+h*0.5)), (int(x+w), int(y+h*0.5)), (255, 0, 255), 6)
             trait_img = cv2.line(orig, (int(x+w*0.5), int(y)), (int(x+w*0.5), int(y+h)), (255, 0, 255), 6)
             
-
+            # compute the convex hull of the contour
             hull = cv2.convexHull(c)
             
             # draw convexhull in red color
@@ -551,6 +558,7 @@ def comp_external_contour(orig, thresh, img_overlay):
             area_c_cmax = cv2.contourArea(c)
             #hull_area = cv2.contourArea(hull)
             
+            # record the traits of each contour
             cnt_area[index] = (area_c_cmax)
             cnt_width.append(w)
             cnt_height.append(h)
@@ -566,20 +574,67 @@ def comp_external_contour(orig, thresh, img_overlay):
 
 # convert RGB value to HEX format
 def RGB2HEX(color):
+
+    """convert RGB value to HEX format
+    
+    Inputs: 
+    
+        color: color in rgb format
+        
+    Returns:
+    
+        color in hex format
+        
+    """   
     return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
 
 
 
 # get the color pallate
 def get_cmap(n, name = 'hsv'):
-    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
-    RGB color; the keyword argument name must be a standard mpl colormap name.'''
+
+    """get n kinds of colors from a color palette 
+    
+    Inputs: 
+    
+        n: number of colors
+        
+        name: the color palette choosed
+        
+    Returns:
+    
+        plt.cm.get_cmap(name, n): Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
+        RGB color; the keyword argument name must be a standard mpl colormap name. 
+        
+    """   
     return plt.cm.get_cmap(name, n)
     
-    
-# dorminant color clustering method 
+
+
 def color_region(image, mask, save_path, num_clusters):
     
+    """dominant color clustering method to compute the color distribution 
+    
+    Inputs: 
+    
+        image: image contains different colors
+        
+        mask: mask of the plant object
+        
+        save_path: result path
+        
+        num_clusters: number of clusters for computation 
+
+    Returns:
+    
+        rgb_colors: center color values in rgb format for every cluster
+        
+        counts: percentage of each color cluster
+        
+        hex_colors: center color values in hex format for every cluster
+        
+        
+    """   
     # read the image
      #grab image width and height
     (h, w) = image.shape[:2]
@@ -619,22 +674,14 @@ def color_region(image, mask, save_path, num_clusters):
     # reshape back to the original image dimension
     segmented_image = segmented_image.reshape(image_RGB.shape)
 
-
+    # convert image format from RGB to BGR for OpenCV
     segmented_image_BRG = cv2.cvtColor(segmented_image, cv2.COLOR_RGB2BGR)
+    
     #define result path for labeled images
     result_img_path = save_path + 'clustered.png'
     cv2.imwrite(result_img_path, segmented_image_BRG)
 
 
-    '''
-    fig = plt.figure()
-    ax = Axes3D(fig)        
-    for label, pix in zip(labels, segmented_image):
-        ax.scatter(pix[0], pix[1], pix[2], color = (centers))
-            
-    result_file = (save_path + base_name + 'color_cluster_distributation.png')
-    plt.savefig(result_file)
-    '''
     #Show only one chosen cluster 
     #masked_image = np.copy(image)
     masked_image = np.zeros_like(image_RGB)
@@ -644,51 +691,38 @@ def color_region(image, mask, save_path, num_clusters):
     # color (i.e cluster) to render
     #cluster = 2
 
+    # get the color template
     cmap = get_cmap(num_clusters+1)
     
     #clrs = sns.color_palette('husl', n_colors = num_clusters)  # a list of RGB tuples
-
+    
+    # convert colors format
     color_conversion = interp1d([0,1],[0,255])
 
-
+    # loop over all the clusters
     for cluster in range(num_clusters):
 
         print("Processing color cluster {0} ...\n".format(cluster))
-        #print(clrs[cluster])
-        #print(color_conversion(clrs[cluster]))
 
+        # choose current label image of same cluster
         masked_image[labels_flat == cluster] = centers[cluster]
-
-        #print(centers[cluster])
 
         #convert back to original shape
         masked_image_rp = masked_image.reshape(image_RGB.shape)
 
-        #masked_image_BRG = cv2.cvtColor(masked_image, cv2.COLOR_RGB2BGR)
-        #cv2.imwrite('maksed.png', masked_image_BRG)
 
+        # convert the maksed image from BGR to GRAY
         gray = cv2.cvtColor(masked_image_rp, cv2.COLOR_BGR2GRAY)
 
-        # threshold the image, then perform a series of erosions +
-        # dilations to remove any small regions of noise
+        # threshold the image,
         thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)[1]
 
-        #thresh_cleaned = clear_border(thresh)
-
+        # get the external contours
         cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         #c = max(cnts, key=cv2.contourArea)
 
-        '''
-        # compute the center of the contour area and draw a circle representing the center
-        M = cv2.moments(c)
-        cX = int(M["m10"] / M["m00"])
-        cY = int(M["m01"] / M["m00"])
-        # draw the countour number on the image
-        result = cv2.putText(masked_image_rp, "#{}".format(cluster + 1), (cX - 20, cY), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
-        '''
-        
-        
+        # if no contour was found
         if not cnts:
             print("findContours is empty")
         else:
@@ -696,48 +730,49 @@ def color_region(image, mask, save_path, num_clusters):
             # loop over the (unsorted) contours and draw them
             for (i, c) in enumerate(cnts):
 
+                # draw contours on the masked_image_rp
                 result = cv2.drawContours(masked_image_rp, c, -1, color_conversion(np.random.random(3)), 2)
                 #result = cv2.drawContours(masked_image_rp, c, -1, color_conversion(clrs[cluster]), 2)
 
             #result = result(np.where(result == 0)== 255)
             result[result == 0] = 255
 
-
+            # convert the result image from RGB to BGR format for OpenCV
             result_BRG = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
+            
+            # save result
             result_img_path = save_path + 'result_' + str(cluster) + '.png'
             cv2.imwrite(result_img_path, result_BRG)
 
 
-    
-    counts = Counter(labels_flat)
     # sort to ensure correct color percentage
+    counts = Counter(labels_flat)
     counts = dict(sorted(counts.items()))
     
+    # get all cluster center colors
     center_colors = centers
 
-    # We get ordered colors by iterating through the keys
+    # get ordered colors by iterating through the keys
     ordered_colors = [center_colors[i] for i in counts.keys()]
     hex_colors = [RGB2HEX(ordered_colors[i]) for i in counts.keys()]
     rgb_colors = [ordered_colors[i] for i in counts.keys()]
 
-    #print(hex_colors)
-    
+
+    # find the background index
     index_bkg = [index for index in range(len(hex_colors)) if hex_colors[index] == '#000000']
     
-    #print(index_bkg[0])
 
-    #print(counts)
     #remove background color 
     del hex_colors[index_bkg[0]]
     del rgb_colors[index_bkg[0]]
     
-    # Using dictionary comprehension to find list 
-    # keys having value . 
+    # Using dictionary comprehension to find list keys having value . 
     delete = [key for key in counts if key == index_bkg[0]] 
   
     # delete the key 
     for key in delete: del counts[key] 
-   
+    
+    # save the color distribution pie chart
     fig = plt.figure(figsize = (6, 6))
     plt.pie(counts.values(), labels = hex_colors, colors = hex_colors)
 
@@ -750,33 +785,46 @@ def color_region(image, mask, save_path, num_clusters):
 
 
 
-# Read barcode in the imageand decode barcode info
+
 def barcode_detect(img_ori):
     
+    """Read barcode in the image and decode barcode info
+    
+    Inputs: 
+    
+        img_ori: image contains the barcode region
+        
+    Returns:
+    
+        tag_info: decoded barcode information  
+        
+    """
+    
+    # get the dimension of the image
     height, width = img_ori.shape[:2]
     
+    # decode the barcode info 
     barcode_info = decode((img_ori.tobytes(), width, height))
     
-    
+    # if barcode info was not empty
     if len(barcode_info) > 0:
         
-        
+        # get the decoded barcode info data value as string
         barcode_str = str(barcode_info[0].data)
         
         #print('Decoded data:', barcode_str)
         #print(decoded_object.rect.top, decoded_object.rect.left)
         #print(decoded_object.rect.width, decoded_object.rect.height)
  
+        # accquire the barcode info and remove extra characters
         tag_info = re.findall(r"'(.*?)'", barcode_str, re.DOTALL)
-        
         tag_info = " ".join(str(x) for x in tag_info)
-        
         tag_info = tag_info.replace("'", "")
         
         print("Tag info: {}\n".format(tag_info))
     
     else:
-        
+        # print warning if barcode info was empty
         print("barcode information was not readable!\n")
         tag_info = 'Unreadable'
         
@@ -785,71 +833,79 @@ def barcode_detect(img_ori):
     
 
 
-# Detect marker in the image
 def marker_detect(img_ori, template, method, selection_threshold):
+    
+    """Detect marker in the image
+    
+    Inputs: 
+    
+        img_ori: image contains the marker region
+        
+        template: preload marker template image
+        
+        method: method used to compute template matching
+        
+        selection_threshold: thresh value for accept the template matching result
+
+    Returns:
+    
+        marker_img: matching region image with marker object  
+        
+        thresh: mask image of the marker region
+        
+        coins_width_contour: computed width result based on contour of the object 
+        
+        coins_width_circle: computed width result based on min circle of the object 
+        
+    """   
     
     # load the image, clone it for output
     img_rgb = img_ori.copy()
       
-    # Convert it to grayscale 
+    # convert it to grayscale 
     img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY) 
       
-    # Store width and height of template in w and h 
+    # store width and height of template in w and h 
     w, h = template.shape[::-1] 
       
     # Perform match operations. 
     #res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
     
+    # Perform template matching operations. 
     res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF)
     
     #res = cv2.matchTemplate(img_gray, template, cv2.TM_SQDIFF)
     
     
+    # Specify a threshold for template detection as selection_threshold
     
-    #(minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(res)
-    
-    
-    # Specify a threshold for template detection, can be adjusted
-    #threshold = 0.8
-      
     # Store the coordinates of matched area in a numpy array 
-    #loc = np.where( res <= selection_threshold)
-    
     loc = np.where( res >= selection_threshold)   
     
     if len(loc):
-    
+        
+        # unwarp the template mathcing result
         (y,x) = np.unravel_index(res.argmax(), res.shape)
-    
+        
+        # get the template matching region coordinates
         (min_val, max_val, min_loc, max_loc) = cv2.minMaxLoc(res)
 
         (startX, startY) = max_loc
         endX = startX + template.shape[1]
         endY = startY + template.shape[0]
         
-        
+        # get the sub image with matching region
         marker_img = img_ori[startY:endY, startX:endX]
-        
         marker_overlay = marker_img
-        
-        
-        
-        # Draw a rectangle around the matched region. 
-        #for pt in zip(*loc[::-1]): 
-            
-            #marker_overlay = cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,255,0), 1)
 
-    
         # load the marker image, convert it to grayscale
         marker_img_gray = cv2.cvtColor(marker_img, cv2.COLOR_BGR2GRAY) 
-    
-       
+
         # load the image and perform pyramid mean shift filtering to aid the thresholding step
         shifted = cv2.pyrMeanShiftFiltering(marker_img, 21, 51)
         
         # convert the mean shift image to grayscale, then apply Otsu's thresholding
         gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
-        
         thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
         
         
@@ -885,6 +941,21 @@ def marker_detect(img_ori, template, method, selection_threshold):
 # compute rect region based on left top corner coordinates and dimension of the region
 def region_extracted(orig, x, y, w, h):
     
+    """compute rect region based on left top corner coordinates and dimension of the region
+    
+    Inputs: 
+    
+        orig: image
+        
+        x, y: left top corner coordinates 
+        
+        w, h: dimension of the region
+
+    Returns:
+    
+        roi: region of interest
+        
+    """   
     roi = orig[y:y+h, x:x+w]
     
     return roi
@@ -893,15 +964,41 @@ def region_extracted(orig, x, y, w, h):
 # compute all the traits based on input image
 def extract_traits(image_file):
 
+    """compute all the traits based on input image
+    
+    Inputs: 
+    
+        image file: full path and file name
+
+    Returns:
+        image_file_name: file name
+        
+        tag_info: Barcode information
+        
+        tassel_area: area occupied by the tassel in the image
+        
+        tassel_area_ratio: The ratio between tassel area and its convex hull area
+        
+        cnt_width, cnt_height: width and height of the tassel
+        
+        n_branch: number of branches in the tassel
+        
+        avg_branch_length: average length of the branches
+        
+        branch_length: list of all branch length
+    """
     
     # extarct path and name of the image file
     abs_path = os.path.abspath(image_file)
     
+    # extract the base name 
     filename, file_extension = os.path.splitext(abs_path)
     base_name = os.path.splitext(os.path.basename(filename))[0]
 
+    # get the file size
     file_size = os.path.getsize(image_file)/MBFACTOR
     
+    # get the image file name
     image_file_name = Path(image_file).name
 
 
@@ -927,14 +1024,16 @@ def extract_traits(image_file):
     else:
         print("Segmentaing plant object using automatic color clustering method...\n")
     
+    # load the input image 
     image = cv2.imread(image_file)
     
     #make backup image
     orig = image.copy()
     
+    # get the dimension of the image
     img_height, img_width, img_channels = orig.shape
     
-    source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
+    #source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
     
     # segment mutiple objects in image using thresh method to accquire internal contours
     (left_img, right_img, mask_seg, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig)
@@ -943,7 +1042,7 @@ def extract_traits(image_file):
     result_file = (save_path + base_name + '_overlay' + file_extension)
     cv2.imwrite(result_file, img_overlay)
     
-     
+    # parse input arguments
     args_colorspace = args['color_space']
     args_channels = args['channels']
     args_num_clusters = args['num_clusters']
@@ -965,14 +1064,15 @@ def extract_traits(image_file):
     #print(filename)
     cv2.imwrite(result_file, combined_mask)
     
-    
+    # #combine external contours and internal contoures 
     thresh_combined_mask = cv2.threshold(combined_mask, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     
     # find contours in the thresholded image
     cnts = cv2.findContours(thresh_combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
 
-    cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)
+    #sort the contours based on area size
+    cnts_sorted = sorted(cnts, key = cv2.contourArea, reverse = True)
     
     for c in cnts_sorted[0:2]:
 
@@ -1000,7 +1100,7 @@ def extract_traits(image_file):
     
     sum_area_internal = sum(cnt_area_internal)
     
-
+    # if internal contour and external contour was connectd, meaning the two plant objects are touching each other and overlapped
     if (cnt_area_internal[0] >= cnt_area_external[0])  or  (cnt_area_internal[1] >= cnt_area_external[1]):
         
         if sum_area_internal < area_max_external:
@@ -1010,24 +1110,16 @@ def extract_traits(image_file):
             cnt_area_external[0] = cnt_area_external[1] = area_max_external
 
     
+    # compute the area ratio 
     area_ratio = (cnt_area_internal[0]/cnt_area_external[0], cnt_area_internal[1]/cnt_area_external[1])
-    
-    
     area_ratio  = [ elem for elem in area_ratio if elem < 1]
     
-    '''
-    print("[INFO]: The two kernel_area = {}".format(area_ratio))
-    print("[INFO]: The two width = {}".format(cnt_width))
-    print("[INFO]: The two height = {}".format(cnt_height))
-    '''
     # compute traits needed
     kernel_area_ratio = np.mean(area_ratio)
     kernel_area = sum(cnt_area_internal) / len(cnt_area_internal)
     max_width = sum(cnt_width) / len(cnt_width)
     max_height = sum(cnt_height) / len(cnt_height)
-    
-    
-    
+ 
     ###################################################################################################
     # detect coin and bracode uisng template mathcing method
     
@@ -1191,7 +1283,7 @@ if __name__ == '__main__':
 
     '''
     ######################################################################################
-    #loop execute
+    #loop execute to get all traits
     for image in imgList:
         
         #(filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
@@ -1231,11 +1323,12 @@ if __name__ == '__main__':
     for i, (v0,v1,v2,v3,v4,v5) in enumerate(zip(filename, tag_info, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height)):
 
         result_list.append([v0,v1,v2,v3,v4,v5])
+    
+    
+    
     ############################################################################################
-    
-    
-    #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
-    
+    #print out result on screen output as table
+
     print("Summary: {0} plant images were processed...\n".format(n_images))
     
     #output in command window in a sum table
@@ -1245,9 +1338,9 @@ if __name__ == '__main__':
     table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height'], tablefmt = 'orgtbl')
     
     print(table + "\n")
-    
-    
 
+    ##############################################################################################
+    # save computation traits results as excel file
     
     if (args['result']):
 

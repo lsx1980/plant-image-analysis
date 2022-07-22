@@ -221,7 +221,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     # get all connected Components's area value
     sizes = stats[1:, cv2.CC_STAT_AREA]
 
-    # remove backgrounf component
+    # remove background component
     nb_components = nb_components - 1
 
     #max_size = width*height*0.1
@@ -257,9 +257,6 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         # use the final closing result as mask
         img_thresh = closing
 
-    
-    #return img_thresh
-    #return thresh_cleaned
     
     # return segmentation mask
     return img_thresh
@@ -376,8 +373,10 @@ def comp_external_contour(orig, thresh):
     
     area_child_contour_sum = []
     
-    # compute all the contours/holes inside the max contour and their areas 
+    
     ###########################################################################
+    # compute all the contours/holes inside the max contour and their areas 
+    
     for index, c in enumerate(contours_sorted):
        
         # visualize only the external contour and its bounding box
@@ -386,7 +385,7 @@ def comp_external_contour(orig, thresh):
             # draw a green contour
             trait_img = cv2.drawContours(orig, [c], -1, (0, 255, 0), 2)
             
-            # draw a green rectangle to visualize the bounding rect
+            # draw a rectangle to visualize the bounding rect
             trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 4)
 
             # compute the center of the contour
@@ -599,7 +598,7 @@ def color_region(image, mask, save_path, num_clusters):
         #masked_image_BRG = cv2.cvtColor(masked_image, cv2.COLOR_RGB2BGR)
         #cv2.imwrite('maksed.png', masked_image_BRG)
         
-        # conver the maksed image from BGR to GRAY
+        # convert the maksed image from BGR to GRAY
         gray = cv2.cvtColor(masked_image_rp, cv2.COLOR_BGR2GRAY)
 
         # threshold the image
@@ -619,7 +618,8 @@ def color_region(image, mask, save_path, num_clusters):
             
             # loop over the (unsorted) contours and draw them
             for (i, c) in enumerate(cnts):
-
+                
+                # draw contours on the masked_image_rp
                 result = cv2.drawContours(masked_image_rp, c, -1, color_conversion(np.random.random(3)), 2)
                 #result = cv2.drawContours(masked_image_rp, c, -1, color_conversion(clrs[cluster]), 2)
 
@@ -654,8 +654,7 @@ def color_region(image, mask, save_path, num_clusters):
     del hex_colors[index_bkg[0]]
     del rgb_colors[index_bkg[0]]
     
-    # Using dictionary comprehension to find list 
-    # keys having value . 
+    # Using dictionary comprehension to find list keys having value . 
     delete = [key for key in counts if key == index_bkg[0]] 
   
     # delete the key 
@@ -750,10 +749,10 @@ def marker_detect(img_ori, template, method, selection_threshold):
     # load the image, clone it for output
     img_rgb = img_ori.copy()
       
-    # Convert it to grayscale 
+    # convert it to grayscale 
     img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY) 
       
-    # Store width and height of template in w and h 
+    # store width and height of template in w and h 
     w, h = template.shape[::-1] 
       
     # Perform match operations. 
@@ -907,7 +906,7 @@ def skeleton_bw(thresh):
 
 
 
-def outlier_doubleMAD(data,thresh = 3.5):
+def outlier_doubleMAD(data, thresh = 3.5):
     
     """outlier removal 
     Calculates median to divide data into 2 halves.(skew conditions handled)
@@ -1058,6 +1057,7 @@ def extract_traits(image_file):
     else:
         print("Perform plant object segmentation using automatic color clustering method...\n")
     
+    # load the input image 
     image = cv2.imread(image_file)
     
     #make backup image
@@ -1290,7 +1290,7 @@ if __name__ == '__main__':
 
     result_list_branch = []
     
-    #loop execute
+    #loop execute to get all traits
     for image in imgList:
         
         #(filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
@@ -1336,9 +1336,9 @@ if __name__ == '__main__':
         result_list.append([v0,v1,v2,v3,v4,v5,v6])
     
     '''
-    
-    
-    #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
+
+    #################################################################################
+    #print out result on screen output as table
     
     print("Summary: {0} plant images were processed...\n".format(n_images))
     
