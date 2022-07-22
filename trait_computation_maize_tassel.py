@@ -3,7 +3,7 @@ Name: trait_extract_parallel.py
 
 Version: 1.0
 
-Summary: Extract plant shoot traits (larea, kernel_area_ratio, max_width, max_height, avg_curv, color_cluster) by paralell processing 
+Summary: Extract maize_tassel traits 
     
 Author: suxing liu
 
@@ -13,7 +13,7 @@ Created: 2022-09-29
 
 USAGE:
 
-time python3 trait_computation_maize_tassel.py -p ~/example/plant_test/seeds/test/ -ft png -s Ycc -c 2 
+time python3 trait_computation_maize_tassel.py -p ~/example/plant_test/seeds/test/ -ft png 
 
 '''
 
@@ -85,11 +85,21 @@ warnings.filterwarnings("ignore")
 MBFACTOR = float(1<<20)
 
 
-# generate foloder to store the output results
 def mkdir(path):
-    # import module
-    import os
- 
+
+    """create folder and path to store the output results
+    
+    Inputs: 
+    
+        path: result path
+        
+       
+    Returns:
+    
+        create path and folder if not exist  
+        
+    """   
+
     # remove space at the beginning
     path=path.strip()
     # remove slash at the end
@@ -110,135 +120,28 @@ def mkdir(path):
         #print path+' path exists!'
         return False
         
-'''
-# sort contoures based on method
-def sort_contours(cnts, method="left-to-right"):
-    
-    # initialize the reverse flag and sort index
-    reverse = False
-    i = 0
-    # handle if we need to sort in reverse
-    if method == "right-to-left" or method == "bottom-to-top":
-        reverse = True
-    # handle if we are sorting against the y-coordinate rather than
-    # the x-coordinate of the bounding box
-    if method == "top-to-bottom" or method == "bottom-to-top":
-        i = 1
-    # construct the list of bounding boxes and sort them from top to
-    # bottom
-    boundingBoxes = [cv2.boundingRect(c) for c in cnts]
-    (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes), key=lambda b:b[1][i], reverse=reverse))
-    # return the list of sorted contours and bounding boxes
-    return cnts
-'''
 
 
-
-'''
-# segment mutiple objects in image, for maize ear image, based on the protocal, shoudl be two objects. 
-def mutilple_objects_seg(orig):
-    
-    shifted = cv2.pyrMeanShiftFiltering(orig, 21, 70)
-
-    height, width, channels = orig.shape
-
-    # convert the mean shift image to grayscale, then apply
-    # Otsu's thresholding
-    gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
-    
-    thresh = cv2.threshold(gray, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-    
-    # Taking a matrix of size 25 as the kernel
-    kernel = np.ones((25,25), np.uint8)
-    
-    thresh_dilation = cv2.dilate(thresh, kernel, iterations=1)
-    
-    thresh_erosion = cv2.erode(thresh, kernel, iterations=1)
-    
-    #define result path for labeled images
-    #result_img_path = save_path_label + str(filename[0:-4]) + '_thresh.jpg'
-    #cv2.imwrite(result_img_path, thresh_erosion)
-    
-    # find contours in the thresholded image
-    cnts = cv2.findContours(thresh_erosion.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    cnts = imutils.grab_contours(cnts)
-    
-    cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)[0:1]
-
-    cnts_sorted = sort_contours(cnts_sorted, method="left-to-right")
-    
-    
-    #c = max(cnts, key=cv2.contourArea)
-    center_locX = []
-    center_locY = []
-    cnt_area = [0] * 2
-    
-    img_thresh = np.zeros(orig.shape, np.uint8)
-    
-    img_overlay_bk = orig
-    
-    
-    
-    for idx, c in enumerate(cnts_sorted):
-        
-        # compute the center of the contour
-        M = cv2.moments(c)
-        cX = int(M["m10"] / M["m00"])
-        cY = int(M["m01"] / M["m00"])
-        
-        center_locX.append(cX)
-        center_locY.append(cY)
-        
-        #cnt_area.append(cv2.contourArea(c))
-        
-        cnt_area[idx] = cv2.contourArea(c)
-        
-        # draw the contour and center of the shape on the image
-        img_overlay = cv2.drawContours(img_overlay_bk, [c], -1, (0, 255, 0), 2)
-        mask_seg = cv2.drawContours(img_thresh, [c], -1, (255,255,255),-1)
-        #center_result = cv2.circle(img_thresh, (cX, cY), 14, (0, 0, 255), -1)
-        img_overlay = cv2.putText(img_overlay_bk, "{}".format(idx +1), (cX - 20, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 5.5, (255, 0, 0), 5)
-        
-    
-    #print(center_locX, center_locY)
-    
-    divide_X = int(sum(center_locX) / len(center_locX))
-    divide_Y = int(sum(center_locY) / len(center_locY))
-    
-    #print(divide_X, divide_Y)
-    
-    
-    #center_result = cv2.circle(image, (divide_X, divide_Y), 14, (0, 255, 0), -1)
-    
-    
-    #define result path for labeled images
-    #result_img_path = save_path_label + str(filename[0:-4]) + '_center.jpg'
-    #cv2.imwrite(result_img_path, center_result)
-    
-    
-    
-    left_img = orig[0:height, 0:divide_X]
-    #define result path for labeled images
-    #result_img_path = save_path_label + str(filename[0:-4]) + '_left.jpg'
-    #cv2.imwrite(result_img_path, left_img)
-    
-    
-    right_img = orig[0:height, divide_X:width]
-    #define result path for labeled images
-    #result_img_path = save_path_label + str(filename[0:-4]) + '_right.jpg'
-    #cv2.imwrite(result_img_path, right_img)
-    
-    mask_seg_gray = cv2.cvtColor(mask_seg, cv2.COLOR_BGR2GRAY)
-    
-    #(mask_seg_binary, im_bw) = cv2.threshold(mask_seg_gray, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-    
-    
-    return left_img, right_img, mask_seg_gray, img_overlay, cnt_area
-'''
-
-# color clustering based object segmentation
 def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
+
+
+    """color clustering based object segmentation
+    
+    Inputs: 
+    
+        image: image contains the plant objects
+        
+        args_colorspace: user-defined color space for clustering 
+        
+        args_channels: user-defined color channel for clustering 
+        
+        args_num_clusters: number of clustering
+        
+    Returns:
+    
+        img_thresh: mask image with the segmentation of the plant object 
+        
+    """   
     
     # Change image color space, if necessary.
     colorSpace = args_colorspace.lower()
@@ -363,25 +266,68 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     
     
-
-# compute percentage value
 def percentage(part, whole):
   
-  #percentage = "{:.0%}".format(float(part)/float(whole))
+    """compute percentage value
+    
+    Inputs: 
+    
+        part, whole: the part and whole value
+        
+       
+    Returns:
+    
+        string type of the percentage in decimals 
+        
+    """   
   
-  percentage = "{:.2f}".format(float(part)/float(whole))
-  
-  return str(percentage)
+    percentage = "{:.2f}".format(float(part)/float(whole))
+
+    return str(percentage)
 
 
 
-# compute middle points of two points in 2D 
+
 def midpoint(ptA, ptB):
+    
+    """compute middle point of two points in 2D coordinates
+    
+    Inputs: 
+    
+        ptA, ptB: coordinates of two points
+        
+    Returns:
+    
+        coordinates of the middle point
+        
+    """   
     return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
 
 
 # compute the parameters of the external contour of the object 
 def comp_external_contour(orig, thresh):
+
+
+    """compute the parameters of the external contour of the plant object 
+    
+    Inputs: 
+    
+        orig: image contains the plant objects
+        
+        thresh: mask of the plant object
+        
+    Returns:
+    
+        trait_img: input image overlayed with external contour and bouding box
+        
+        tassel_area: area occupied by the tassel in the image
+        
+        cnt_width, cnt_height: width and height of the tassel
+        
+        tassel_area_ratio: the ratio of area occupied by the tassel and its convex hull area
+        
+        
+    """   
     
     # get the dimension and color channel of the input image    
     img_height, img_width, img_channels = orig.shape
@@ -507,23 +453,71 @@ def comp_external_contour(orig, thresh):
     
 
 
-# convert RGB value to HEX format
+
 def RGB2HEX(color):
     
+    """convert RGB value to HEX format
+    
+    Inputs: 
+    
+        color: color in rgb format
+        
+    Returns:
+    
+        color in hex format
+        
+    """   
     return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
 
 
 
-# get the color pallate
+
 def get_cmap(n, name = 'hsv'):
-    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
-    RGB color; the keyword argument name must be a standard mpl colormap name.'''
+    
+    """get n kinds of colors from a color palette 
+    
+    Inputs: 
+    
+        n: number of colors
+        
+        name: the color palette choosed
+        
+    Returns:
+    
+        plt.cm.get_cmap(name, n): Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
+        RGB color; the keyword argument name must be a standard mpl colormap name. 
+        
+    """   
+
     return plt.cm.get_cmap(name, n)
     
     
-# dorminant color clustering method 
+ 
 def color_region(image, mask, save_path, num_clusters):
+
+    """dominant color clustering method to compute the color distribution 
     
+    Inputs: 
+    
+        image: image contains different colors
+        
+        mask: mask of the plant object
+        
+        save_path: result path
+        
+        num_clusters: number of clusters for computation 
+
+    Returns:
+    
+        rgb_colors: center color values in rgb format for every cluster
+        
+        counts: percentage of each color cluster
+        
+        hex_colors: center color values in hex format for every cluster
+        
+        
+    """   
+
     # read the image
      #grab image width and height
     (h, w) = image.shape[:2]
@@ -680,8 +674,19 @@ def color_region(image, mask, save_path, num_clusters):
 
 
 
-# Read barcode in the imageand decode barcode info
 def barcode_detect(img_ori):
+
+    """Read barcode in the image and decode barcode info
+    
+    Inputs: 
+    
+        img_ori: image contains the barcode region
+        
+    Returns:
+    
+        tag_info: decoded barcode information  
+        
+    """   
     
     # get the dimension of the image
     height, width = img_ori.shape[:2]
@@ -716,8 +721,31 @@ def barcode_detect(img_ori):
     
 
 
-# Detect marker in the image
 def marker_detect(img_ori, template, method, selection_threshold):
+
+    """Detect marker in the image
+    
+    Inputs: 
+    
+        img_ori: image contains the marker region
+        
+        template: preload marker template image
+        
+        method: method used to compute template matching
+        
+        selection_threshold: thresh value for accept the template matching result
+
+    Returns:
+    
+        marker_img: matching region image with marker object  
+        
+        thresh: mask image of the marker region
+        
+        coins_width_contour: computed width result based on contour of the object 
+        
+        coins_width_circle: computed width result based on min circle of the object 
+        
+    """   
     
     # load the image, clone it for output
     img_rgb = img_ori.copy()
@@ -753,7 +781,7 @@ def marker_detect(img_ori, template, method, selection_threshold):
         endX = startX + template.shape[1]
         endY = startY + template.shape[0]
         
-        # get the sub image with mathcing region
+        # get the sub image with matching region
         marker_img = img_ori[startY:endY, startX:endX]
         
         marker_overlay = marker_img
@@ -809,17 +837,45 @@ def marker_detect(img_ori, template, method, selection_threshold):
 
 
 
-# compute rect region based on left top corner coordinates and dimension of the region
 def region_extracted(orig, x, y, w, h):
     
+    """compute rect region based on left top corner coordinates and dimension of the region
+    
+    Inputs: 
+    
+        orig: image
+        
+        x, y: left top corner coordinates 
+        
+        w, h: dimension of the region
+
+    Returns:
+    
+        roi: region of interest
+        
+    """   
+
     roi = orig[y:y+h, x:x+w]
     
     return roi
 
 
-# compute the skeleton of a mask image
+
 def skeleton_bw(thresh):
 
+    """compute skeleton from binary mask image
+    
+    Inputs: 
+    
+        image_skeleton: binary mask image
+
+    Returns:
+    
+        skeleton_img: skeleton image for output
+        
+        skeleton: skeleton data 
+        
+    """
     # Convert mask to boolean image, rather than 0 and 255 for skimage to use it
     
     #convert an image from OpenCV to skimage
@@ -850,17 +906,21 @@ def skeleton_bw(thresh):
     return skeleton_img, skeleton
 
 
+
 def outlier_doubleMAD(data,thresh = 3.5):
     
-    """
-    FOR ASSYMMETRIC DISTRIBUTION
-    Returns : filtered array excluding the outliers
-
-    Parameters : the actual data Points array
-
+    """outlier removal 
     Calculates median to divide data into 2 halves.(skew conditions handled)
     Then those two halves are treated as separate data with calculation same as for symmetric distribution.(first answer) 
     Only difference being , the thresholds are now the median distance of the right and left median with the actual data median
+    convert the skeleton to graph and analyze the graph
+    
+    FOR ASSYMMETRIC DISTRIBUTION
+    
+    Inputs: the actual data Points array and thresh value
+
+    Returns : filtered array excluding the outliers
+
     """
     
     # warning: this function does not check for NAs
@@ -880,14 +940,29 @@ def outlier_doubleMAD(data,thresh = 3.5):
 
 def skeleton_graph(image_skeleton):
     
-        
-    ###
-    # ['skeleton-id', 'node-id-src', 'node-id-dst', 'branch-distance', 
-    #'branch-type', 'mean-pixel-value', 'stdev-pixel-value', 
-    #'image-coord-src-0', 'image-coord-src-1', 'image-coord-dst-0', 'image-coord-dst-1', 
-    #'coord-src-0', 'coord-src-1', 'coord-dst-0', 'coord-dst-1', 'euclidean-distance']
-    ###
+    """convert the skeleton to graph and analyze the graph
     
+    Inputs: 
+    
+        image_skeleton: skeleton image accquire from image binary mask
+
+    Returns:
+    
+        branch_data:structure of branch info
+        ###
+        # ['skeleton-id', 'node-id-src', 'node-id-dst', 'branch-distance', 
+        #'branch-type', 'mean-pixel-value', 'stdev-pixel-value', 
+        #'image-coord-src-0', 'image-coord-src-1', 'image-coord-dst-0', 'image-coord-dst-1', 
+        #'coord-src-0', 'coord-src-1', 'coord-dst-0', 'coord-dst-1', 'euclidean-distance']
+        ###
+        
+        n_branch: number of brunches 
+        
+        sub_branch_branch_distance_cleaned: list of individual branch length 
+        
+    """
+        
+
     #get brach data
     branch_data = summarize(Skeleton(image_skeleton))
     #print(branch_data)
@@ -923,16 +998,27 @@ def skeleton_graph(image_skeleton):
 def extract_traits(image_file):
 
     """compute all the traits based on input image
-    Inputs:
-    skel_img         = Skeletonized image
-    mask             = (Optional) binary mask for debugging. If provided, debug image will be overlaid on the mask.
+    
+    Inputs: 
+    
+        image file: full path and file name
+
     Returns:
-    segmented_img       = Segmented debugging image
-    segment_objects     = list of contours
-    :param skel_img: numpy.ndarray
-    :param mask: numpy.ndarray
-    :return segmented_img: numpy.ndarray
-    :return segment_objects: list
+        image_file_name: file name
+        
+        tag_info: Barcode information
+        
+        tassel_area: area occupied by the tassel in the image
+        
+        tassel_area_ratio: The ratio between tassel area and its convex hull area
+        
+        cnt_width, cnt_height: width and height of the tassel
+        
+        n_branch: number of branches in the tassel
+        
+        avg_branch_length: average length of the branches
+        
+        branch_length: list of all branch length
     """
     
     # extarct path and name of the image file
@@ -970,7 +1056,7 @@ def extract_traits(image_file):
     if (file_size > 5.0):
         print("It will take some time due to larger file size {0} MB\n".format(str(int(file_size))))
     else:
-        print("Segmentaing plant object using automatic color clustering method...\n")
+        print("Perform plant object segmentation using automatic color clustering method...\n")
     
     image = cv2.imread(image_file)
     
@@ -1014,6 +1100,8 @@ def extract_traits(image_file):
     
     
     (branch_data, n_branch, branch_length) = skeleton_graph(image_skeleton)
+    
+    avg_branch_length = int(sum(branch_length)/len(branch_length))
 
 
     #img_hist = branch_data.hist(column = 'branch-distance', by = 'branch-type', bins = 100)
@@ -1032,11 +1120,11 @@ def extract_traits(image_file):
     plt.close()
     
  
-    print("[INFO] {} branch end points found\n".format(n_branch))
+    #print("[INFO] {} branch end points found\n".format(n_branch))
     
-    print("[INFO] {} branch length\n".format(branch_length))
+    #print("[INFO] {} branch length\n".format(branch_length))
     
-    
+
     
     
     ###################################################################################################
@@ -1113,7 +1201,7 @@ def extract_traits(image_file):
     
     #return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
     
-    return image_file_name, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height
+    return image_file_name, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, branch_length
     
 
 
@@ -1200,17 +1288,25 @@ if __name__ == '__main__':
     
     result_list = []
 
-    '''
+    result_list_branch = []
+    
     #loop execute
     for image in imgList:
         
         #(filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
         #result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        (filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height) = extract_traits(image)
+        (filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, branch_length) = extract_traits(image)
 
-        result_list.append([filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height])
+        result_list.append([filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length])
+        
+        for i in range(len(branch_length)):
+            
+            result_list_branch.append([filename, str(i).zfill(2), branch_length[i]])
 
+ 
+    ###########################################################
+    #parallel processing module
     '''
     # get cpu number for parallel processing
     agents = psutil.cpu_count() - 2 
@@ -1232,13 +1328,14 @@ if __name__ == '__main__':
     tassel_area_ratio = list(zip(*result))[3]
     avg_width = list(zip(*result))[4]
     avg_height = list(zip(*result))[5]
+    n_branch = list(zip(*result))[6]
 
     
-    for i, (v0,v1,v2,v3,v4,v5) in enumerate(zip(filename, tag_info, tassel_area, tassel_area_ratio, avg_width, avg_height)):
+    for i, (v0,v1,v2,v3,v4,v5,v6) in enumerate(zip(filename, tag_info, tassel_area, tassel_area_ratio, avg_width, avg_height, n_branch)):
 
-        result_list.append([v0,v1,v2,v3,v4,v5])
+        result_list.append([v0,v1,v2,v3,v4,v5,v6])
     
-    
+    '''
     
     
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
@@ -1248,12 +1345,14 @@ if __name__ == '__main__':
     #output in command window in a sum table
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
-    table = tabulate(result_list, headers = ['filename', 'tag_info', 'tassel_area', 'tassel_area_ratio', 'avg_width', 'avg_height'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'tag_info', 'tassel_area', 'tassel_area_ratio', 'avg_width', 'avg_height', 'number_branches', 'average branch_length'], tablefmt = 'orgtbl')
     
     print(table + "\n")
     
     
 
+    #####################################################################
+    # save computation traits results as excel file
     
     if (args['result']):
 
@@ -1263,9 +1362,11 @@ if __name__ == '__main__':
         trait_file = (file_path + 'trait.xlsx')
         trait_file_csv = (file_path + 'trait.csv')
     
-    
-    if os.path.isfile(trait_file):
-        # update values
+
+    if os.path.exists(trait_file):
+        
+        #os.remove(trait_file)
+        
         #Open an xlsx for reading
         wb = openpyxl.load_workbook(trait_file)
 
@@ -1274,14 +1375,15 @@ if __name__ == '__main__':
         
         sheet.delete_rows(2, sheet.max_row+1) # for entire sheet
         
-        #sheet_leaf = wb.create_sheet()
+        sheet_branch = wb.create_sheet()
 
     else:
         # Keep presets
         wb = openpyxl.Workbook()
+        
         sheet = wb.active
         
-        sheet_leaf = wb.create_sheet()
+        sheet_branch = wb.create_sheet()
 
         sheet.cell(row = 1, column = 1).value = 'filename'
         sheet.cell(row = 1, column = 2).value = 'tag_info'
@@ -1290,23 +1392,21 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 5).value = 'avg_width'
         sheet.cell(row = 1, column = 6).value = 'avg_height'
         sheet.cell(row = 1, column = 7).value = 'number of branches'
+        sheet.cell(row = 1, column = 8).value = 'avg branch length'
 
-        '''
-        sheet.cell(row = 1, column = 7).value = 'color distribution cluster 1'
-        sheet.cell(row = 1, column = 8).value = 'color distribution cluster 2'
-        sheet.cell(row = 1, column = 9).value = 'color distribution cluster 3'
-        sheet.cell(row = 1, column = 10).value = 'color distribution cluster 4'
-        sheet.cell(row = 1, column = 11).value = 'color cluster 1 hex value'
-        sheet.cell(row = 1, column = 12).value = 'color cluster 2 hex value'
-        sheet.cell(row = 1, column = 13).value = 'color cluster 3 hex value'
-        sheet.cell(row = 1, column = 14).value = 'color cluster 4 hex value'        
-        '''
+        
+        sheet_branch.cell(row = 1, column = 1).value = 'filename'
+        sheet_branch.cell(row = 1, column = 2).value = 'branch index'
+        sheet_branch.cell(row = 1, column = 3).value = 'branch length'
+
 
     for row in result_list:
         sheet.append(row)
    
-    
-    #save the csv file
+    for row in result_list_branch:
+        sheet_branch.append(row)
+        
+    #save the xlsx file
     wb.save(trait_file)
     
     
