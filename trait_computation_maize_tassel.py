@@ -993,6 +993,30 @@ def skeleton_graph(image_skeleton):
 
 
 
+#apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to perfrom image enhancement
+def image_enhance(img):
+
+    # CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    clahe = cv2.createCLAHE(clipLimit=3., tileGridSize=(8,8))
+
+    # convert from BGR to LAB color space
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)  
+    
+    # split on 3 different channels
+    l, a, b = cv2.split(lab)  
+
+    # apply CLAHE to the L-channel
+    l2 = clahe.apply(l)  
+
+    # merge channels
+    lab = cv2.merge((l2,a,b))  
+    
+    # convert from LAB to BGR
+    img_enhance = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)  
+    
+    return img_enhance
+    
+
 
 def extract_traits(image_file):
 
@@ -1157,15 +1181,29 @@ def extract_traits(image_file):
     w = int(img_width*0.5)
     h = int(img_height*0.5)
     
+    barcode_region = region_extracted(orig, x, y, w, h)
+    
     # detect the barcode object based on template image
-    (marker_barcode_img, thresh_barcode, barcode_width_contour, barcode_width_circle) = marker_detect(region_extracted(orig, x, y, w, h), tp_barcode, methods[0], 0.8)
+    (marker_barcode_img, thresh_barcode, barcode_width_contour, barcode_width_circle) = marker_detect(barcode_region, tp_barcode, methods[0], 0.8)
     
     # save segmentation result
     result_file = (save_path + base_name + '_barcode' + file_extension)
     cv2.imwrite(result_file, marker_barcode_img)
     
+    #barcode_enhance = image_enhance(marker_barcode_img)
+    
+    kernel = np.array([[0, -1, 0],
+                   [-1, 5,-1],
+                   [0, -1, 0]])
+    
+    barcode_sharp = cv2.filter2D(src=marker_barcode_img, ddepth=-1, kernel=kernel)
+    
+    # save segmentation result
+    result_file = (save_path + base_name + '_barcode_sharp' + file_extension)
+    cv2.imwrite(result_file, barcode_sharp)
+    
     # parse barcode image using pylibdmtx lib
-    tag_info = barcode_detect(marker_barcode_img)
+    tag_info = barcode_detect(barcode_sharp)
     
 
     
@@ -1214,7 +1252,7 @@ if __name__ == '__main__':
     ap.add_argument("-p", "--path", required = True,    help = "path to image file")
     ap.add_argument("-ft", "--filetype", required = True,    help = "Image filetype")
     ap.add_argument('-mk', '--marker', required = False,  default ='/marker_template/coin.png',  help = "Marker file name")
-    ap.add_argument('-bc', '--barcode', required = False,  default ='/marker_template/barcode.png',  help = "Barcode file name")
+    ap.add_argument('-bc', '--barcode', required = False,  default ='/marker_template/barcode_cropped.png',  help = "Barcode file name")
     ap.add_argument("-r", "--result", required = False,    help="result path")
     ap.add_argument('-s', '--color-space', type = str, required = False, default ='lab', help='Color space to use: BGR, HSV, Lab (default), YCrCb (YCC)')
     ap.add_argument('-c', '--channels', type = str, required = False, default='2', help='Channel indices to use for clustering, where 0 is the first channel,' 

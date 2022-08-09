@@ -282,7 +282,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #print(img_thresh.dtype)
     
     
-    size_kernel = 5
+    size_kernel = 15
     
     #if mask contains mutiple non-conected parts, combine them into one. 
     contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -1401,9 +1401,9 @@ def extract_traits(image_file):
     if isbright(image_file):
     
         if (file_size > 5.0):
-            print("It will take some time due to file size {0} MB".format(str(int(file_size))))
+            print("File size is {0} MB".format(str(int(file_size))))
         else:
-            print("Segmentaing plant object using automatic color clustering method... ")
+            print("Plant object segmentation using automatic color clustering method... ")
         
         image = cv2.imread(image_file)
         
@@ -1535,7 +1535,7 @@ def extract_traits(image_file):
         
         n_leaves = int(len((leaf_index_rec)))
         
-        #print('number of leaves{0}'.format(n_leaves))
+        print('number of leaves = {0}'.format(n_leaves))
         
         #save watershed result label image
         result_file = (save_path + base_name + '_leafspec' + file_extension)
@@ -1616,8 +1616,17 @@ if __name__ == '__main__':
     result_list_leaf = []
     
     #loop execute
-    for image in imgList:
+    for image_id, image in enumerate(imgList):
         
+        if image_id > 20:
+            
+            min_distance_value = 35
+        
+        elif image_id > 40:
+            
+            min_distance_value = 55
+
+            
         (filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec) = extract_traits(image)
         
         #result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])

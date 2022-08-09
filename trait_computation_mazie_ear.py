@@ -13,7 +13,11 @@ Created: 2022-09-29
 
 USAGE:
 
-time python3 trait_computation_mazie_ear.py -p ~/example/plant_test/seeds/test/ -ft png -s Ycc -c 2 -min 250000
+time python3 trait_computation_mazie_ear.py -p ~/example/plant_test/seeds/test/ -ft png -s Lab -c 0 -min 250000
+
+time python3 trait_computation_mazie_ear.py -p ~/example/plant_test/seeds/test/ -ft png -s HSV -c 1 -min 250000
+
+
 
 '''
 
@@ -166,7 +170,7 @@ def sort_contours(cnts, method = "left-to-right"):
 
 
 # segment mutiple objects in image, for maize ear image, based on the protocal, shoudl be two objects. 
-def mutilple_objects_seg(orig):
+def mutilple_objects_seg(orig, channel):
 
     """segment mutiple objects in image, for maize ear image, based on the protocal, should be only two objects.
     
@@ -190,11 +194,53 @@ def mutilple_objects_seg(orig):
 
     # get the dimension of the image
     height, width, channels = orig.shape
-
-    # convert the mean shift image to grayscale, then apply Otsu's thresholding
-    gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
     
-    thresh = cv2.threshold(gray, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    '''
+    # Change image color space, if necessary.
+    colorSpace = args_colorspace.lower()
+
+    if colorSpace == 'hsv':
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    elif colorSpace == 'ycrcb' or colorSpace == 'ycc':
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
+
+    elif colorSpace == 'lab':
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+
+    else:
+        colorSpace = 'bgr'  # set for file naming purposes
+    
+        
+
+    # Keep only the selected channels for K-means clustering.
+    if args_channels != 'all':
+        channels = cv2.split(image)
+        channelIndices = []
+        for char in args_channels:
+            channelIndices.append(int(char))
+        image = image[:,:,channelIndices]
+        if len(image.shape) == 2:
+            image.reshape(image.shape[0], image.shape[1], 1)
+    '''
+
+    # Convert mean shift image from BRG color space to LAB space and extract B channel
+    L, A, B = cv2.split(cv2.cvtColor(shifted, cv2.COLOR_BGR2LAB))
+    
+    # convert the mean shift image to grayscale, then apply Otsu's thresholding
+    #gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
+    
+    if channel == 'B':
+        
+        thresh = cv2.threshold(B, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    
+    elif channel == 'A':
+        
+        thresh = cv2.threshold(A, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    
+    elif channel == 'L':
+        
+        thresh = cv2.threshold(L, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     
     # Taking a matrix of size 25 as the kernel
     kernel = np.ones((25,25), np.uint8)
@@ -217,7 +263,16 @@ def mutilple_objects_seg(orig):
     # sort the contours from left to right
     cnts_sorted = sort_contours(cnts_sorted, method = "left-to-right")
     
+    #print("cv2.contourArea(cnts_sorted[0]), cv2.contourArea(cnts_sorted[1])")
+    #print(cv2.contourArea(cnts_sorted[0]), cv2.contourArea(cnts_sorted[1]))
+    #print(len(cnts_sorted))
     
+    # if two contours are connectedm remove the significantly smaller one in size
+    if cv2.contourArea(cnts_sorted[0]) > 10*cv2.contourArea(cnts_sorted[1]):
+        
+        cnts_sorted = cnts_sorted[:1]
+    
+
     # initialize variables to record the centera, area of contours
     center_locX = []
     center_locY = []
@@ -258,6 +313,7 @@ def mutilple_objects_seg(orig):
     # get the left and right segmentation of the image 
     left_img = orig[0:height, 0:divide_X]
     right_img = orig[0:height, divide_X:width]
+    
 
     # convert the mask image to gray format
     mask_seg_gray = cv2.cvtColor(mask_seg, cv2.COLOR_BGR2GRAY)
@@ -383,7 +439,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     if len(contours) > 1:
         
-        print("mask contains mutiple non-conected parts, combine them into one\n")
+        print("mask contains mutiple non-connected parts, combine them into one\n")
         
         # create an size 10 kernel
         kernel = np.ones((10,10), np.uint8)
@@ -416,11 +472,11 @@ def percentage(part, whole):
         string type of the percentage in decimals 
         
     """   
-  #percentage = "{:.0%}".format(float(part)/float(whole))
-  
-  percentage = "{:.2f}".format(float(part)/float(whole))
-  
-  return str(percentage)
+    #percentage = "{:.0%}".format(float(part)/float(whole))
+
+    percentage = "{:.2f}".format(float(part)/float(whole))
+
+    return str(percentage)
 
 
 
@@ -961,7 +1017,52 @@ def region_extracted(orig, x, y, w, h):
     return roi
 
 
-# compute all the traits based on input image
+
+
+def isbright(image_file):
+    
+    """compute the brightness of the input image, Convert it to LAB color space to access the luminous channel which is independent of colors.
+    
+    Inputs: 
+    
+        image file: full path and file name
+
+    Returns:
+    
+        np.mean(L): brightness value of the image
+        
+    """
+    
+    # Set up threshold value for luminous channel, can be adjusted and generalized 
+    thresh = 1.5
+    
+    # Load image file 
+    orig = cv2.imread(image_file)
+    
+    # Make backup image
+    image = orig.copy()
+    
+    
+    # Convert color space to LAB format and extract L channel
+    L, A, B = cv2.split(cv2.cvtColor(image, cv2.COLOR_BGR2LAB))
+    
+    # Normalize L channel by dividing all pixel values with maximum pixel value
+    L = L/np.max(L)
+    
+    text_bool = "bright" if np.mean(L) < thresh else "dark"
+    
+    #return image_file_name, np.mean(L), text_bool
+    
+    #print("np.mean(L) < thresh = {}".format(np.mean(L)))
+    
+    #return np.mean(L) < thresh
+    
+    return np.mean(L)
+
+
+
+
+
 def extract_traits(image_file):
 
     """compute all the traits based on input image
@@ -1002,7 +1103,7 @@ def extract_traits(image_file):
     image_file_name = Path(image_file).name
 
 
-    print("Exacting traits for image : {0}\n".format(str(image_file_name)))
+    print("Extracting traits for image : {0}\n".format(str(image_file_name)))
      
     # create result folder
     if (args['result']):
@@ -1015,14 +1116,18 @@ def extract_traits(image_file):
 
     print ("results_folder:" + save_path +'\n')
     
+    img_brightness = isbright(image_file)
+    
+    print ("image brightness is {}\n".format(img_brightness)) 
+    
 
     # initialize all the traits output 
     area = kernel_area_ratio = max_width = max_height = avg_curv = n_leaves = 0
     
     if (file_size > 5.0):
-        print("It will take some time due to larger file size {0} MB\n".format(str(int(file_size))))
+        print("File size: {0} MB\n".format(str(int(file_size))))
     else:
-        print("Segmentaing plant object using automatic color clustering method...\n")
+        print("Plant object segmentation using automatic color clustering method...\n")
     
     # load the input image 
     image = cv2.imread(image_file)
@@ -1036,11 +1141,36 @@ def extract_traits(image_file):
     #source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
     
     # segment mutiple objects in image using thresh method to accquire internal contours
-    (left_img, right_img, mask_seg, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig)
+    (left_img, right_img, mask_seg, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig, channel = 'B')
     
-    # save segmentation result
+    # save result
     result_file = (save_path + base_name + '_overlay' + file_extension)
     cv2.imwrite(result_file, img_overlay)
+    
+    # apply individual object mask
+    masked_image = cv2.bitwise_and(image.copy(), image.copy(), mask = mask_seg)
+    
+    # save result
+    result_file = (save_path + base_name + '_masked' + file_extension)
+    cv2.imwrite(result_file, masked_image)
+
+    
+    
+    # Convert mean shift image from BRG color space to LAB space and extract B channel
+    L, A, B = cv2.split(cv2.cvtColor(masked_image, cv2.COLOR_BGR2LAB))
+    
+    # save Lab result
+    result_file = (save_path + base_name + '_L' + file_extension)
+    cv2.imwrite(result_file, L)
+    
+    # save Lab result
+    result_file = (save_path + base_name + '_A' + file_extension)
+    cv2.imwrite(result_file, A)
+    
+    # save Lab result
+    result_file = (save_path + base_name + '_B' + file_extension)
+    cv2.imwrite(result_file, B)
+    
     
     # parse input arguments
     args_colorspace = args['color_space']
@@ -1050,6 +1180,12 @@ def extract_traits(image_file):
     #color clustering based object segmentation to accquire external contours
     thresh = color_cluster_seg(image.copy(), args_colorspace, args_channels, args_num_clusters)
     
+    # segment mutiple objects in image using thresh method to accquire internal contours
+    #(left_img, right_img, thresh, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig, channel = 'L')
+    
+    # save result
+    result_file = (save_path + base_name + '_thresh' + file_extension)
+    cv2.imwrite(result_file, thresh)
     
    ###############################################################################################
     #combine external contours and internal contoures to compute object mask
@@ -1079,7 +1215,7 @@ def extract_traits(image_file):
         # draw the contour and center of the shape on the image
         img_overlay = cv2.drawContours(img_overlay, [c], -1, (0, 255, 0), 2)
     
-    # save segmentation result
+    # save result
     result_file = (save_path + base_name + '_overlay_combined' + file_extension)
     cv2.imwrite(result_file, img_overlay)
     
@@ -1087,12 +1223,10 @@ def extract_traits(image_file):
     #compute external traits
     (trait_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
     
-    # save segmentation result
+    # save result
     result_file = (save_path + base_name + '_excontour' + file_extension)
     #print(filename)
     cv2.imwrite(result_file, trait_img)
-    
-
     
     #################################################################################################################################
     #compute the area ratio of interal contour verse external contour, kernal area ratio
@@ -1101,7 +1235,7 @@ def extract_traits(image_file):
     sum_area_internal = sum(cnt_area_internal)
     
     # if internal contour and external contour was connectd, meaning the two plant objects are touching each other and overlapped
-    if (cnt_area_internal[0] >= cnt_area_external[0])  or  (cnt_area_internal[1] >= cnt_area_external[1]):
+    if (cnt_area_internal[0] > cnt_area_external[0])  or  (cnt_area_internal[1] > cnt_area_external[1]):
         
         if sum_area_internal < area_max_external:
             
@@ -1109,10 +1243,30 @@ def extract_traits(image_file):
         else:
             cnt_area_external[0] = cnt_area_external[1] = area_max_external
 
-    
+
+   
     # compute the area ratio 
-    area_ratio = (cnt_area_internal[0]/cnt_area_external[0], cnt_area_internal[1]/cnt_area_external[1])
-    area_ratio  = [ elem for elem in area_ratio if elem < 1]
+    if cnt_area_external[0] > 0 and cnt_area_external[1] > 0:
+
+        area_ratio = (cnt_area_internal[0]/cnt_area_external[0], cnt_area_internal[1]/cnt_area_external[1])
+    
+    elif cnt_area_external[0] > 0:
+        
+        area_ratio = (cnt_area_internal[0]/cnt_area_external[0], cnt_area_internal[1]/cnt_area_external[0])
+    
+    elif cnt_area_external[1] > 0:
+        
+        area_ratio = (cnt_area_internal[0]/cnt_area_external[1], cnt_area_internal[1]/cnt_area_external[1])
+        
+    else:
+        
+        area_ratio = 0
+        
+        
+    #print(area_ratio)
+    
+    area_ratio  = [ elem for elem in area_ratio if elem < 1 and elem > 0]
+
     
     # compute traits needed
     kernel_area_ratio = np.mean(area_ratio)
@@ -1136,7 +1290,7 @@ def extract_traits(image_file):
     # detect the coin object based on the template image
     (marker_coin_img, thresh_coin, coins_width_contour, coins_width_circle) = marker_detect(region_extracted(orig, x, y, w, h), tp_coin, methods[0], 0.8)
     
-    # save segmentation result
+    # save result
     result_file = (save_path + base_name + '_coin' + file_extension)
     cv2.imwrite(result_file, marker_coin_img)
     
@@ -1153,7 +1307,7 @@ def extract_traits(image_file):
     # detect the barcode object based on template image
     (marker_barcode_img, thresh_barcode, barcode_width_contour, barcode_width_circle) = marker_detect(region_extracted(orig, x, y, w, h), tp_barcode, methods[0], 0.8)
     
-    # save segmentation result
+    # save result
     result_file = (save_path + base_name + '_barcode' + file_extension)
     cv2.imwrite(result_file, marker_barcode_img)
     
@@ -1161,10 +1315,10 @@ def extract_traits(image_file):
     tag_info = barcode_detect(marker_barcode_img)
     
 
-    '''
+    
     ################################################################################################
     # analyze color distribution of the segmented objects
-    
+    '''
     num_clusters = 5
     
     #save color analysisi/quantization result
@@ -1187,14 +1341,14 @@ def extract_traits(image_file):
         
         color_ratio.append(percentage(value_counts, np.sum(list_counts)))
 
-    
-    ####################################################
     '''
+    ####################################################
+    
       
     
     #return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
     
-    return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height
+    return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, img_brightness
     
 
 
@@ -1209,8 +1363,8 @@ if __name__ == '__main__':
     ap.add_argument('-mk', '--marker', required = False,  default ='/marker_template/coin.png',  help = "Marker file name")
     ap.add_argument('-bc', '--barcode', required = False,  default ='/marker_template/barcode.png',  help = "Barcode file name")
     ap.add_argument("-r", "--result", required = False,    help="result path")
-    ap.add_argument('-s', '--color-space', type = str, required = False, default ='lab', help='Color space to use: BGR , HSV, Lab(default), YCrCb (YCC)')
-    ap.add_argument('-c', '--channels', type = str, required = False, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
+    ap.add_argument('-s', '--color-space', type = str, required = False, default ='Lab', help='Color space to use: BGR , HSV, Lab(default), YCrCb (YCC)')
+    ap.add_argument('-c', '--channels', type = str, required = False, default='0', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
@@ -1286,15 +1440,15 @@ if __name__ == '__main__':
     #loop execute to get all traits
     for image in imgList:
         
-        #(filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
-        #result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
+        (filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
+        result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        (filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height) = extract_traits(image)
+        #(filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height) = extract_traits(image)
 
-        result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height])
+        #result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height])
 
-    '''
     
+    '''
     ####################################################################################
     # parallel processing
     
@@ -1318,11 +1472,12 @@ if __name__ == '__main__':
     avg_kernel_area_ratio = list(zip(*result))[3]
     avg_width = list(zip(*result))[4]
     avg_height = list(zip(*result))[5]
+    brightness = list(zip(*result))[6]
 
     
-    for i, (v0,v1,v2,v3,v4,v5) in enumerate(zip(filename, tag_info, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height)):
+    for i, (v0,v1,v2,v3,v4,v5,v6) in enumerate(zip(filename, tag_info, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height, brightness)):
 
-        result_list.append([v0,v1,v2,v3,v4,v5])
+        result_list.append([v0,v1,v2,v3,v4,v5,v6])
     
     
     
@@ -1335,7 +1490,7 @@ if __name__ == '__main__':
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
     
-    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'brightness'], tablefmt = 'orgtbl')
     
     print(table + "\n")
 
@@ -1376,6 +1531,8 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 4).value = 'avg_kernel_area_ratio'
         sheet.cell(row = 1, column = 5).value = 'avg_width'
         sheet.cell(row = 1, column = 6).value = 'avg_height'
+        sheet.cell(row = 1, column = 7).value = 'brightness'
+
 
         '''
         sheet.cell(row = 1, column = 7).value = 'color distribution cluster 1'

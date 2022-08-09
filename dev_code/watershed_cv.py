@@ -74,19 +74,22 @@ def image_label(image_file):
     
     img_width, img_height, img_channels = image.shape
 
-    shifted = cv2.pyrMeanShiftFiltering(image, 21, 70)
+    #shifted = cv2.pyrMeanShiftFiltering(orig, 21, 70)
 
     #accquire image dimensions 
     height, width, channels = image.shape
      
     # convert the mean shift image to grayscale, then apply
     # Otsu's thresholding
-    gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
+    #gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
     
+    gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
+    
+    '''
     thresh = cv2.threshold(gray, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-    
+
     # Taking a matrix of size 5 as the kernel
-    kernel = np.ones((25,25), np.uint8)
+    kernel = np.ones((5,5), np.uint8)
     
     thresh_dilation = cv2.dilate(thresh, kernel, iterations=1)
     
@@ -95,7 +98,7 @@ def image_label(image_file):
     #define result path for labeled images
     result_img_path = save_path_label + str(filename[0:-4]) + '_thresh.jpg'
     cv2.imwrite(result_img_path, thresh_erosion)
-    
+    '''
     '''
     ##############################################################################################
     # find contours in the thresholded image
@@ -153,15 +156,21 @@ def image_label(image_file):
     #define result path for labeled images
     result_img_path = save_path_label + str(filename[0:-4]) + '_right.jpg'
     cv2.imwrite(result_img_path, right_img)
+    '''
     ##########################################################################
     '''
     # compute the exact Euclidean distance from every binary
     # pixel to the nearest zero pixel, then find peaks in this
     # distance map
-    D = ndimage.distance_transform_edt(thresh)
-    localMax = peak_local_max(D, indices=False, min_distance = 120, labels=thresh)
+    D = ndimage.distance_transform_edt(thresh_erosion)
+    localMax = peak_local_max(D, indices=False, min_distance = 10, labels=thresh)
     
     #localMax = peak_local_max(D, min_distance = 120, labels=thresh)
+    
+    #define result path for labeled images
+    result_img_path = save_path_label + str(filename[0:-4]) + '_df.jpg'
+    # save results
+    cv2.imwrite(result_img_path, D)
     
      
     # perform a connected component analysis on the local peaks,
@@ -202,9 +211,9 @@ def image_label(image_file):
         mask[labels == label] = 255
         
         #define result path for simplified segmentation result
-        result_img_path = save_path_ac + str(filename[0:-4]) + str(label) + '_ac.jpg'
+        #result_img_path = save_path_ac + str(filename[0:-4]) + str(label) + '_ac.jpg'
         
-        cv2.imwrite(result_img_path,mask)
+        #cv2.imwrite(result_img_path,mask)
      
         # detect contours in the mask and grab the largest one
         cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -213,8 +222,8 @@ def image_label(image_file):
      
         # draw a circle enclosing the object
         ((x, y), r) = cv2.minEnclosingCircle(c)
-        if r > 80:
-            cv2.circle(image, (int(x), int(y)), int(r), (0, 255, 0), 2)
+        if r > 0:
+            cv2.circle(image, (int(x), int(y)), 2, (0, 255, 0), 2)
             cv2.putText(image, "#{}".format(label), (int(x) - 10, int(y)),cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             count+= 1
 
@@ -222,11 +231,10 @@ def image_label(image_file):
 
     #define result path for simplified segmentation result
     result_img_path = save_path_ac + str(filename[0:-4]) + '_ac.jpg'
-    
-    
 
     #write out results
     cv2.imwrite(result_img_path,image)
+    '''
     
     
 
