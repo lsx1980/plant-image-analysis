@@ -81,9 +81,84 @@ def image_label(image_file):
      
     # convert the mean shift image to grayscale, then apply
     # Otsu's thresholding
-    #gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
-    
     gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
+    
+    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    
+####################################################################################3
+    '''
+    # compute a "wide", "mid-range", and "tight" threshold for the edges
+    # using the Canny edge detector
+    wide = cv2.Canny(thresh, 10, 200)
+    mid = cv2.Canny(thresh, 30, 150)
+    tight = cv2.Canny(thresh, 240, 250)
+
+
+    #define result path for simplified segmentation result
+    result_img_path = save_path_ac + str(filename[0:-4]) + '_wide.jpg'
+
+    #write out results
+    cv2.imwrite(result_img_path,wide)
+    
+    #define result path for simplified segmentation result
+    result_img_path = save_path_ac + str(filename[0:-4]) + '_mid.jpg'
+
+    #write out results
+    cv2.imwrite(result_img_path,mid)
+    
+    
+    #define result path for simplified segmentation result
+    result_img_path = save_path_ac + str(filename[0:-4]) + '_tight.jpg'
+
+    #write out results
+    cv2.imwrite(result_img_path,tight)
+    '''
+####################################################################################
+    '''
+    # apply connected component analysis to the thresholded image
+    (numLabels, labels, stats, centroids) = cv2.connectedComponentsWithStats(thresh, 4, cv2.CV_32S)
+
+    # loop over the number of unique connected component labels
+    for i in range(0, numLabels):
+        
+        # if this is the first component then we examine the
+        # *background* (typically we would just ignore this
+        # component in our loop)
+        if i == 0:
+            text = "examining component {}/{} (background)".format(
+                i + 1, numLabels)
+        # otherwise, we are examining an actual connected component
+        else:
+            text = "examining component {}/{}".format( i + 1, numLabels)
+        # print a status message update for the current connected
+        # component
+        print("[INFO] {}".format(text))
+        
+        # extract the connected component statistics and centroid for
+        # the current label
+        x = stats[i, cv2.CC_STAT_LEFT]
+        y = stats[i, cv2.CC_STAT_TOP]
+        w = stats[i, cv2.CC_STAT_WIDTH]
+        h = stats[i, cv2.CC_STAT_HEIGHT]
+        
+        area = stats[i, cv2.CC_STAT_AREA]
+        
+        (cX, cY) = centroids[i]
+        
+        # clone our original image (so we can draw on it) and then draw
+        # a bounding box surrounding the connected component along with
+        # a circle corresponding to the centroid
+
+        cp_image = cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 3)
+        cp_image = cv2.circle(image, (int(cX), int(cY)), 4, (0, 0, 255), -1)
+        
+        
+        
+        
+    #define result path for labeled images
+    result_img_path = save_path_ac + str(filename[0:-4]) + '_cp.jpg'
+    cv2.imwrite(result_img_path, cp_image)
+    '''
     
     '''
     thresh = cv2.threshold(gray, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
@@ -102,75 +177,44 @@ def image_label(image_file):
     '''
     ##############################################################################################
     # find contours in the thresholded image
-    cnts = cv2.findContours(thresh_erosion.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
     cnts = imutils.grab_contours(cnts)
     
     cnts_sorted = sorted(cnts, key=cv2.contourArea, reverse=True)
 
     
-    #c = max(cnts, key=cv2.contourArea)
-    center_locX = []
-    center_locY = []
-    
-    for c in cnts_sorted[0:2]:
+    for c in cnts_sorted:
         
         # compute the center of the contour
         M = cv2.moments(c)
         cX = int(M["m10"] / M["m00"])
         cY = int(M["m01"] / M["m00"])
-        
-        center_locX.append(cX)
-        center_locY.append(cY)
+
         
         # draw the contour and center of the shape on the image
-        center_result = cv2.drawContours(image, [c], -1, (0, 255, 0), 2)
-        center_result = cv2.circle(image, (cX, cY), 14, (0, 0, 255), -1)
-        center_result = cv2.putText(image, "center", (cX - 20, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        contour_img = cv2.drawContours(image, [c], -1, (0, 255, 0), 2)
+        contour_img = cv2.circle(image, (cX, cY), 14, (0, 0, 255), -1)
+        contour_img = cv2.putText(image, "center", (cX - 20, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
-    
-    print(center_locX, center_locY)
-    
-    divide_X = int(sum(center_locX) / len(center_locX))
-    divide_Y = int(sum(center_locY) / len(center_locY))
-    
-    print(divide_X, divide_Y)
-    
-    
-    center_result = cv2.circle(image, (divide_X, divide_Y), 14, (0, 255, 0), -1)
-    
-    
     #define result path for labeled images
-    result_img_path = save_path_label + str(filename[0:-4]) + '_center.jpg'
-    cv2.imwrite(result_img_path, center_result)
-    
-    
-    
-    left_img = orig[0:height, 0:divide_X]
-    #define result path for labeled images
-    result_img_path = save_path_label + str(filename[0:-4]) + '_left.jpg'
-    cv2.imwrite(result_img_path, left_img)
-    
-    
-    right_img = orig[0:height, divide_X:img_width]
-    #define result path for labeled images
-    result_img_path = save_path_label + str(filename[0:-4]) + '_right.jpg'
-    cv2.imwrite(result_img_path, right_img)
+    result_img_path = save_path_ac + str(filename[0:-4]) + '_contour.jpg'
+    cv2.imwrite(result_img_path, contour_img)
     '''
     ##########################################################################
-    '''
+    
     # compute the exact Euclidean distance from every binary
     # pixel to the nearest zero pixel, then find peaks in this
     # distance map
-    D = ndimage.distance_transform_edt(thresh_erosion)
+    D = ndimage.distance_transform_edt(thresh)
     localMax = peak_local_max(D, indices=False, min_distance = 10, labels=thresh)
     
     #localMax = peak_local_max(D, min_distance = 120, labels=thresh)
     
     #define result path for labeled images
-    result_img_path = save_path_label + str(filename[0:-4]) + '_df.jpg'
+    #result_img_path = save_path_label + str(filename[0:-4]) + '_df.jpg'
     # save results
-    cv2.imwrite(result_img_path, D)
+    #cv2.imwrite(result_img_path, D)
     
      
     # perform a connected component analysis on the local peaks,
@@ -223,8 +267,9 @@ def image_label(image_file):
         # draw a circle enclosing the object
         ((x, y), r) = cv2.minEnclosingCircle(c)
         if r > 0:
-            cv2.circle(image, (int(x), int(y)), 2, (0, 255, 0), 2)
-            cv2.putText(image, "#{}".format(label), (int(x) - 10, int(y)),cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            cp_img = cv2.circle(image, (int(x), int(y)), 2, (0, 255, 0), 5)
+            cp_img = cv2.drawContours(image, [c], -1, (0, 255, 0), 2)
+            #cv2.putText(image, "#{}".format(label), (int(x) - 10, int(y)),cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             count+= 1
 
     print("[INFO] {} unique segments found".format(count))
@@ -233,8 +278,8 @@ def image_label(image_file):
     result_img_path = save_path_ac + str(filename[0:-4]) + '_ac.jpg'
 
     #write out results
-    cv2.imwrite(result_img_path,image)
-    '''
+    cv2.imwrite(result_img_path,cp_img)
+    
     
     
 
