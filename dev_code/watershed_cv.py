@@ -9,7 +9,7 @@ Author-email: suxingliu@gmail.com
 
 USAGE:
 
-python3 watershed_cv.py -p /home/suxing/plant-image-analysis/test/  -ft jpg
+python3 watershed_cv.py -p /home/suxing/example/plant_test/seeds/test/  -ft jpg
 
 
 argument:
@@ -77,13 +77,32 @@ def image_label(image_file):
     #shifted = cv2.pyrMeanShiftFiltering(orig, 21, 70)
 
     #accquire image dimensions 
-    height, width, channels = image.shape
+    #height, width, channels = image.shape
+    
+    
+   
      
     # convert the mean shift image to grayscale, then apply
     # Otsu's thresholding
     gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
     
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    
+    '''
+    bk = cv2.imread("/home/suxing/example/plant_test/seeds/test/thresh/rgb/EX12_masked.png")
+    
+    # apply individual object mask
+    masked_image = cv2.bitwise_and(bk.copy(), bk.copy(), mask = ~thresh)
+    
+    # save result
+    result_file = (save_path_ac + str(filename[0:-4]) + '_masked.jpg')
+    cv2.imwrite(result_file, masked_image)
+    
+    
+    gray = cv2.cvtColor(masked_image, cv2.COLOR_BGR2GRAY)
+    
+    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    '''
     
 ####################################################################################3
     '''
@@ -207,14 +226,16 @@ def image_label(image_file):
     # pixel to the nearest zero pixel, then find peaks in this
     # distance map
     D = ndimage.distance_transform_edt(thresh)
-    localMax = peak_local_max(D, indices=False, min_distance = 10, labels=thresh)
+    #localMax = peak_local_max(D, indices=False, min_distance = 30, labels=thresh)
+    
+    localMax = peak_local_max(D, indices=False, min_distance = 30, labels=thresh)
     
     #localMax = peak_local_max(D, min_distance = 120, labels=thresh)
     
     #define result path for labeled images
-    #result_img_path = save_path_label + str(filename[0:-4]) + '_df.jpg'
+    result_img_path = save_path_label + str(filename[0:-4]) + '_df.jpg'
     # save results
-    #cv2.imwrite(result_img_path, D)
+    cv2.imwrite(result_img_path, D)
     
      
     # perform a connected component analysis on the local peaks,
@@ -267,9 +288,9 @@ def image_label(image_file):
         # draw a circle enclosing the object
         ((x, y), r) = cv2.minEnclosingCircle(c)
         if r > 0:
-            cp_img = cv2.circle(image, (int(x), int(y)), 2, (0, 255, 0), 5)
+            cp_img = cv2.circle(image, (int(x), int(y)), 2, (255, 0, 0), 5)
             cp_img = cv2.drawContours(image, [c], -1, (0, 255, 0), 2)
-            #cv2.putText(image, "#{}".format(label), (int(x) - 10, int(y)),cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            cv2.putText(image, "#{}".format(label), (int(x) - 10, int(y)),cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             count+= 1
 
     print("[INFO] {} unique segments found".format(count))

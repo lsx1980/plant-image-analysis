@@ -80,7 +80,7 @@ import multiprocessing
 from multiprocessing import Pool
 from contextlib import closing
 
-
+import pandas as pd
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -180,7 +180,7 @@ def mutilple_objects_seg(orig, channel):
         
     Returns:
     
-        left_img, right_img: left/right image contains an maize ear on the left/right side 
+        left_img, right_img: left/right image contains each maize ear on the left/right side 
         
         mask_seg_gray: 
         
@@ -1079,26 +1079,27 @@ def watershed_seg(orig, min_distance_value):
         
         labeled_img: label image in hue map format
         
+        count_kernel: count of the segmented kernels 
+        
     """
    
     image = orig.copy()
      
-    # convert the mean shift image to grayscale, then apply
-    # Otsu's thresholding
+    # convert the mean shift image to grayscale, then apply Otsu's thresholding
     gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
     
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     
     
-    # compute the exact Euclidean distance from every binary
-    # pixel to the nearest zero pixel, then find peaks in this
+    # compute the exact Euclidean distance from every binary pixel to the nearest zero pixel, then find peaks in this
     # distance map
     D = ndimage.distance_transform_edt(thresh)
     
+    #localMax = peak_local_max(D, indices = False, min_distance = min_distance_value,  labels = thresh)
+    
     localMax = peak_local_max(D, indices = False, min_distance = min_distance_value,  labels = thresh)
      
-    # perform a connected component analysis on the local peaks,
-    # using 8-connectivity, then appy the Watershed algorithm
+    # perform a connected component analysis on the local peaks, using 8-connectivity, then appy the Watershed algorithm
     markers = ndimage.label(localMax, structure = np.ones((3, 3)))[0]
     
     #print("markers")
@@ -1106,7 +1107,7 @@ def watershed_seg(orig, min_distance_value):
     
     labels = watershed(-D, markers, mask = thresh)
     
-    print("[INFO] {} unique segments found\n".format(len(np.unique(labels)) - 1))
+    #print("[INFO] {} unique segments found\n".format(len(np.unique(labels)) - 1))
     
     #Map component labels to hue val
     label_hue = np.uint8(128*labels/np.max(labels))
@@ -1126,7 +1127,7 @@ def watershed_seg(orig, min_distance_value):
     #cv2.imwrite(result_img_path,labeled_img)
 
 
-    count = 0
+    count_kernel = 0
     # loop over the unique labels returned by the Watershed algorithm
     for label in np.unique(labels):
         # if the label is zero, we are examining the 'background'
@@ -1148,12 +1149,12 @@ def watershed_seg(orig, min_distance_value):
         # draw a circle enclosing the object
         ((x, y), r) = cv2.minEnclosingCircle(c)
         if r > 0:
-            label_overlay = cv2.circle(image, (int(x), int(y)), 2, (0, 255, 0), 5)
+            label_overlay = cv2.circle(image, (int(x), int(y)), 2, (255, 0, 0), 5)
             label_overlay = cv2.drawContours(image, [c], -1, (0, 255, 0), 2)
             #cv2.putText(image, "#{}".format(label), (int(x) - 10, int(y)),cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            count+= 1
+            count_kernel+= 1
 
-    print("[INFO] {} unique segments found".format(count))
+    print("[INFO] {} unique segments found \n".format(count_kernel))
 
     #define result path for simplified segmentation result
     #result_img_path = save_path_ac + str(filename[0:-4]) + '_ac.jpg'
@@ -1162,8 +1163,220 @@ def watershed_seg(orig, min_distance_value):
     #cv2.imwrite(result_img_path,cp_img)
     
     
-    return labels, label_overlay, labeled_img
+    return labels, label_overlay, labeled_img, count_kernel
+
+
+
+   
+
+def adaptive_threshold(masked_image, GaussianBlur_ksize, blockSize, weighted_mean):
     
+    """compute thresh image using adaptive threshold Method
+    
+    Inputs: 
+    
+        maksed_img: masked image contains only target objects
+        
+        GaussianBlur_ksize: Gaussian Kernel Size 
+        
+        blockSize: size of the pixelneighborhood used to calculate the threshold value
+        
+        weighted_mean: the constant used in the both methods (subtracted from the mean or weighted mean).
+
+    Returns:
+        
+        thresh_adaptive_threshold: thresh image using adaptive thrshold Method
+        
+        maksed_img_adaptive_threshold: masked image using thresh_adaptive_threshold
+
+    """
+    ori = masked_image.copy()
+    
+    # convert the image to grayscale and blur it slightly
+    gray = cv2.cvtColor(masked_image, cv2.COLOR_BGR2GRAY)
+
+    # blurring it . Applying Gaussian blurring with a GaussianBlur_ksize×GaussianBlur_ksize kernel 
+    # helps remove some of the high frequency edges in the image that we are not concerned with and allow us to obtain a more “clean” segmentation.
+    blurred = cv2.GaussianBlur(gray, (GaussianBlur_ksize, GaussianBlur_ksize), 0)
+
+    # adaptive method to be used. 'ADAPTIVE_THRESH_MEAN_C' or 'ADAPTIVE_THRESH_GAUSSIAN_C'
+    thresh_adaptive_threshold = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 81, 10)
+
+    # apply individual object mask
+    maksed_img_adaptive_threshold = cv2.bitwise_and(ori, ori.copy(), mask = ~thresh_adaptive_threshold)
+
+    return thresh_adaptive_threshold, maksed_img_adaptive_threshold
+
+
+
+
+def kernel_traits_computation(masked_img, labels):
+
+    """compute kernel traits based on input image and its segmentation labels
+    
+    Inputs: 
+    
+        masked_img: masked image contains only target objects
+        
+        labels: watershed_seg return matrix, Each pixel value as a unique label value. Pixels that have the same label value belong to the same object.
+                
+
+    Returns:
+        
+        label_trait: overlay image with all traits visualization
+        
+        kernel_index_rec: index of each kernel.
+        
+        contours_rec: list of contours of each kernel.
+        
+        area_rec: list of area of each kernel.
+        
+        major_axis_rec: list of major_axis of each kernel. (Bounding box)
+        
+        minor_axis_rec: list of minor_axis of each kernel. (Bounding box)
+        
+        
+    """
+    # initialize parameters
+    orig = masked_img.copy()
+    
+    gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
+    
+    kernel_index_rec = []
+    contours_rec = []
+    area_rec = []
+
+    major_axis_rec = []
+    minor_axis_rec = []
+    
+    count = 0
+
+
+    # loop over the unique labels returned by the Watershed algorithm
+    for index, label in enumerate(np.unique(labels), start = 1):
+        # if the label is zero, we are examining the 'background'
+        # so simply ignore it
+        if label == 0:
+            continue
+     
+        # otherwise, allocate memory for the label region and draw
+        # it on the mask
+        mask = np.zeros(gray.shape, dtype = "uint8")
+        mask[labels == label] = 255
+        
+        # apply individual object mask
+        masked = cv2.bitwise_and(orig, orig, mask = mask)
+        
+        #individual kernel segmentation 
+        
+        # detect contours in the mask and grab the largest one
+        #cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+        contours, hierarchy = cv2.findContours(mask.copy(),cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        c = max(contours, key = cv2.contourArea)
+
+        if len(c) >= 10 :
+
+            contours_rec.append(c)
+            area_rec.append(cv2.contourArea(c))
+
+        #else:
+            # optional to "delete" the small contours
+            #print("small contours")
+    
+ 
+    # sort the contours based on area size order
+    contours_rec_sorted = [x for _, x in sorted(zip(area_rec, contours_rec), key=lambda pair: pair[0])]
+    
+    #cmap = get_cmap(len(contours_rec_sorted)) 
+    
+    cmap = get_cmap(len(contours_rec_sorted)+1)
+    
+    
+    #tracking_backgd = np.zeros(gray.shape, dtype = "uint8")
+    #backgd.fill(128)
+    
+    label_trait = orig.copy()
+    
+    #track_trait = orig.copy()
+    #clean area record list
+    area_rec = []
+    #individual kernel traits sorting based on area order 
+    ################################################################################
+    for i in range(len(contours_rec_sorted)):
+        
+        c = contours_rec_sorted[i]
+        
+        #assign unique color value in opencv format
+        color_rgb = tuple(reversed(cmap(i)[:len(cmap(i))-1]))
+        
+        color_rgb = tuple([255*x for x in color_rgb])
+        
+        
+        # get coordinates of bounding box
+        
+        (x,y,w,h) = cv2.boundingRect(c)
+    
+        
+        
+        # draw a circle enclosing the object
+        ((x, y), r) = cv2.minEnclosingCircle(c)
+        #label_trait = cv2.circle(orig, (int(x), int(y)), 3, (0, 255, 0), 2)
+        
+        #draw filled contour
+        #label_trait = cv2.drawContours(orig, [c], -1, color_rgb, -1)
+        if cv2.contourArea(c) < 6523:
+            
+            label_trait = cv2.drawContours(orig, [c], -1, color_rgb, 2)
+        
+        #label_trait = cv2.putText(orig, "#{}".format(i+1), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rgb, 1)
+        
+        #label_trait = cv2.putText(backgd, "#{}".format(i+1), (int(x) - 10, int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rgb, 1)
+        
+        #draw mini bounding box
+        #label_trait = cv2.drawContours(orig, [box], -1, (0, 255, 0), 2)
+        
+        #######################################individual kernel curvature computation
+        '''
+        #Get rotated bounding ellipse of contour
+        ellipse = cv2.fitEllipse(c)
+        
+        #get paramters of ellipse
+        ((xc,yc), (d1,d2), angle) = ellipse
+        
+        # draw circle at ellipse center
+        #label_trait = cv2.ellipse(orig, ellipse, color_rgb, 2)
+        #label_trait = cv2.circle(backgd, (int(xc),int(yc)), 10, color_rgb, -1)
+        
+        #track_trait = cv2.circle(tracking_backgd, (int(xc),int(yc)), 5, (255, 255, 255), -1)
+        
+        
+        #draw major radius
+        #compute major radius
+        rmajor = max(d1,d2)/2
+        rminor = min(d1,d2)/2
+        '''
+        
+        #record all traits 
+        kernel_index_rec.append(i)
+        area_rec.append(cv2.contourArea(c))
+        #curv_rec.append(curvature)
+        
+
+        major_axis_rec.append(w)
+        minor_axis_rec.append(h)
+        
+    ################################################################################
+    
+    
+    #print('unique labels={0}, len(contours_rec)={1}, len(kernel_index_rec)={2}'.format(np.unique(labels),len(contours_rec),len(kernel_index_rec)))
+        
+    n_contours = len(contours_rec_sorted)
+    
+
+    return label_trait, kernel_index_rec, contours_rec, area_rec, major_axis_rec, minor_axis_rec
+    
+
+
 
 
 
@@ -1233,6 +1446,7 @@ def extract_traits(image_file):
     else:
         print("Plant object segmentation using automatic color clustering method...\n")
     
+    
     # load the input image 
     image = cv2.imread(image_file)
     
@@ -1257,12 +1471,38 @@ def extract_traits(image_file):
     # save result
     result_file = (save_path + base_name + '_masked' + file_extension)
     cv2.imwrite(result_file, masked_image)
-
-
-    ###################################################################################
-    min_distance_value = 10
     
-    (labels, label_overlay, labeled_img) = watershed_seg(masked_image, min_distance_value)
+    
+    n_kernels = 0
+    
+    kernel_size = 0
+    
+    
+    ###################################################################################
+    # set the parameters for adoptive threshholding method
+    GaussianBlur_ksize = 7
+    
+    blockSize = 81
+    
+    weighted_mean = 10
+    
+    # adoptive threshholding method to the masked image from mutilple_objects_seg
+    (thresh_adaptive_threshold, maksed_img_adaptive_threshold) = adaptive_threshold(masked_image, GaussianBlur_ksize, blockSize, weighted_mean)
+    
+    # save result
+    result_file = (save_path + base_name + '_thresh_adaptive_threshold' + file_extension)
+    cv2.imwrite(result_file, thresh_adaptive_threshold)
+    
+    # save result
+    result_file = (save_path + base_name + '_maksed_img_adaptive_threshold' + file_extension)
+    cv2.imwrite(result_file, maksed_img_adaptive_threshold)
+
+    
+    ###################################################################################
+    # set the parameters for wateshed segmentation method
+    min_distance_value = args['min_dist']
+    
+    (labels, label_overlay, labeled_img, count_kernel) = watershed_seg(maksed_img_adaptive_threshold, min_distance_value)
     
     # save result
     result_file = (save_path + base_name + '_label_overlay' + file_extension)
@@ -1271,9 +1511,10 @@ def extract_traits(image_file):
     # save result
     result_file = (save_path + base_name + '_labeled_img' + file_extension)
     cv2.imwrite(result_file, labeled_img)
+    
+
     ####################################################################################
-    
-    
+ 
     # Convert mean shift image from BRG color space to LAB space and extract B channel
     L, A, B = cv2.split(cv2.cvtColor(masked_image, cv2.COLOR_BGR2LAB))
     
@@ -1311,8 +1552,8 @@ def extract_traits(image_file):
     
     
     # Taking a matrix of size 25 as the kernel
-    kernel = np.ones((25,25), np.uint8)
-    combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
+    dilate_kernel = np.ones((25,25), np.uint8)
+    combined_mask = cv2.dilate(combined_mask, dilate_kernel, iterations=1)
     
     result_file = (save_path + base_name + '_combined_mask' + file_extension)
     #print(filename)
@@ -1339,14 +1580,14 @@ def extract_traits(image_file):
     
     ################################################################################################################################
     #compute external traits
-    (trait_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(image.copy(), thresh_combined_mask, img_overlay)
+    (trait_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(orig, thresh_combined_mask, img_overlay)
     
     # save result
     result_file = (save_path + base_name + '_excontour' + file_extension)
     #print(filename)
     cv2.imwrite(result_file, trait_img)
     
-    #################################################################################################################################
+        #################################################################################################################################
     #compute the area ratio of interal contour verse external contour, kernal area ratio
     area_max_external = max(cnt_area_external)
     
@@ -1386,11 +1627,54 @@ def extract_traits(image_file):
     area_ratio  = [ elem for elem in area_ratio if elem < 1 and elem > 0]
 
     
-    # compute traits needed
+    # compute external traits 
     kernel_area_ratio = np.mean(area_ratio)
     kernel_area = sum(cnt_area_internal) / len(cnt_area_internal)
     max_width = sum(cnt_width) / len(cnt_width)
     max_height = sum(cnt_height) / len(cnt_height)
+    
+    ###################################################################################
+    # compute the kernel traits
+    (label_trait, kernel_index_rec, contours_rec, area_rec, major_axis_rec, minor_axis_rec) = kernel_traits_computation(masked_image, labels)
+    
+    # save result
+    result_file = (save_path + base_name + '_kernel_overlay' + file_extension)
+    cv2.imwrite(result_file, label_trait)
+    
+    n_kernels = int(count_kernel*0.5)
+    
+    kernel_size = sum(area_rec)/len(area_rec)
+    
+    
+    #####################################
+    # kernel area distributation
+    # panda data format
+    s = pd.Series(area_rec)
+    
+    # output info
+    print("[INFO] Statistical analysis of Kernel traits: (unit:pixels)\n")
+    print(s.describe())
+    print()
+    
+    #counts, bins, _ = plt.hist(area_rec, bins=len(area_rec))
+
+    # save result
+    #result_file = (save_path + base_name + '_kernel_hist' + file_extension)
+    #plt.savefig(result_file)
+    
+    # draw distributation histogram
+    _, bins = pd.cut(area_rec, bins=200, retbins=True)
+    plt.hist(area_rec, bins)
+    
+    # Add title and axis names
+    plt.title('Individual kernel size distributation')
+    plt.xlabel('Kernel Numbers')
+    plt.ylabel('Individual kernel size (unit:pixel)')
+    
+    result_file = (save_path + base_name + '_kernel_hist' + file_extension)
+    plt.savefig(result_file)
+    
+
  
     ###################################################################################################
     # detect coin and bracode uisng template mathcing method
@@ -1431,42 +1715,9 @@ def extract_traits(image_file):
     
     # parse barcode image using pylibdmtx lib
     tag_info = barcode_detect(marker_barcode_img)
-    
 
     
-    ################################################################################################
-    # analyze color distribution of the segmented objects
-    '''
-    num_clusters = 5
-    
-    #save color analysisi/quantization result
-    (rgb_colors, counts, hex_colors) = color_region(image.copy(), thresh_combined_mask, save_path, num_clusters)
-    
-
-    #print("hex_colors = {} {}\n".format(hex_colors, type(hex_colors)))
-    
-    list_counts = list(counts.values())
-    
-    #list_hex_colors = list(hex_colors)
-    
-    #print(type(list_counts))
-    
-    color_ratio = []
-    
-    for value_counts, value_hex in zip(list_counts, hex_colors):
-        
-        #print(percentage(value, np.sum(list_counts)))
-        
-        color_ratio.append(percentage(value_counts, np.sum(list_counts)))
-
-    '''
-    ####################################################
-    
-      
-    
-    #return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
-    
-    return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, img_brightness
+    return image_file_name, tag_info, kernel_size, n_kernels, kernel_area, kernel_area_ratio, max_width, max_height, img_brightness
     
 
 
@@ -1487,6 +1738,7 @@ if __name__ == '__main__':
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 250000,  help = 'min size of object to be segmented.')
+    ap.add_argument('-md', '--min_dist', type = int, required = False, default = 30,  help = 'distance threshold for watershed segmentation.')
     
     args = vars(ap.parse_args())
     
@@ -1499,7 +1751,7 @@ if __name__ == '__main__':
     barcode_path = args["barcode"]
     
     min_size = args['min_size']
-    #min_distance_value = args['min_dist']
+    min_distance_value = args['min_dist']
     
     
     # path of the marker (coin), default path will be '/marker_template/marker.png' and '/marker_template/barcode.png'
@@ -1584,18 +1836,21 @@ if __name__ == '__main__':
         pool.terminate()
     
     
+    # unwarp all the computed trait values
     filename = list(zip(*result))[0]
     tag_info = list(zip(*result))[1]
-    avg_kernel_area = list(zip(*result))[2]
-    avg_kernel_area_ratio = list(zip(*result))[3]
-    avg_width = list(zip(*result))[4]
-    avg_height = list(zip(*result))[5]
-    brightness = list(zip(*result))[6]
+    avg_kernel_size = list(zip(*result))[2]
+    avg_n_kernels = list(zip(*result))[3]
+    avg_kernel_area = list(zip(*result))[4]
+    avg_kernel_area_ratio = list(zip(*result))[5]
+    avg_width = list(zip(*result))[6]
+    avg_height = list(zip(*result))[7]
+    brightness = list(zip(*result))[8]
 
-    
-    for i, (v0,v1,v2,v3,v4,v5,v6) in enumerate(zip(filename, tag_info, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height, brightness)):
+    # create result list
+    for i, (v0,v1,v2,v3,v4,v5,v6, v7,v8) in enumerate(zip(filename, tag_info, avg_kernel_size, avg_n_kernels, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height, brightness)):
 
-        result_list.append([v0,v1,v2,v3,v4,v5,v6])
+        result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8])
     
     
     
@@ -1608,7 +1863,7 @@ if __name__ == '__main__':
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
     
-    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'brightness'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_size', 'avg_n_kernels', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'brightness'], tablefmt = 'orgtbl')
     
     print(table + "\n")
 
@@ -1645,11 +1900,13 @@ if __name__ == '__main__':
 
         sheet.cell(row = 1, column = 1).value = 'filename'
         sheet.cell(row = 1, column = 2).value = 'tag_info'
-        sheet.cell(row = 1, column = 3).value = 'avg_kernel_area'
-        sheet.cell(row = 1, column = 4).value = 'avg_kernel_area_ratio'
-        sheet.cell(row = 1, column = 5).value = 'avg_width'
-        sheet.cell(row = 1, column = 6).value = 'avg_height'
-        sheet.cell(row = 1, column = 7).value = 'brightness'
+        sheet.cell(row = 1, column = 3).value = 'avg_kernel_size'
+        sheet.cell(row = 1, column = 4).value = 'avg_n_kernels'
+        sheet.cell(row = 1, column = 5).value = 'avg_kernel_area'
+        sheet.cell(row = 1, column = 6).value = 'avg_kernel_area_ratio'
+        sheet.cell(row = 1, column = 7).value = 'avg_width'
+        sheet.cell(row = 1, column = 8).value = 'avg_height'
+        sheet.cell(row = 1, column = 9).value = 'brightness'
 
 
         '''

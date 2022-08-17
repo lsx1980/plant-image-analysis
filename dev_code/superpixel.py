@@ -1,5 +1,5 @@
 # USAGE
-# python3 superpixel.py --image 01.jpg
+# python3 superpixel.py -i 01.jpg
 
 # import the necessary packages
 from skimage.segmentation import slic
