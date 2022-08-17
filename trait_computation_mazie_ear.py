@@ -1667,9 +1667,9 @@ def extract_traits(image_file):
     plt.hist(area_rec, bins)
     
     # Add title and axis names
-    plt.title('Individual kernel size distributation')
-    plt.xlabel('Kernel Numbers')
-    plt.ylabel('Individual kernel size (unit:pixel)')
+    plt.title('Individual maize kernel size distributation')
+    plt.xlabel('Maize kernel number')
+    plt.ylabel('Individual maize kernel size (unit:pixel)')
     
     result_file = (save_path + base_name + '_kernel_hist' + file_extension)
     plt.savefig(result_file)
