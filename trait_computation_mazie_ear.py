@@ -1668,8 +1668,8 @@ def extract_traits(image_file):
     
     # Add title and axis names
     plt.title('Individual maize kernel size distributation')
-    plt.xlabel('Maize kernel number')
-    plt.ylabel('Individual maize kernel size (unit:pixel)')
+    plt.ylabel('Maize kernel number')
+    plt.xlabel('Individual maize kernel size (unit:pixel)')
     
     result_file = (save_path + base_name + '_kernel_hist' + file_extension)
     plt.savefig(result_file)
@@ -1739,6 +1739,8 @@ if __name__ == '__main__':
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 250000,  help = 'min size of object to be segmented.')
     ap.add_argument('-md', '--min_dist', type = int, required = False, default = 30,  help = 'distance threshold for watershed segmentation.')
+    ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 27,  help = 'coin size in mm')
+    ap.add_argument('-vkr', '--valid_kernel_ratio', type = float, required = False, default = 0.15,  help = 'valid kernel ratio copmpared with ear length')
     
     args = vars(ap.parse_args())
     
