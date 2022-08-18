@@ -1382,12 +1382,45 @@ def kernel_traits_computation(masked_img, labels):
     
 
 
-def valid_kernel_mask(orig_mask, cnt_width, cnt_height, cnt_x, cnt_y, valid_kernel_ratio):
+def valid_kernel_mask(orig_mask, max_width, max_height, avg_x, avg_y, valid_kernel_ratio_top, valid_kernel_ratio_bottom):
     
+    """compute mask image for valid kernel area defined by the ratio of top/bottom to the ear length
     
-    valid_kernel_mask = orig_mask
+    Inputs: 
     
-    return valid_kernel_mask
+        orig_mask: ear object segmentation mask
+        
+        max_width, max_height: dimension of the ear object
+        
+        avg_x, avg_y: coordinates of ear object
+        
+        valid_kernel_ratio_top, valid_kernel_ratio_bottom: user defined ratio of top/bottom to the ear length
+
+    Returns:
+    
+        v_mask: mask image for valid kernel area
+        
+    """
+    
+    # a mask with the same size as inout image, pixels with a value of 0 (background) are
+    # ignored in the original image while mask pixels with a value of
+    # 255 (foreground) are allowed to be kept
+    img_height, img_width = orig_mask.shape
+    
+    #print(img_height, img_width)
+    
+    v_mask = np.zeros(orig_mask.shape, dtype = "uint8")
+    
+    # compute the coordinates to get the masking area
+    x_l = 0
+    x_r = int(avg_x+img_width)
+    y_t = int(avg_y + max_height*valid_kernel_ratio_top)
+    y_b = int(avg_y + max_height*(1-valid_kernel_ratio_bottom))
+    
+    # assign area of valid kernel 
+    v_mask[y_t : y_b, x_l : x_r] = 255
+    
+    return v_mask
     
 
 
@@ -1488,44 +1521,9 @@ def extract_traits(image_file):
     
     kernel_size = 0
     
-    
-    ###################################################################################
-    # set the parameters for adoptive threshholding method
-    GaussianBlur_ksize = 7
-    
-    blockSize = 81
-    
-    weighted_mean = 10
-    
-    # adoptive threshholding method to the masked image from mutilple_objects_seg
-    (thresh_adaptive_threshold, maksed_img_adaptive_threshold) = adaptive_threshold(masked_image, GaussianBlur_ksize, blockSize, weighted_mean)
-    
-    # save result
-    result_file = (save_path + base_name + '_thresh_adaptive_threshold' + file_extension)
-    cv2.imwrite(result_file, thresh_adaptive_threshold)
-    
-    # save result
-    result_file = (save_path + base_name + '_maksed_img_adaptive_threshold' + file_extension)
-    cv2.imwrite(result_file, maksed_img_adaptive_threshold)
-
-    
-    ###################################################################################
-    # set the parameters for wateshed segmentation method
-    min_distance_value = args['min_dist']
-    
-    (labels, label_overlay, labeled_img, count_kernel) = watershed_seg(maksed_img_adaptive_threshold, min_distance_value)
-    
-    # save result
-    result_file = (save_path + base_name + '_label_overlay' + file_extension)
-    cv2.imwrite(result_file, label_overlay)
-    
-    # save result
-    result_file = (save_path + base_name + '_labeled_img' + file_extension)
-    cv2.imwrite(result_file, labeled_img)
-    
 
     ####################################################################################
- 
+    '''
     # Convert mean shift image from BRG color space to LAB space and extract B channel
     L, A, B = cv2.split(cv2.cvtColor(masked_image, cv2.COLOR_BGR2LAB))
     
@@ -1540,7 +1538,7 @@ def extract_traits(image_file):
     # save Lab result
     result_file = (save_path + base_name + '_B' + file_extension)
     cv2.imwrite(result_file, B)
-    
+    '''
     
     # parse input arguments
     args_colorspace = args['color_space']
@@ -1558,7 +1556,7 @@ def extract_traits(image_file):
     cv2.imwrite(result_file, thresh)
     
    ###############################################################################################
-    #combine external contours and internal contoures to compute object mask
+    #combine external contours and internal contours to compute object mask
     combined_mask = mask_seg | thresh
     
     
@@ -1570,7 +1568,7 @@ def extract_traits(image_file):
     #print(filename)
     cv2.imwrite(result_file, combined_mask)
     
-    # #combine external contours and internal contoures 
+    # #combine external contours and internal contours 
     thresh_combined_mask = cv2.threshold(combined_mask, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     
     # find contours in the thresholded image
@@ -1595,10 +1593,11 @@ def extract_traits(image_file):
     
     # save result
     result_file = (save_path + base_name + '_excontour' + file_extension)
-    #print(filename)
+
     cv2.imwrite(result_file, trait_img)
     
-        #################################################################################################################################
+
+    #################################################################################################################################
     #compute the area ratio of interal contour verse external contour, kernal area ratio
     area_max_external = max(cnt_area_external)
     
@@ -1644,9 +1643,60 @@ def extract_traits(image_file):
     max_width = sum(cnt_width) / len(cnt_width)
     max_height = sum(cnt_height) / len(cnt_height)
     
+    avg_x = sum(cnt_x) / len(cnt_x)
+    avg_y = sum(cnt_y) / len(cnt_y)
+    
+    #################################################################################
+    
+    v_mask = valid_kernel_mask(mask_seg.copy(), max_width, max_height, avg_x, avg_y, valid_kernel_ratio_top, valid_kernel_ratio_bottom)
+    
+    # apply individual object mask
+    masked_valid_kernel = cv2.bitwise_and(masked_image.copy(), masked_image.copy(), mask = v_mask)
+    
+    # save result
+    result_file = (save_path + base_name + '_masked_valid_kernel' + file_extension)
+    cv2.imwrite(result_file, masked_valid_kernel)
+    
+
+    ###################################################################################
+    # set the parameters for adoptive threshholding method
+    GaussianBlur_ksize = 7
+    
+    blockSize = 81
+    
+    weighted_mean = 10
+    
+    # adoptive threshholding method to the masked image from mutilple_objects_seg
+    (thresh_adaptive_threshold, maksed_img_adaptive_threshold) = adaptive_threshold(masked_valid_kernel, GaussianBlur_ksize, blockSize, weighted_mean)
+    
+    # save result
+    result_file = (save_path + base_name + '_thresh_adaptive_threshold' + file_extension)
+    cv2.imwrite(result_file, thresh_adaptive_threshold)
+    
+    # save result
+    result_file = (save_path + base_name + '_maksed_img_adaptive_threshold' + file_extension)
+    cv2.imwrite(result_file, maksed_img_adaptive_threshold)
+
+    
+    ###################################################################################
+    # set the parameters for wateshed segmentation method
+    min_distance_value = args['min_dist']
+    
+    (labels, label_overlay, labeled_img, count_kernel) = watershed_seg(maksed_img_adaptive_threshold, min_distance_value)
+    
+    # save result
+    result_file = (save_path + base_name + '_label_overlay' + file_extension)
+    cv2.imwrite(result_file, label_overlay)
+    
+    # save result
+    result_file = (save_path + base_name + '_labeled_img' + file_extension)
+    cv2.imwrite(result_file, labeled_img)
+    
+
+
     ###################################################################################
     # compute the kernel traits
-    (label_trait, kernel_index_rec, contours_rec, area_rec, major_axis_rec, minor_axis_rec) = kernel_traits_computation(masked_image, labels)
+    (label_trait, kernel_index_rec, contours_rec, area_rec, major_axis_rec, minor_axis_rec) = kernel_traits_computation(masked_valid_kernel, labels)
     
     # save result
     result_file = (save_path + base_name + '_kernel_overlay' + file_extension)
@@ -1755,7 +1805,8 @@ if __name__ == '__main__':
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 250000,  help = 'min size of object to be segmented.')
     ap.add_argument('-md', '--min_dist', type = int, required = False, default = 30,  help = 'distance threshold for watershed segmentation.')
     ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 2.7,  help = 'coin size in cm')
-    ap.add_argument('-vkr', '--valid_kernel_ratio', type = float, required = False, default = 0.15,  help = 'valid kernel ratio copmpared with ear length')
+    ap.add_argument('-vkrt', '--valid_kernel_ratio_top', type = float, required = False, default = 0.35,  help = 'valid kernel ratio copmpared with ear length from top')
+    ap.add_argument('-vkrb', '--valid_kernel_ratio_bottom', type = float, required = False, default = 0.15,  help = 'valid kernel ratio copmpared with ear length from bottom')
     
     args = vars(ap.parse_args())
     
@@ -1771,7 +1822,8 @@ if __name__ == '__main__':
     min_distance_value = args['min_dist']
     
     coin_size = args['coin_size']
-    valid_kernel_ratio = args['valid_kernel_ratio']
+    valid_kernel_ratio_top = args['valid_kernel_ratio_top']
+    valid_kernel_ratio_bottom = args['valid_kernel_ratio_bottom']
     
     # path of the marker (coin), default path will be '/marker_template/marker.png' and '/marker_template/barcode.png'
     # can be changed based on requirement
