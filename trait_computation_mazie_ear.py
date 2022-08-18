@@ -549,6 +549,9 @@ def comp_external_contour(orig, thresh, img_overlay):
     area_holes_sum = 0
     cnt_area = [0] * 2
     
+    cnt_x = []
+    cnt_y = []
+    
     cnt_width = []
     cnt_height = []
     
@@ -618,12 +621,14 @@ def comp_external_contour(orig, thresh, img_overlay):
             cnt_area[index] = (area_c_cmax)
             cnt_width.append(w)
             cnt_height.append(h)
+            cnt_x.append(x)
+            cnt_y.append(y)
             
-            
+
             print("Contour {0} shape info: Width = {1:.2f}, height= {2:.2f}, area = {3:.2f}\n".format(index+1, w, h, area_c_cmax))
    
             
-    return trait_img, cnt_area, cnt_width, cnt_height
+    return trait_img, cnt_area, cnt_width, cnt_height, cnt_x, cnt_y
     
 
 
@@ -1377,7 +1382,13 @@ def kernel_traits_computation(masked_img, labels):
     
 
 
-
+def valid_kernel_mask(orig_mask, cnt_width, cnt_height, cnt_x, cnt_y, valid_kernel_ratio):
+    
+    
+    valid_kernel_mask = orig_mask
+    
+    return valid_kernel_mask
+    
 
 
 def extract_traits(image_file):
@@ -1580,7 +1591,7 @@ def extract_traits(image_file):
     
     ################################################################################################################################
     #compute external traits
-    (trait_img, cnt_area_external, cnt_width, cnt_height) = comp_external_contour(orig, thresh_combined_mask, img_overlay)
+    (trait_img, cnt_area_external, cnt_width, cnt_height, cnt_x, cnt_y) = comp_external_contour(orig, thresh_combined_mask, img_overlay)
     
     # save result
     result_file = (save_path + base_name + '_excontour' + file_extension)
@@ -1677,7 +1688,7 @@ def extract_traits(image_file):
 
  
     ###################################################################################################
-    # detect coin and bracode uisng template mathcing method
+    # detect coin and barcode uisng template mathcing method
     
     # define right bottom area for coin detection
     x = int(img_width*0.5)
@@ -1697,7 +1708,11 @@ def extract_traits(image_file):
     cv2.imwrite(result_file, marker_coin_img)
     
     # Brazil 1 Real coin dimension is 27 × 27 mm
-    print("The width of Brazil 1 Real coin in the marker image is {:.0f} × {:.0f} pixels\n".format(coins_width_contour, coins_width_circle))
+    print("The width of coin in the marker image is {:.0f} × {:.0f} pixels\n".format(coins_width_contour, coins_width_circle))
+    
+    coins_width_avg = int((coins_width_contour + coins_width_circle)*0.5)
+    
+    pixel_cm_ratio = coins_width_avg/coin_size
     
 
     # define left bottom area for barcode detection
@@ -1717,7 +1732,7 @@ def extract_traits(image_file):
     tag_info = barcode_detect(marker_barcode_img)
 
     
-    return image_file_name, tag_info, kernel_size, n_kernels, kernel_area, kernel_area_ratio, max_width, max_height, img_brightness
+    return image_file_name, tag_info, kernel_size, n_kernels, kernel_area, kernel_area_ratio, max_width, max_height, coins_width_avg, coin_size, pixel_cm_ratio, img_brightness
     
 
 
@@ -1739,7 +1754,7 @@ if __name__ == '__main__':
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 250000,  help = 'min size of object to be segmented.')
     ap.add_argument('-md', '--min_dist', type = int, required = False, default = 30,  help = 'distance threshold for watershed segmentation.')
-    ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 27,  help = 'coin size in mm')
+    ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 2.7,  help = 'coin size in cm')
     ap.add_argument('-vkr', '--valid_kernel_ratio', type = float, required = False, default = 0.15,  help = 'valid kernel ratio copmpared with ear length')
     
     args = vars(ap.parse_args())
@@ -1755,6 +1770,8 @@ if __name__ == '__main__':
     min_size = args['min_size']
     min_distance_value = args['min_dist']
     
+    coin_size = args['coin_size']
+    valid_kernel_ratio = args['valid_kernel_ratio']
     
     # path of the marker (coin), default path will be '/marker_template/marker.png' and '/marker_template/barcode.png'
     # can be changed based on requirement
@@ -1806,6 +1823,8 @@ if __name__ == '__main__':
     n_images = len(imgList)
     
     result_list = []
+    
+    result_list_cm = []
 
     '''
     ######################################################################################
@@ -1847,12 +1866,17 @@ if __name__ == '__main__':
     avg_kernel_area_ratio = list(zip(*result))[5]
     avg_width = list(zip(*result))[6]
     avg_height = list(zip(*result))[7]
-    brightness = list(zip(*result))[8]
+    coins_width_avg = list(zip(*result))[8]
+    coin_size = list(zip(*result))[9]
+    pixel_cm_ratio = list(zip(*result))[10]
+    brightness = list(zip(*result))[11]
 
     # create result list
-    for i, (v0,v1,v2,v3,v4,v5,v6, v7,v8) in enumerate(zip(filename, tag_info, avg_kernel_size, avg_n_kernels, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height, brightness)):
+    for i, (v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11) in enumerate(zip(filename, tag_info, avg_kernel_size, avg_n_kernels, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height, coins_width_avg, coin_size, pixel_cm_ratio, brightness)):
 
-        result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8])
+        result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11])
+        
+        result_list_cm.append([v0,v1,v2/pow(v10,2),v3,v4/pow(v10,2),v5,v6/v10,v7/v10,v8/v10,v9,v10,v11])
     
     
     
@@ -1865,7 +1889,7 @@ if __name__ == '__main__':
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
     
-    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_size', 'avg_n_kernels', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'brightness'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_size', 'avg_n_kernels', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'coins_width_avg', 'coin_size', 'pixel_cm_ratio', 'brightness'], tablefmt = 'orgtbl')
     
     print(table + "\n")
 
@@ -1875,58 +1899,79 @@ if __name__ == '__main__':
     if (args['result']):
 
         trait_file = (args['result'] + 'trait.xlsx')
-        trait_file_csv = (args['result'] + 'trait.csv')
+
     else:
         trait_file = (file_path + 'trait.xlsx')
-        trait_file_csv = (file_path + 'trait.csv')
+
     
-    
+    # if excel file exits, clear sheets content
     if os.path.isfile(trait_file):
         # update values
         #Open an xlsx for reading
         wb = openpyxl.load_workbook(trait_file)
 
         #Get the current Active Sheet
-        sheet = wb.active
-        
-        sheet.delete_rows(2, sheet.max_row+1) # for entire sheet
-        
-        #sheet_leaf = wb.create_sheet()
+        sheet_pixel = wb['trait_pixel']
 
+        sheet_pixel.delete_rows(2, sheet_pixel.max_row - 1) # for entire sheet
+
+        #Get the current Active Sheet
+        sheet_cm = wb['trait_cm']
+
+        sheet_cm.delete_rows(2, sheet_cm.max_row - 1) # for entire sheet
+        
+    # if excel file does not exit, create sheets content
     else:
         # Keep presets
         wb = openpyxl.Workbook()
-        sheet = wb.active
         
-        sheet_leaf = wb.create_sheet()
+        #sheet = wb.active
+        
+        sheet_pixel = wb.active
+        sheet_pixel.title = "trait_pixel"
+        
+        sheet_cm = wb.create_sheet("Sheet2")
+        sheet_cm.title = "trait_cm"
+ 
+    # assign traits label names
+    sheet_pixel.cell(row = 1, column = 1).value = 'filename'
+    sheet_pixel.cell(row = 1, column = 2).value = 'tag_info'
+    sheet_pixel.cell(row = 1, column = 3).value = 'avg_kernel_size'
+    sheet_pixel.cell(row = 1, column = 4).value = 'avg_n_kernels'
+    sheet_pixel.cell(row = 1, column = 5).value = 'avg_kernel_area'
+    sheet_pixel.cell(row = 1, column = 6).value = 'avg_kernel_area_ratio'
+    sheet_pixel.cell(row = 1, column = 7).value = 'avg_width'
+    sheet_pixel.cell(row = 1, column = 8).value = 'avg_height'
+    sheet_pixel.cell(row = 1, column = 9).value = 'coins_width_avg'
+    sheet_pixel.cell(row = 1, column = 10).value = 'coin_size'
+    sheet_pixel.cell(row = 1, column = 11).value = 'pixel_cm_ratio'
+    sheet_pixel.cell(row = 1, column = 12).value = 'brightness'
 
-        sheet.cell(row = 1, column = 1).value = 'filename'
-        sheet.cell(row = 1, column = 2).value = 'tag_info'
-        sheet.cell(row = 1, column = 3).value = 'avg_kernel_size'
-        sheet.cell(row = 1, column = 4).value = 'avg_n_kernels'
-        sheet.cell(row = 1, column = 5).value = 'avg_kernel_area'
-        sheet.cell(row = 1, column = 6).value = 'avg_kernel_area_ratio'
-        sheet.cell(row = 1, column = 7).value = 'avg_width'
-        sheet.cell(row = 1, column = 8).value = 'avg_height'
-        sheet.cell(row = 1, column = 9).value = 'brightness'
 
-
-        '''
-        sheet.cell(row = 1, column = 7).value = 'color distribution cluster 1'
-        sheet.cell(row = 1, column = 8).value = 'color distribution cluster 2'
-        sheet.cell(row = 1, column = 9).value = 'color distribution cluster 3'
-        sheet.cell(row = 1, column = 10).value = 'color distribution cluster 4'
-        sheet.cell(row = 1, column = 11).value = 'color cluster 1 hex value'
-        sheet.cell(row = 1, column = 12).value = 'color cluster 2 hex value'
-        sheet.cell(row = 1, column = 13).value = 'color cluster 3 hex value'
-        sheet.cell(row = 1, column = 14).value = 'color cluster 4 hex value'        
-        '''
-
+    # assign traits label names
+    sheet_cm.cell(row = 1, column = 1).value = 'filename'
+    sheet_cm.cell(row = 1, column = 2).value = 'tag_info'
+    sheet_cm.cell(row = 1, column = 3).value = 'avg_kernel_size'
+    sheet_cm.cell(row = 1, column = 4).value = 'avg_n_kernels'
+    sheet_cm.cell(row = 1, column = 5).value = 'avg_kernel_area'
+    sheet_cm.cell(row = 1, column = 6).value = 'avg_kernel_area_ratio'
+    sheet_cm.cell(row = 1, column = 7).value = 'avg_width'
+    sheet_cm.cell(row = 1, column = 8).value = 'avg_height'
+    sheet_cm.cell(row = 1, column = 9).value = 'coins_width_avg'
+    sheet_cm.cell(row = 1, column = 10).value = 'coin_size'
+    sheet_cm.cell(row = 1, column = 11).value = 'pixel_cm_ratio'
+    sheet_cm.cell(row = 1, column = 12).value = 'brightness'     
+        
+    # write traits values
     for row in result_list:
-        sheet.append(row)
+        sheet_pixel.append(row)
+    
+    for row in result_list_cm:
+        sheet_cm.append(row)
+        
    
     
-    #save the csv file
+    #save computation traits results as xlsx format excel file
     wb.save(trait_file)
     
     
