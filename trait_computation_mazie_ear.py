@@ -82,6 +82,9 @@ from contextlib import closing
 
 import pandas as pd
 
+
+import natsort 
+
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -1869,6 +1872,9 @@ if __name__ == '__main__':
     
     #accquire image file list
     imgList = sorted(glob.glob(image_file_path))
+    
+    imgList = natsort.natsorted(imgList,reverse = False)
+    
 
     #print((imgList))
     
