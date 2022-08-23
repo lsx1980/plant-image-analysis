@@ -1172,8 +1172,11 @@ def extract_traits(image_file):
     cv2.imwrite(result_file, marker_coin_img)
     
     # Brazil 1 Real coin dimension is 27 × 27 mm
-    print("The width of Brazil 1 Real coin in the marker image is {:.0f} × {:.0f} pixels\n".format(coins_width_contour, coins_width_circle))
+    print("The width of coin in the marker image is {:.0f} × {:.0f} pixels\n".format(coins_width_contour, coins_width_circle))
     
+    coins_width_avg = int((coins_width_contour + coins_width_circle)*0.5)
+    
+    pixel_cm_ratio = coins_width_avg/coin_size
 
     # define left bottom area for barcode detection
     x = 0
@@ -1239,7 +1242,7 @@ def extract_traits(image_file):
     
     #return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
     
-    return image_file_name, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, branch_length
+    return image_file_name, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, coins_width_avg, coin_size, pixel_cm_ratio
     
 
 
@@ -1260,6 +1263,7 @@ if __name__ == '__main__':
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 10000,  help = 'min size of object to be segmented.')
+    ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 2.7,  help = 'coin size in cm')
     
     args = vars(ap.parse_args())
     
@@ -1272,7 +1276,7 @@ if __name__ == '__main__':
     barcode_path = args["barcode"]
     
     min_size = args['min_size']
-    #min_distance_value = args['min_dist']
+    coin_size = args['coin_size']
     
     
     # path of the marker (coin), default path will be '/marker_template/marker.png' and '/marker_template/barcode.png'
@@ -1325,27 +1329,28 @@ if __name__ == '__main__':
     n_images = len(imgList)
     
     result_list = []
-
-    result_list_branch = []
     
+    result_list_cm = []
+    
+    '''
     #loop execute to get all traits
     for image in imgList:
         
         #(filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
         #result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        (filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, branch_length) = extract_traits(image)
+        (filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, coin_size, pixel_cm_ratio) = extract_traits(image)
 
-        result_list.append([filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length])
+        result_list.append([filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, coin_size, pixel_cm_ratio])
         
         for i in range(len(branch_length)):
             
-            result_list_branch.append([filename, str(i).zfill(2), branch_length[i]])
+            result_list_cm.append([filename, str(i).zfill(2), branch_length[i]])
 
- 
+    '''
     ###########################################################
     #parallel processing module
-    '''
+    
     # get cpu number for parallel processing
     agents = psutil.cpu_count() - 2 
     #agents = multiprocessing.cpu_count() 
@@ -1359,7 +1364,7 @@ if __name__ == '__main__':
         result = pool.map(extract_traits, imgList)
         pool.terminate()
         
-        
+    # unwarp all the computed trait values
     filename = list(zip(*result))[0]
     tag_info = list(zip(*result))[1]
     tassel_area = list(zip(*result))[2]
@@ -1367,13 +1372,18 @@ if __name__ == '__main__':
     avg_width = list(zip(*result))[4]
     avg_height = list(zip(*result))[5]
     n_branch = list(zip(*result))[6]
+    avg_branch_length = list(zip(*result))[7]
+    coins_width_avg = list(zip(*result))[8]
+    coin_size = list(zip(*result))[9]
+    pixel_cm_ratio = list(zip(*result))[10]
 
-    
-    for i, (v0,v1,v2,v3,v4,v5,v6) in enumerate(zip(filename, tag_info, tassel_area, tassel_area_ratio, avg_width, avg_height, n_branch)):
+    # create result list
+    for i, (v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10) in enumerate(zip(filename, tag_info, tassel_area, tassel_area_ratio, avg_width, avg_height, n_branch, avg_branch_length, coins_width_avg, coin_size, pixel_cm_ratio)):
 
-        result_list.append([v0,v1,v2,v3,v4,v5,v6])
+        result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10])
+        
+        result_list_cm.append([v0,v1,v2/pow(v10,2),v3,v4/v10,v5/v10,v6,v7/v10,v8/v10,v9,v10])
     
-    '''
 
     #################################################################################
     #print out result on screen output as table
@@ -1383,7 +1393,7 @@ if __name__ == '__main__':
     #output in command window in a sum table
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
-    table = tabulate(result_list, headers = ['filename', 'tag_info', 'tassel_area', 'tassel_area_ratio', 'avg_width', 'avg_height', 'number_branches', 'average branch_length'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'tag_info', 'tassel_area', 'tassel_area_ratio', 'avg_width', 'avg_height', 'number_branches', 'average branch_length', 'coins_width_avg', 'coin_size', 'pixel_cm_ratio'], tablefmt = 'orgtbl')
     
     print(table + "\n")
     
@@ -1403,48 +1413,67 @@ if __name__ == '__main__':
 
     if os.path.exists(trait_file):
         
-        #os.remove(trait_file)
-        
+        # update values
         #Open an xlsx for reading
         wb = openpyxl.load_workbook(trait_file)
 
         #Get the current Active Sheet
-        sheet = wb.active
+        sheet_pixel = wb['trait_pixel']
+
+        sheet_pixel.delete_rows(2, sheet_pixel.max_row - 1) # for entire sheet
+
+        #Get the current Active Sheet
+        sheet_cm = wb['trait_cm']
+
+        sheet_cm.delete_rows(2, sheet_cm.max_row - 1) # for entire sheet
         
-        sheet.delete_rows(2, sheet.max_row+1) # for entire sheet
-        
-        sheet_branch = wb.create_sheet()
 
     else:
         # Keep presets
         wb = openpyxl.Workbook()
         
-        sheet = wb.active
+        sheet_pixel = wb.active
+        sheet_pixel.title = "trait_pixel"
         
-        sheet_branch = wb.create_sheet()
+        sheet_cm = wb.create_sheet("Sheet2")
+        sheet_cm.title = "trait_cm"
 
-        sheet.cell(row = 1, column = 1).value = 'filename'
-        sheet.cell(row = 1, column = 2).value = 'tag_info'
-        sheet.cell(row = 1, column = 3).value = 'tassel_area'
-        sheet.cell(row = 1, column = 4).value = 'tassel_area_ratio'
-        sheet.cell(row = 1, column = 5).value = 'avg_width'
-        sheet.cell(row = 1, column = 6).value = 'avg_height'
-        sheet.cell(row = 1, column = 7).value = 'number of branches'
-        sheet.cell(row = 1, column = 8).value = 'avg branch length'
+    sheet_pixel.cell(row = 1, column = 1).value = 'filename'
+    sheet_pixel.cell(row = 1, column = 2).value = 'tag_info'
+    sheet_pixel.cell(row = 1, column = 3).value = 'tassel_area'
+    sheet_pixel.cell(row = 1, column = 4).value = 'tassel_area_ratio'
+    sheet_pixel.cell(row = 1, column = 5).value = 'avg_width'
+    sheet_pixel.cell(row = 1, column = 6).value = 'avg_height'
+    sheet_pixel.cell(row = 1, column = 7).value = 'number of branches'
+    sheet_pixel.cell(row = 1, column = 8).value = 'avg branch length'
+    sheet_pixel.cell(row = 1, column = 9).value = 'coins_width_avg'
+    sheet_pixel.cell(row = 1, column = 10).value = 'coin_size'
+    sheet_pixel.cell(row = 1, column = 11).value = 'pixel_cm_ratio'
 
-        
-        sheet_branch.cell(row = 1, column = 1).value = 'filename'
-        sheet_branch.cell(row = 1, column = 2).value = 'branch index'
-        sheet_branch.cell(row = 1, column = 3).value = 'branch length'
+    sheet_cm.cell(row = 1, column = 1).value = 'filename'
+    sheet_cm.cell(row = 1, column = 2).value = 'tag_info'
+    sheet_cm.cell(row = 1, column = 3).value = 'tassel_area'
+    sheet_cm.cell(row = 1, column = 4).value = 'tassel_area_ratio'
+    sheet_cm.cell(row = 1, column = 5).value = 'avg_width'
+    sheet_cm.cell(row = 1, column = 6).value = 'avg_height'
+    sheet_cm.cell(row = 1, column = 7).value = 'number of branches'
+    sheet_cm.cell(row = 1, column = 8).value = 'avg branch length'
+    sheet_cm.cell(row = 1, column = 9).value = 'coins_width_avg'
+    sheet_cm.cell(row = 1, column = 10).value = 'coin_size'
+    sheet_cm.cell(row = 1, column = 11).value = 'pixel_cm_ratio'
 
 
+
+    # write traits values
     for row in result_list:
-        sheet.append(row)
-   
-    for row in result_list_branch:
-        sheet_branch.append(row)
+        sheet_pixel.append(row)
+    
+    for row in result_list_cm:
+        sheet_cm.append(row)
         
-    #save the xlsx file
+   
+    
+    #save computation traits results as xlsx format excel file
     wb.save(trait_file)
     
     
