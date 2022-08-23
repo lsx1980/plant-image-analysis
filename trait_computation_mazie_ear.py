@@ -13,9 +13,9 @@ Created: 2022-09-29
 
 USAGE:
 
-time python3 trait_computation_mazie_ear.py -p ~/example/plant_test/seeds/test/ -ft png -s Lab -c 0 -min 250000
+time python3 trait_computation_mazie_ear.py -p ~/example/plant_test/seeds/test_ear/ -ft png -s Lab -c 0 -min 250000
 
-time python3 trait_computation_mazie_ear.py -p ~/example/plant_test/seeds/test/ -ft png -s HSV -c 1 -min 250000
+time python3 trait_computation_mazie_ear.py -p ~/example/plant_test/seeds/test_ear/ -ft png -s HSV -c 1 -min 250000
 
 
 
