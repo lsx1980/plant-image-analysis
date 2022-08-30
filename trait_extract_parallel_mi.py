@@ -43,9 +43,9 @@ from scipy import optimize
 from scipy import ndimage
 from scipy.interpolate import interp1d
 
-from skan import skeleton_to_csgraph, Skeleton, summarize, draw
+#from skan import skeleton_to_csgraph, Skeleton, summarize, draw
 
-import networkx as nx
+#import networkx as nx
 
 import imutils
 
