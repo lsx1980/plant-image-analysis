@@ -1207,7 +1207,9 @@ def extract_traits(image_file):
     cv2.imwrite(result_file, barcode_sharp)
     
     # parse barcode image using pylibdmtx lib
-    tag_info = barcode_detect(barcode_sharp)
+    #tag_info = barcode_detect(barcode_sharp)
+    
+    tag_info = 'Unreadable'
     
 
     '''

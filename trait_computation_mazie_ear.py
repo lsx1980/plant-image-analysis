@@ -1520,9 +1520,11 @@ def extract_traits(image_file):
     cv2.imwrite(result_file, masked_image)
     
     
-    n_kernels = 0
+    n_kernels_valid = 0
     
     kernel_size = 0
+    
+    n_kernels_all = 0
     
 
     ####################################################################################
@@ -1657,89 +1659,123 @@ def extract_traits(image_file):
     masked_valid_kernel = cv2.bitwise_and(masked_image.copy(), masked_image.copy(), mask = v_mask)
     
     # save result
-    result_file = (save_path + base_name + '_masked_valid_kernel' + file_extension)
-    cv2.imwrite(result_file, masked_valid_kernel)
+    #result_file = (save_path + base_name + '_masked_valid_kernel' + file_extension)
+    #cv2.imwrite(result_file, masked_valid_kernel)
     
-
-    ###################################################################################
-    # set the parameters for adoptive threshholding method
-    GaussianBlur_ksize = 7
-    
-    blockSize = 81
-    
-    weighted_mean = 10
-    
-    # adoptive threshholding method to the masked image from mutilple_objects_seg
-    (thresh_adaptive_threshold, maksed_img_adaptive_threshold) = adaptive_threshold(masked_valid_kernel, GaussianBlur_ksize, blockSize, weighted_mean)
+    # apply individual object mask
+    masked_all_kernel = cv2.bitwise_and(masked_image.copy(), masked_image.copy(), mask = combined_mask)
     
     # save result
-    result_file = (save_path + base_name + '_thresh_adaptive_threshold' + file_extension)
-    cv2.imwrite(result_file, thresh_adaptive_threshold)
+    #result_file = (save_path + base_name + '_masked_all_kernel' + file_extension)
+    #cv2.imwrite(result_file, masked_all_kernel)
     
-    # save result
-    result_file = (save_path + base_name + '_maksed_img_adaptive_threshold' + file_extension)
-    cv2.imwrite(result_file, maksed_img_adaptive_threshold)
+    mask_valid_all = []
+    mask_valid_all.append(masked_valid_kernel)
+    mask_valid_all.append(masked_all_kernel)
+    
+    
+    key_word = str('mask_sel')
+    
+    avg_n_kernels = []
+    
+    avg_kernel_size = []
+    
+    
+    # loop over the selected contours
+    for idx, mask_value in enumerate(mask_valid_all):
+        
+        if idx == 0:
+            key_word = '_valid'
+        else:
+            key_word = '_all'
+            
+        ###################################################################################
+        # set the parameters for adoptive threshholding method
+        GaussianBlur_ksize = 5
+        
+        blockSize = 41
+        
+        weighted_mean = 10
+        
+        # adoptive threshholding method to the masked image from mutilple_objects_seg
+        (thresh_adaptive_threshold, maksed_img_adaptive_threshold) = adaptive_threshold(mask_value, GaussianBlur_ksize, blockSize, weighted_mean)
+        
+        # save result
+        #result_file = (save_path + base_name + '_thresh_adaptive_threshold' + file_extension)
+        #cv2.imwrite(result_file, thresh_adaptive_threshold)
+        
+        # save result
+        #result_file = (save_path + base_name + '_maksed_img_adaptive_threshold' + file_extension)
+        #cv2.imwrite(result_file, maksed_img_adaptive_threshold)
 
-    
-    ###################################################################################
-    # set the parameters for wateshed segmentation method
-    min_distance_value = args['min_dist']
-    
-    (labels, label_overlay, labeled_img, count_kernel) = watershed_seg(maksed_img_adaptive_threshold, min_distance_value)
-    
-    # save result
-    result_file = (save_path + base_name + '_label_overlay' + file_extension)
-    cv2.imwrite(result_file, label_overlay)
-    
-    # save result
-    result_file = (save_path + base_name + '_labeled_img' + file_extension)
-    cv2.imwrite(result_file, labeled_img)
-    
+        
+        ###################################################################################
+        # set the parameters for wateshed segmentation method
+        min_distance_value = args['min_dist']
+        
+        (labels, label_overlay, labeled_img, count_kernel) = watershed_seg(maksed_img_adaptive_threshold, min_distance_value)
+        
+        # save result
+        result_file = (save_path + base_name + '_label_overlay' + key_word + file_extension)
+        cv2.imwrite(result_file, label_overlay)
+        
+        # save result
+        #result_file = (save_path + base_name + '_labeled_img' + file_extension)
+        #cv2.imwrite(result_file, labeled_img)
+        
 
 
-    ###################################################################################
-    # compute the kernel traits
-    (label_trait, kernel_index_rec, contours_rec, area_rec, major_axis_rec, minor_axis_rec) = kernel_traits_computation(masked_valid_kernel, labels)
-    
-    # save result
-    result_file = (save_path + base_name + '_kernel_overlay' + file_extension)
-    cv2.imwrite(result_file, label_trait)
-    
-    n_kernels = int(count_kernel*0.5)
-    
-    kernel_size = sum(area_rec)/len(area_rec)
-    
-    
-    #####################################
-    # kernel area distributation
-    # panda data format
-    s = pd.Series(area_rec)
-    
-    # output info
-    print("[INFO] Statistical analysis of Kernel traits: (unit:pixels)\n")
-    print(s.describe())
-    print()
-    
-    #counts, bins, _ = plt.hist(area_rec, bins=len(area_rec))
+        ###################################################################################
+        # compute the kernel traits
+        (label_trait, kernel_index_rec, contours_rec, area_rec, major_axis_rec, minor_axis_rec) = kernel_traits_computation(masked_valid_kernel, labels)
+        
+        # save result
+        #result_file = (save_path + base_name + '_kernel_overlay' + file_extension)
+        #cv2.imwrite(result_file, label_trait)
+        
+        n_kernels = int(count_kernel*0.5)
+        
+        kernel_size = sum(area_rec)/len(area_rec)
+        
+        avg_n_kernels.append(n_kernels)
+        avg_kernel_size.append(kernel_size)
+        
+        
+        #####################################
+        # kernel area distributation
+        # panda data format
+        s = pd.Series(area_rec)
+        
+        # output info
+        print("[INFO] Statistical analysis of Kernel traits: (unit:pixels)\n")
+        print(s.describe())
+        print()
+        
+        #counts, bins, _ = plt.hist(area_rec, bins=len(area_rec))
 
-    # save result
-    #result_file = (save_path + base_name + '_kernel_hist' + file_extension)
-    #plt.savefig(result_file)
+        # save result
+        #result_file = (save_path + base_name + '_kernel_hist' + file_extension)
+        #plt.savefig(result_file)
+        
+        # draw distributation histogram
+        _, bins = pd.cut(area_rec, bins=200, retbins=True)
+        plt.hist(area_rec, bins)
+        
+        # Add title and axis names
+        plt.title('Individual maize kernel size distributation')
+        plt.ylabel('Maize kernel number')
+        plt.xlabel('Individual maize kernel size (unit:pixel)')
+        
+        result_file = (save_path + base_name + '_kernel_hist' + key_word + file_extension)
+        plt.savefig(result_file)
+        
     
-    # draw distributation histogram
-    _, bins = pd.cut(area_rec, bins=200, retbins=True)
-    plt.hist(area_rec, bins)
+    n_kernels_valid = avg_n_kernels[0]
     
-    # Add title and axis names
-    plt.title('Individual maize kernel size distributation')
-    plt.ylabel('Maize kernel number')
-    plt.xlabel('Individual maize kernel size (unit:pixel)')
+    n_kernels_all = avg_n_kernels[1]
     
-    result_file = (save_path + base_name + '_kernel_hist' + file_extension)
-    plt.savefig(result_file)
+    kernel_size = sum(avg_kernel_size)/len(avg_kernel_size)
     
-
- 
     ###################################################################################################
     # detect coin and barcode uisng template mathcing method
     
@@ -1785,7 +1821,7 @@ def extract_traits(image_file):
     tag_info = barcode_detect(marker_barcode_img)
 
     
-    return image_file_name, tag_info, kernel_size, n_kernels, kernel_area, kernel_area_ratio, max_width, max_height, coins_width_avg, coin_size, pixel_cm_ratio, img_brightness
+    return image_file_name, tag_info, kernel_size, n_kernels_valid, n_kernels_all, kernel_area, kernel_area_ratio, max_width, max_height, coins_width_avg, coin_size, pixel_cm_ratio, img_brightness
     
 
 
@@ -1806,7 +1842,7 @@ if __name__ == '__main__':
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 250000,  help = 'min size of object to be segmented.')
-    ap.add_argument('-md', '--min_dist', type = int, required = False, default = 30,  help = 'distance threshold for watershed segmentation.')
+    ap.add_argument('-md', '--min_dist', type = int, required = False, default = 15,  help = 'distance threshold for watershed segmentation.')
     ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 2.7,  help = 'coin size in cm')
     ap.add_argument('-vkrt', '--valid_kernel_ratio_top', type = float, required = False, default = 0.35,  help = 'valid kernel ratio copmpared with ear length from top')
     ap.add_argument('-vkrb', '--valid_kernel_ratio_bottom', type = float, required = False, default = 0.15,  help = 'valid kernel ratio copmpared with ear length from bottom')
@@ -1919,22 +1955,23 @@ if __name__ == '__main__':
     filename = list(zip(*result))[0]
     tag_info = list(zip(*result))[1]
     avg_kernel_size = list(zip(*result))[2]
-    avg_n_kernels = list(zip(*result))[3]
-    avg_kernel_area = list(zip(*result))[4]
-    avg_kernel_area_ratio = list(zip(*result))[5]
-    avg_width = list(zip(*result))[6]
-    avg_height = list(zip(*result))[7]
-    coins_width_avg = list(zip(*result))[8]
-    coin_size = list(zip(*result))[9]
-    pixel_cm_ratio = list(zip(*result))[10]
-    brightness = list(zip(*result))[11]
+    avg_n_kernels_valid = list(zip(*result))[3]
+    avg_n_kernels_all = list(zip(*result))[4]
+    avg_kernel_area = list(zip(*result))[5]
+    avg_kernel_area_ratio = list(zip(*result))[6]
+    avg_width = list(zip(*result))[7]
+    avg_height = list(zip(*result))[8]
+    coins_width_avg = list(zip(*result))[9]
+    coin_size = list(zip(*result))[10]
+    pixel_cm_ratio = list(zip(*result))[11]
+    brightness = list(zip(*result))[12]
 
     # create result list
-    for i, (v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11) in enumerate(zip(filename, tag_info, avg_kernel_size, avg_n_kernels, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height, coins_width_avg, coin_size, pixel_cm_ratio, brightness)):
+    for i, (v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12) in enumerate(zip(filename, tag_info, avg_kernel_size, avg_n_kernels_valid, avg_n_kernels_all, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height, coins_width_avg, coin_size, pixel_cm_ratio, brightness)):
 
-        result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11])
+        result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12])
         
-        result_list_cm.append([v0,v1,v2/pow(v10,2),v3,v4/pow(v10,2),v5,v6/v10,v7/v10,v8/v10,v9,v10,v11])
+        result_list_cm.append([v0,v1,v2/pow(v11,2),v3,v4,v5/pow(v11,2),v6,v7/v11,v8/v11,v9/v11,v10,v11,v12])
     
     
     
@@ -1947,7 +1984,7 @@ if __name__ == '__main__':
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
     
-    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_size', 'avg_n_kernels', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'coins_width_avg', 'coin_size', 'pixel_cm_ratio', 'brightness'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_size', 'avg_n_kernels_valid', 'avg_n_kernels_all', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'coins_width_avg', 'coin_size', 'pixel_cm_ratio', 'brightness'], tablefmt = 'orgtbl')
     
     print(table + "\n")
 
@@ -1995,30 +2032,32 @@ if __name__ == '__main__':
     sheet_pixel.cell(row = 1, column = 1).value = 'filename'
     sheet_pixel.cell(row = 1, column = 2).value = 'tag_info'
     sheet_pixel.cell(row = 1, column = 3).value = 'avg_kernel_size'
-    sheet_pixel.cell(row = 1, column = 4).value = 'avg_n_kernels'
-    sheet_pixel.cell(row = 1, column = 5).value = 'avg_kernel_area'
-    sheet_pixel.cell(row = 1, column = 6).value = 'avg_kernel_area_ratio'
-    sheet_pixel.cell(row = 1, column = 7).value = 'avg_width'
-    sheet_pixel.cell(row = 1, column = 8).value = 'avg_height'
-    sheet_pixel.cell(row = 1, column = 9).value = 'coins_width_avg'
-    sheet_pixel.cell(row = 1, column = 10).value = 'coin_size'
-    sheet_pixel.cell(row = 1, column = 11).value = 'pixel_cm_ratio'
-    sheet_pixel.cell(row = 1, column = 12).value = 'brightness'
+    sheet_pixel.cell(row = 1, column = 4).value = 'avg_n_kernels_valid'
+    sheet_pixel.cell(row = 1, column = 5).value = 'avg_n_kernels_all'
+    sheet_pixel.cell(row = 1, column = 6).value = 'avg_kernel_area'
+    sheet_pixel.cell(row = 1, column = 7).value = 'avg_kernel_area_ratio'
+    sheet_pixel.cell(row = 1, column = 8).value = 'avg_width'
+    sheet_pixel.cell(row = 1, column = 9).value = 'avg_height'
+    sheet_pixel.cell(row = 1, column = 10).value = 'coins_width_avg'
+    sheet_pixel.cell(row = 1, column = 11).value = 'coin_size'
+    sheet_pixel.cell(row = 1, column = 12).value = 'pixel_cm_ratio'
+    sheet_pixel.cell(row = 1, column = 13).value = 'brightness'
 
 
     # assign traits label names
     sheet_cm.cell(row = 1, column = 1).value = 'filename'
     sheet_cm.cell(row = 1, column = 2).value = 'tag_info'
     sheet_cm.cell(row = 1, column = 3).value = 'avg_kernel_size'
-    sheet_cm.cell(row = 1, column = 4).value = 'avg_n_kernels'
-    sheet_cm.cell(row = 1, column = 5).value = 'avg_kernel_area'
-    sheet_cm.cell(row = 1, column = 6).value = 'avg_kernel_area_ratio'
-    sheet_cm.cell(row = 1, column = 7).value = 'avg_width'
-    sheet_cm.cell(row = 1, column = 8).value = 'avg_height'
-    sheet_cm.cell(row = 1, column = 9).value = 'coins_width_avg'
-    sheet_cm.cell(row = 1, column = 10).value = 'coin_size'
-    sheet_cm.cell(row = 1, column = 11).value = 'pixel_cm_ratio'
-    sheet_cm.cell(row = 1, column = 12).value = 'brightness'     
+    sheet_cm.cell(row = 1, column = 4).value = 'avg_n_kernels_valid'
+    sheet_cm.cell(row = 1, column = 5).value = 'avg_n_kernels_all'
+    sheet_cm.cell(row = 1, column = 6).value = 'avg_kernel_area'
+    sheet_cm.cell(row = 1, column = 7).value = 'avg_kernel_area_ratio'
+    sheet_cm.cell(row = 1, column = 8).value = 'avg_width'
+    sheet_cm.cell(row = 1, column = 9).value = 'avg_height'
+    sheet_cm.cell(row = 1, column = 10).value = 'coins_width_avg'
+    sheet_cm.cell(row = 1, column = 11).value = 'coin_size'
+    sheet_cm.cell(row = 1, column = 12).value = 'pixel_cm_ratio'
+    sheet_cm.cell(row = 1, column = 13).value = 'brightness'     
         
     # write traits values
     for row in result_list:
