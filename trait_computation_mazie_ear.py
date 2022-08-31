@@ -89,7 +89,6 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-
 MBFACTOR = float(1<<20)
 
 
@@ -1027,13 +1026,13 @@ def region_extracted(orig, x, y, w, h):
 
 
 
-def isbright(image_file):
+def isbright(orig):
     
     """compute the brightness of the input image, Convert it to LAB color space to access the luminous channel which is independent of colors.
     
     Inputs: 
     
-        image file: full path and file name
+        orig: image data after loading
 
     Returns:
     
@@ -1043,9 +1042,6 @@ def isbright(image_file):
     
     # Set up threshold value for luminous channel, can be adjusted and generalized 
     thresh = 1.5
-    
-    # Load image file 
-    orig = cv2.imread(image_file)
     
     # Make backup image
     image = orig.copy()
@@ -1385,7 +1381,7 @@ def kernel_traits_computation(masked_img, labels):
     
 
 
-def valid_kernel_mask(orig_mask, max_width, max_height, avg_x, avg_y, valid_kernel_ratio_top, valid_kernel_ratio_bottom):
+def valid_kernel_mask(orig_mask, cnt_width, cnt_height, cnt_x, cnt_y, valid_kernel_ratio_list):
     
     """compute mask image for valid kernel area defined by the ratio of top/bottom to the ear length
     
@@ -1393,9 +1389,9 @@ def valid_kernel_mask(orig_mask, max_width, max_height, avg_x, avg_y, valid_kern
     
         orig_mask: ear object segmentation mask
         
-        max_width, max_height: dimension of the ear object
+        cnt_width, cnt_height: dimension of the ear objects
         
-        avg_x, avg_y: coordinates of ear object
+        cnt_x, cnt_y: coordinates of ear objects
         
         valid_kernel_ratio_top, valid_kernel_ratio_bottom: user defined ratio of top/bottom to the ear length
 
@@ -1405,6 +1401,12 @@ def valid_kernel_mask(orig_mask, max_width, max_height, avg_x, avg_y, valid_kern
         
     """
     
+    # extract ratio values 
+    valid_kernel_ratio_left = valid_kernel_ratio_list[0]
+    valid_kernel_ratio_right = valid_kernel_ratio_list[1]
+    valid_kernel_ratio_top = valid_kernel_ratio_list[2]
+    valid_kernel_ratio_bottom = valid_kernel_ratio_list[3]
+    
     # a mask with the same size as inout image, pixels with a value of 0 (background) are
     # ignored in the original image while mask pixels with a value of
     # 255 (foreground) are allowed to be kept
@@ -1412,19 +1414,121 @@ def valid_kernel_mask(orig_mask, max_width, max_height, avg_x, avg_y, valid_kern
     
     #print(img_height, img_width)
     
+    # initialize empty image as mask
     v_mask = np.zeros(orig_mask.shape, dtype = "uint8")
     
     # compute the coordinates to get the masking area
-    x_l = 0
-    x_r = int(avg_x+img_width)
-    y_t = int(avg_y + max_height*valid_kernel_ratio_top)
-    y_b = int(avg_y + max_height*(1-valid_kernel_ratio_bottom))
+    #x_l = 0
+    #x_r = int(avg_x + img_width)
+    #y_t = int(avg_y + max_height*valid_kernel_ratio_top)
+    #y_b = int(avg_y + max_height*(1-valid_kernel_ratio_bottom))
     
-    # assign area of valid kernel 
-    v_mask[y_t : y_b, x_l : x_r] = 255
+    # compute the coordinates to get the masking area for two ears in one image
+    for i in range(len(cnt_height)):
+    
+        # compute the coordinates to get the masking area
+        x_l = int(cnt_x[i] + cnt_width[i]*valid_kernel_ratio_left)
+        x_r = int(cnt_x[i] + cnt_width[i]*(1 - valid_kernel_ratio_right))
+        y_t = int(cnt_y[i] + cnt_height[i]*valid_kernel_ratio_top)
+        y_b = int(cnt_y[i] + cnt_height[i]*(1-valid_kernel_ratio_bottom))
+    
+        # assign area of valid kernel 
+        v_mask[y_t : y_b, x_l : x_r] = 255
     
     return v_mask
     
+
+
+def detect_blur_fft(image, size=60, thresh=10):
+    
+    """Fast Fourier Transform (FFT) of image
+    
+    Inputs: 
+    
+        image: image data after loading
+        
+        size: window size of FFT
+        
+        thresh: threshhold value for blurry
+
+    Returns:
+    
+        blurry_mean:  value showing the blurriness in image
+        
+        blurry_mean <= thresh: whether the input image was blurry or not
+        
+    """
+    
+    # grab the dimensions of the image and use the dimensions to
+    # derive the center (x, y)-coordinates
+    (h, w) = image.shape
+    (cX, cY) = (int(w / 2.0), int(h / 2.0))
+
+    # compute the FFT to find the frequency transform, then shift
+    # the zero frequency component (i.e., DC component located at
+    # the top-left corner) to the center where it will be more
+    # easy to analyze
+    fft = np.fft.fft2(image)
+    fftShift = np.fft.fftshift(fft)
+
+    # zero-out the center of the FFT shift (i.e., remove low
+    # frequencies), apply the inverse shift such that the DC
+    # component once again becomes the top-left, and then apply
+    # the inverse FFT
+    fftShift[cY - size:cY + size, cX - size:cX + size] = 0
+    fftShift = np.fft.ifftshift(fftShift)
+    recon = np.fft.ifft2(fftShift)
+
+    # compute the magnitude spectrum of the reconstructed image,
+    # then compute the mean of the magnitude values
+    magnitude = 20 * np.log(np.abs(recon))
+    blurry_mean = np.mean(magnitude)
+
+    # the image will be considered "blurry" if the mean value of the
+    # magnitudes is less than the threshold value
+    return (blurry_mean, blurry_mean <= thresh)
+
+
+
+def detect_blur(image_input):
+    
+    """apply Fast Fourier Transform (FFT) to perform blur detection in image
+    
+    Inputs: 
+    
+        orig: image data after loading
+
+    Returns:
+    
+        blurry_mean:  value showing the blurriness in image
+        
+    """
+    
+    #path, filename = os.path.split(image_path)
+    #orig = cv2.imread(image_path)
+    
+    if image_input is None:
+        print("Could not read image, skipping")
+        return
+    
+    # resize image for fast FFT
+    resized = imutils.resize(image_input, width=500)
+    
+    # convert resized image to gray format
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    
+    # compute image blurry value
+    (blurry_mean, blurry) = detect_blur_fft(gray, size=60, thresh=20)
+
+    if blurry:
+        print("Image is too blurry, omitting")
+    else:
+        print("Image is clear enough")
+    
+    # return blurry value
+    return blurry_mean
+    
+        
 
 
 def extract_traits(image_file):
@@ -1477,12 +1581,8 @@ def extract_traits(image_file):
         mkdir(mkpath)
         save_path = mkpath + '/'
         
-
     print ("results_folder:" + save_path +'\n')
-    
-    img_brightness = isbright(image_file)
-    
-    print ("image brightness is {}\n".format(img_brightness)) 
+
     
 
     # initialize all the traits output 
@@ -1496,9 +1596,18 @@ def extract_traits(image_file):
     
     # load the input image 
     image = cv2.imread(image_file)
-    
+
     #make backup image
     orig = image.copy()
+    
+    # compute image brightness value to record illumination condition of images
+    img_brightness = isbright(orig)
+    #print ("image brightness is {}\n".format(img_brightness)) 
+    
+    # compute image blurriness value to record images out of focus
+    blurry_value = detect_blur(orig)
+    
+    #print("Image blurry value: {0}\n".format(blurry_value))
     
     # get the dimension of the image
     img_height, img_width, img_channels = orig.shape
@@ -1645,15 +1754,16 @@ def extract_traits(image_file):
     # compute external traits 
     kernel_area_ratio = np.mean(area_ratio)
     kernel_area = sum(cnt_area_internal) / len(cnt_area_internal)
+    
     max_width = sum(cnt_width) / len(cnt_width)
     max_height = sum(cnt_height) / len(cnt_height)
     
     avg_x = sum(cnt_x) / len(cnt_x)
-    avg_y = sum(cnt_y) / len(cnt_y)
+    
     
     #################################################################################
     
-    v_mask = valid_kernel_mask(mask_seg.copy(), max_width, max_height, avg_x, avg_y, valid_kernel_ratio_top, valid_kernel_ratio_bottom)
+    v_mask = valid_kernel_mask(mask_seg.copy(), cnt_width, cnt_height, cnt_x, cnt_y, valid_kernel_ratio_list)
     
     # apply individual object mask
     masked_valid_kernel = cv2.bitwise_and(masked_image.copy(), masked_image.copy(), mask = v_mask)
@@ -1774,7 +1884,8 @@ def extract_traits(image_file):
     
     n_kernels_all = avg_n_kernels[1]
     
-    kernel_size = sum(avg_kernel_size)/len(avg_kernel_size)
+    # kernel size was defined as average of kernel size inside valid area/region of interest defined by user
+    kernel_size = avg_kernel_size[0]
     
     ###################################################################################################
     # detect coin and barcode uisng template mathcing method
@@ -1821,7 +1932,7 @@ def extract_traits(image_file):
     tag_info = barcode_detect(marker_barcode_img)
 
     
-    return image_file_name, tag_info, kernel_size, n_kernels_valid, n_kernels_all, kernel_area, kernel_area_ratio, max_width, max_height, coins_width_avg, coin_size, pixel_cm_ratio, img_brightness
+    return image_file_name, tag_info, kernel_size, n_kernels_valid, n_kernels_all, kernel_area, kernel_area_ratio, max_width, max_height, coins_width_avg, coin_size, pixel_cm_ratio, img_brightness, blurry_value
     
 
 
@@ -1841,12 +1952,14 @@ if __name__ == '__main__':
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
+    ap.add_argument('-ne', '--num-ears', type = int, required = False, default = 2,  help = 'Number of ears in image (default 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 250000,  help = 'min size of object to be segmented.')
     ap.add_argument('-md', '--min_dist', type = int, required = False, default = 20,  help = 'distance threshold for watershed segmentation.')
     ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 2.7,  help = 'coin size in cm')
+    ap.add_argument('-vkrl', '--valid_kernel_ratio_left', type = float, required = False, default = 0.20,  help = 'valid kernel ratio copmpared with ear width from left')
+    ap.add_argument('-vkrr', '--valid_kernel_ratio_right', type = float, required = False, default = 0.20,  help = 'valid kernel ratio copmpared with ear width from right')
     ap.add_argument('-vkrt', '--valid_kernel_ratio_top', type = float, required = False, default = 0.35,  help = 'valid kernel ratio copmpared with ear length from top')
     ap.add_argument('-vkrb', '--valid_kernel_ratio_bottom', type = float, required = False, default = 0.15,  help = 'valid kernel ratio copmpared with ear length from bottom')
-    
     args = vars(ap.parse_args())
     
     
@@ -1861,8 +1974,16 @@ if __name__ == '__main__':
     min_distance_value = args['min_dist']
     
     coin_size = args['coin_size']
-    valid_kernel_ratio_top = args['valid_kernel_ratio_top']
-    valid_kernel_ratio_bottom = args['valid_kernel_ratio_bottom']
+    
+    valid_kernel_ratio_list = [0] * 4
+    
+    valid_kernel_ratio_list[0] = args['valid_kernel_ratio_left']
+    valid_kernel_ratio_list[1]  = args['valid_kernel_ratio_right']
+    valid_kernel_ratio_list[2] = args['valid_kernel_ratio_top']
+    valid_kernel_ratio_list[3]  = args['valid_kernel_ratio_bottom']
+    
+    
+    #n_ear = args['num-ears']
     
     # path of the marker (coin), default path will be '/marker_template/marker.png' and '/marker_template/barcode.png'
     # can be changed based on requirement
@@ -1965,13 +2086,14 @@ if __name__ == '__main__':
     coin_size = list(zip(*result))[10]
     pixel_cm_ratio = list(zip(*result))[11]
     brightness = list(zip(*result))[12]
+    blurry_value = list(zip(*result))[13]
 
     # create result list
-    for i, (v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12) in enumerate(zip(filename, tag_info, avg_kernel_size, avg_n_kernels_valid, avg_n_kernels_all, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height, coins_width_avg, coin_size, pixel_cm_ratio, brightness)):
+    for i, (v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,v13) in enumerate(zip(filename, tag_info, avg_kernel_size, avg_n_kernels_valid, avg_n_kernels_all, avg_kernel_area, avg_kernel_area_ratio, avg_width, avg_height, coins_width_avg, coin_size, pixel_cm_ratio, brightness, blurry_value)):
 
-        result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12])
+        result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,v13])
         
-        result_list_cm.append([v0,v1,v2/pow(v11,2),v3,v4,v5/pow(v11,2),v6,v7/v11,v8/v11,v9/v11,v10,v11,v12])
+        result_list_cm.append([v0,v1,v2/pow(v11,2),v3,v4,v5/pow(v11,2),v6,v7/v11,v8/v11,v9/v11,v10,v11,v12,v13])
     
     
     
@@ -1984,7 +2106,7 @@ if __name__ == '__main__':
  
     #table = tabulate(result_list, headers = ['filename', 'mazie_ear_area', 'kernel_area_ratio', 'max_width', 'max_height' ,'cluster 1', 'cluster 2', 'cluster 3', 'cluster 4', 'cluster 1 hex value', 'cluster 2 hex value', 'cluster 3 hex value', 'cluster 4 hex value'], tablefmt = 'orgtbl')
     
-    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_size', 'avg_n_kernels_valid', 'avg_n_kernels_all', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'coins_width_avg', 'coin_size', 'pixel_cm_ratio', 'brightness'], tablefmt = 'orgtbl')
+    table = tabulate(result_list, headers = ['filename', 'tag_info', 'avg_kernel_size', 'avg_n_kernels_valid', 'avg_n_kernels_all', 'avg_kernel_area', 'avg_kernel_area_ratio', 'avg_width', 'avg_height', 'coins_width_avg', 'coin_size', 'pixel_cm_ratio', 'brightness', 'blurry_value'], tablefmt = 'orgtbl')
     
     print(table + "\n")
 
@@ -2042,6 +2164,7 @@ if __name__ == '__main__':
     sheet_pixel.cell(row = 1, column = 11).value = 'coin_size'
     sheet_pixel.cell(row = 1, column = 12).value = 'pixel_cm_ratio'
     sheet_pixel.cell(row = 1, column = 13).value = 'brightness'
+    sheet_pixel.cell(row = 1, column = 14).value = 'blurry_value'
 
 
     # assign traits label names
@@ -2057,7 +2180,8 @@ if __name__ == '__main__':
     sheet_cm.cell(row = 1, column = 10).value = 'coins_width_avg'
     sheet_cm.cell(row = 1, column = 11).value = 'coin_size'
     sheet_cm.cell(row = 1, column = 12).value = 'pixel_cm_ratio'
-    sheet_cm.cell(row = 1, column = 13).value = 'brightness'     
+    sheet_cm.cell(row = 1, column = 13).value = 'brightness'
+    sheet_cm.cell(row = 1, column = 14).value = 'blurry_value'
         
     # write traits values
     for row in result_list:
