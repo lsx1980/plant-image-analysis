@@ -1028,6 +1028,13 @@ def adjust_gamma(image, gamma):
     return cv2.LUT(image, table)
 
 
+def closest_center(pt, pt_list):
+    
+    min_dist_index = np.argmin(np.sum((np.array(pt_list) - np.array(pt))**2, axis=1))
+    
+    return min_dist_index
+    
+
 
 def circle_detection(image):
 
@@ -1050,40 +1057,88 @@ def circle_detection(image):
     # create background image for drawing the detected circle
     output = image.copy()
     
+    # obtain image dimension
+    img_height, img_width, n_channels = image.shape
+    
+    #backup input image
     circle_detection_img = image.copy()
     
+    # change image from RGB to Gray scale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
+    # apply blur filter 
     blurred = cv2.medianBlur(gray, 25)
     
+    # setup parameters for circle detection
+    
+    # This parameter is the inverse ratio of the accumulator resolution to the image resolution 
+    #(see Yuen et al. for more details). Essentially, the larger the dp gets, the smaller the accumulator array gets.
+    dp = 1.5
+    
+    #Minimum distance between the center (x, y) coordinates of detected circles. 
+    #If the minDist is too small, multiple circles in the same neighborhood as the original may be (falsely) detected. 
+    #If the minDist is too large, then some circles may not be detected at all.
     minDist = 100
-    param1 = 30 #500
-    param2 = 30 #200 #smaller value-> more false circles
-    minRadius = 80
-    maxRadius = 120 #10
+    
+    #Gradient value used to handle edge detection in the Yuen et al. method.
+    #param1 = 30
+    
+    #accumulator threshold value for the cv2.HOUGH_GRADIENT method. 
+    #The smaller the threshold is, the more circles will be detected (including false circles). 
+    #The larger the threshold is, the more circles will potentially be returned. 
+    #param2 = 30  
+    
+    #Minimum/Maximum size of the radius (in pixels).
+    #minRadius = 80
+    #maxRadius = 120 
     
     # detect circles in the image
     #circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1.2, minDist, param1=param1, param2=param2, minRadius=minRadius, maxRadius=maxRadius)
     
-    circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1.5, 100)
+    # detect circles in the image
+    circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, dp, minDist)
     
-    
+    # initialize diameter of detected circle
     diameter_circle = 0
     
-    # ensure at least some circles were found
-    if circles is not None:
+    
+    circle_center_coord = []
+    circle_center_radius = []
+    idx_closest = 0
+    
+    
+    # convert the (x, y) coordinates and radius of the circles to integers
+    circles = np.round(circles[0, :]).astype("int")
+    
+    # loop over the (x, y) coordinates and radius of the circles
+    for (x, y, r) in circles:
         
-        print("found {} round objects\n".format(len(circles)))
-        # convert the (x, y) coordinates and radius of the circles to integers
-        circles = np.round(circles[0, :]).astype("int")
-        # loop over the (x, y) coordinates and radius of the circles
-        for (x, y, r) in circles:
-            # draw the circle in the output image, then draw a rectangle
-            # corresponding to the center of the circle
-            circle_detection_img = cv2.circle(output, (x, y), r, (0, 255, 0), 4)
-            circle_detection_img = cv2.rectangle(output, (x - 5, y - 5), (x + 5, y + 5), (0, 128, 255), -1)
-            
-        diameter_circle = r*2
+        coord = (x, y)
+        
+        circle_center_coord.append(coord)
+        circle_center_radius.append(r)
+    
+    
+    # choose the left bottom circle if more than one circles are detected 
+    if len(circles) > 1:
+        
+        #finding closest point among the center list of the circles to the right-bottom of the image
+        idx_closest = closest_center((0 + img_width, 0 + img_height), circle_center_coord)
+    
+    else:
+        
+        # ensure at least some circles were found
+        if circles is not None and len(circles) > 0:
+            idx_closest = 0
+    
+    print("idx_closest = {}\n".format(idx_closest))
+    
+    # draw the circle in the output image, then draw a center
+    circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], circle_center_radius[idx_closest], (0, 255, 0), 4)
+    circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], 5, (0, 128, 255), -1)
+
+    # compute the diameter of coin
+    diameter_circle = circle_center_radius[idx_closest]*2
     
     
     return circles, circle_detection_img, diameter_circle
@@ -1695,8 +1750,8 @@ def extract_traits(image_file):
     #print ("image brightness is {}\n".format(img_brightness)) 
     
     # compute image blurriness value to record images out of focus
-    blurry_value = 0
-    #blurry_value = detect_blur(orig)
+    #blurry_value = 0
+    blurry_value = detect_blur(orig)
     
     #print("Image blurry value: {0}\n".format(blurry_value))
     
