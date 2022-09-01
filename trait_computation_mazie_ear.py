@@ -1001,9 +1001,23 @@ def marker_detect(img_ori, template, method, selection_threshold):
 
 
 
-
-#adjust the gamma value to increase the brightness of image
 def adjust_gamma(image, gamma):
+
+    """Adjust the gamma value to increase the brightness of image
+    
+    Inputs: 
+    
+        image: image 
+        
+        gamma: gamma value used to adjust
+
+    Returns:
+    
+        cv2.LUT(image, table): adjusted image with gamma correction
+        
+        
+    """
+    
     # build a lookup table mapping the pixel values [0, 255] to
     # their adjusted gamma values
     invGamma = 1.0 / gamma
@@ -1017,7 +1031,23 @@ def adjust_gamma(image, gamma):
 
 def circle_detection(image):
 
+    """Detecting Circles in Images using OpenCV and Hough Circles
     
+    Inputs: 
+    
+        image: image loaded 
+
+    Returns:
+    
+        circles: detcted circles
+        
+        circle_detection_img: circle overlayed with image
+        
+        diameter_circle: diameter of detected circle
+        
+    """
+    
+    # create background image for drawing the detected circle
     output = image.copy()
     
     circle_detection_img = image.copy()
