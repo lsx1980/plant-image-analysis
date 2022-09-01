@@ -1001,6 +1001,66 @@ def marker_detect(img_ori, template, method, selection_threshold):
 
 
 
+
+#adjust the gamma value to increase the brightness of image
+def adjust_gamma(image, gamma):
+    # build a lookup table mapping the pixel values [0, 255] to
+    # their adjusted gamma values
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255
+        for i in np.arange(0, 256)]).astype("uint8")
+ 
+    # apply gamma correction using the lookup table
+    return cv2.LUT(image, table)
+
+
+
+def circle_detection(image):
+
+    
+    output = image.copy()
+    
+    circle_detection_img = image.copy()
+    
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    blurred = cv2.medianBlur(gray, 25)
+    
+    minDist = 100
+    param1 = 30 #500
+    param2 = 30 #200 #smaller value-> more false circles
+    minRadius = 80
+    maxRadius = 120 #10
+    
+    # detect circles in the image
+    #circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1.2, minDist, param1=param1, param2=param2, minRadius=minRadius, maxRadius=maxRadius)
+    
+    circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1.5, 100)
+    
+    
+    diameter_circle = 0
+    
+    # ensure at least some circles were found
+    if circles is not None:
+        
+        print("found {} round objects\n".format(len(circles)))
+        # convert the (x, y) coordinates and radius of the circles to integers
+        circles = np.round(circles[0, :]).astype("int")
+        # loop over the (x, y) coordinates and radius of the circles
+        for (x, y, r) in circles:
+            # draw the circle in the output image, then draw a rectangle
+            # corresponding to the center of the circle
+            circle_detection_img = cv2.circle(output, (x, y), r, (0, 255, 0), 4)
+            circle_detection_img = cv2.rectangle(output, (x - 5, y - 5), (x + 5, y + 5), (0, 128, 255), -1)
+            
+        diameter_circle = r*2
+    
+    
+    return circles, circle_detection_img, diameter_circle
+        
+
+
+
 # compute rect region based on left top corner coordinates and dimension of the region
 def region_extracted(orig, x, y, w, h):
     
@@ -1605,7 +1665,8 @@ def extract_traits(image_file):
     #print ("image brightness is {}\n".format(img_brightness)) 
     
     # compute image blurriness value to record images out of focus
-    blurry_value = detect_blur(orig)
+    blurry_value = 0
+    #blurry_value = detect_blur(orig)
     
     #print("Image blurry value: {0}\n".format(blurry_value))
     
@@ -1896,10 +1957,11 @@ def extract_traits(image_file):
     w = int(img_width*0.5)
     h = int(img_height*0.5)
     
+    '''
     # method for template matching 
     methods = ['cv.TM_CCOEFF', 'cv.TM_CCOEFF_NORMED', 'cv.TM_CCORR',
         'cv.TM_CCORR_NORMED', 'cv.TM_SQDIFF', 'cv.TM_SQDIFF_NORMED']
-     
+    
     # detect the coin object based on the template image
     (marker_coin_img, thresh_coin, coins_width_contour, coins_width_circle) = marker_detect(region_extracted(orig, x, y, w, h), tp_coin, methods[0], 0.8)
     
@@ -1910,19 +1972,49 @@ def extract_traits(image_file):
     # Brazil 1 Real coin dimension is 27 × 27 mm
     print("The width of coin in the marker image is {:.0f} × {:.0f} pixels\n".format(coins_width_contour, coins_width_circle))
     
-    coins_width_avg = int((coins_width_contour + coins_width_circle)*0.5)
+    diameter_circle = int((coins_width_contour + coins_width_circle)*0.5)
     
-    pixel_cm_ratio = coins_width_avg/coin_size
+    pixel_cm_ratio = diameter_circle/coin_size
     
-
+    '''
+    roi_image = region_extracted(orig, x, y, w, h)
+    
+    # apply gamma correction for image region with coin
+    gamma = 1.5
+    gamma = gamma if gamma > 0 else 0.1
+    enhanced_region = adjust_gamma(roi_image.copy(), gamma=gamma)
+    
+    (circles, circle_detection_img, diameter_circle) = circle_detection(enhanced_region) 
+    
+    pixel_cm_ratio = diameter_circle/coin_size
+    
+    # save result
+    result_file = (save_path + base_name + '_coin_circle' + file_extension)
+    cv2.imwrite(result_file, circle_detection_img)
+    
+    print("The width of coin in the marker image is {:.0f} × {:.0f} pixels\n".format(diameter_circle, diameter_circle))
+    
+    
+    
     # define left bottom area for barcode detection
     x = 0
     y = int(img_height*0.5)
     w = int(img_width*0.5)
     h = int(img_height*0.5)
     
+    roi_image = region_extracted(orig, x, y, w, h)
+    
+    # method for template matching 
+    methods = ['cv.TM_CCOEFF', 'cv.TM_CCOEFF_NORMED', 'cv.TM_CCORR',
+        'cv.TM_CCORR_NORMED', 'cv.TM_SQDIFF', 'cv.TM_SQDIFF_NORMED']
+    
+    # apply gamma correction for image region with coin
+    gamma = 1.5
+    gamma = gamma if gamma > 0 else 0.1
+    enhanced_region = adjust_gamma(roi_image.copy(), gamma=gamma)
+    
     # detect the barcode object based on template image
-    (marker_barcode_img, thresh_barcode, barcode_width_contour, barcode_width_circle) = marker_detect(region_extracted(orig, x, y, w, h), tp_barcode, methods[0], 0.8)
+    (marker_barcode_img, thresh_barcode, barcode_width_contour, barcode_width_circle) = marker_detect(enhanced_region, tp_barcode, methods[0], 0.8)
     
     # save result
     result_file = (save_path + base_name + '_barcode' + file_extension)
@@ -1932,7 +2024,7 @@ def extract_traits(image_file):
     tag_info = barcode_detect(marker_barcode_img)
 
     
-    return image_file_name, tag_info, kernel_size, n_kernels_valid, n_kernels_all, kernel_area, kernel_area_ratio, max_width, max_height, coins_width_avg, coin_size, pixel_cm_ratio, img_brightness, blurry_value
+    return image_file_name, tag_info, kernel_size, n_kernels_valid, n_kernels_all, kernel_area, kernel_area_ratio, max_width, max_height, diameter_circle, coin_size, pixel_cm_ratio, img_brightness, blurry_value
     
 
 
@@ -1955,7 +2047,7 @@ if __name__ == '__main__':
     ap.add_argument('-ne', '--num-ears', type = int, required = False, default = 2,  help = 'Number of ears in image (default 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 250000,  help = 'min size of object to be segmented.')
     ap.add_argument('-md', '--min_dist', type = int, required = False, default = 20,  help = 'distance threshold for watershed segmentation.')
-    ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 2.7,  help = 'coin size in cm')
+    ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 2.7,  help = 'coin diameter in cm')
     ap.add_argument('-vkrl', '--valid_kernel_ratio_left', type = float, required = False, default = 0.20,  help = 'valid kernel ratio copmpared with ear width from left')
     ap.add_argument('-vkrr', '--valid_kernel_ratio_right', type = float, required = False, default = 0.20,  help = 'valid kernel ratio copmpared with ear width from right')
     ap.add_argument('-vkrt', '--valid_kernel_ratio_top', type = float, required = False, default = 0.35,  help = 'valid kernel ratio copmpared with ear length from top')
