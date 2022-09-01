@@ -1028,8 +1028,22 @@ def adjust_gamma(image, gamma):
     return cv2.LUT(image, table)
 
 
+
 def closest_center(pt, pt_list):
     
+    """compute index of closest point between current point and a list of points 
+    
+    Inputs: 
+    
+        pt: coordinate of current point
+        
+        pt_list: coordinates of a list of points
+
+    Returns:
+    
+        min_dist_index: index of closest point
+        
+    """
     min_dist_index = np.argmin(np.sum((np.array(pt_list) - np.array(pt))**2, axis=1))
     
     return min_dist_index
@@ -2133,10 +2147,10 @@ if __name__ == '__main__':
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 250000,  help = 'min size of object to be segmented.')
     ap.add_argument('-md', '--min_dist', type = int, required = False, default = 20,  help = 'distance threshold for watershed segmentation.')
     ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 2.7,  help = 'coin diameter in cm')
-    ap.add_argument('-vkrl', '--valid_kernel_ratio_left', type = float, required = False, default = 0.20,  help = 'valid kernel ratio copmpared with ear width from left')
-    ap.add_argument('-vkrr', '--valid_kernel_ratio_right', type = float, required = False, default = 0.20,  help = 'valid kernel ratio copmpared with ear width from right')
-    ap.add_argument('-vkrt', '--valid_kernel_ratio_top', type = float, required = False, default = 0.35,  help = 'valid kernel ratio copmpared with ear length from top')
-    ap.add_argument('-vkrb', '--valid_kernel_ratio_bottom', type = float, required = False, default = 0.15,  help = 'valid kernel ratio copmpared with ear length from bottom')
+    ap.add_argument('-vkrl', '--valid_kernel_ratio_left', type = float, required = False, default = 0.10,  help = 'valid kernel ratio copmpared with ear width from left')
+    ap.add_argument('-vkrr', '--valid_kernel_ratio_right', type = float, required = False, default = 0.10,  help = 'valid kernel ratio copmpared with ear width from right')
+    ap.add_argument('-vkrt', '--valid_kernel_ratio_top', type = float, required = False, default = 0.30,  help = 'valid kernel ratio copmpared with ear length from top')
+    ap.add_argument('-vkrb', '--valid_kernel_ratio_bottom', type = float, required = False, default = 0.10,  help = 'valid kernel ratio copmpared with ear length from bottom')
     args = vars(ap.parse_args())
     
     
