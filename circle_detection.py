@@ -29,6 +29,9 @@ import cv2
 import glob
 import os,fnmatch
 
+from scipy.spatial.distance import pdist
+
+
 import multiprocessing
 from multiprocessing import Pool
 from contextlib import closing
@@ -174,47 +177,26 @@ def circle_detection(image_file):
 
 
 
-
-def sort_contours(cnts, method = "left-to-right"):
+def closest_center(pt, pt_list):
     
-    """sort contours based on user defined method
+    """compute index of closest point between current point and a list of points 
     
     Inputs: 
     
-        cnts: contours extracted from mask image
+        pt: coordinate of current point
         
-        method: user defined method, default was "left-to-right"
-        
+        pt_list: coordinates of a list of points
 
     Returns:
     
-        sorted_cnts: list of sorted contours 
+        min_dist_index: index of closest point
         
-    """   
+    """
+    min_dist_index = np.argmin(np.sum((np.array(pt_list) - np.array(pt))**2, axis=1))
     
+    dist_array = np.sum((np.array(pt_list) - np.array(pt))**2, axis=1)
     
-    # initialize the reverse flag and sort index
-    reverse = False
-    i = 0
-    
-    # handle if we need to sort in reverse
-    if method == "right-to-left" or method == "bottom-to-top":
-        reverse = True
-        
-    # handle if we are sorting against the y-coordinate rather than
-    # the x-coordinate of the bounding box
-    if method == "top-to-bottom" or method == "bottom-to-top":
-        i = 1
-        
-    # construct the list of bounding boxes and sort them from top to bottom
-    boundingBoxes = [cv2.boundingRect(c) for c in cnts]
-    
-    (sorted_cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes), key=lambda b:b[1][i], reverse=reverse))
-    
-    # return the list of sorted contours and bounding boxes
-    return sorted_cnts
-
-
+    return dist_array
 
 
 
@@ -283,9 +265,11 @@ def adaptive_threshold_external(image_file):
     
     #contours_sorted = contours
     
-    
+    #select correct contours 
+    ##########################################################################
     rect_area_rec = []
     
+    # save all the boundingRect area for each contour 
     for index, c in enumerate(contours_sorted):
         
         #get the bounding rect
@@ -293,15 +277,18 @@ def adaptive_threshold_external(image_file):
             
             rect_area_rec.append(w*h)
     
+    # sort all contours according to the boundingRect area size in descending order
     idx_sort = [i[0] for i in sorted(enumerate(rect_area_rec), key=lambda k: k[1], reverse=True)]
     
     
+    # initialize parametrs for first 3 biggest boundingRect
     rect_center_rec = []
+    rect_size_rec = []
     
-    rect_width_rec = []
-    
+    # loop to record the center and size of the three boundingRect
     for index, value in enumerate(idx_sort[0:3]):
         
+        # get the contour by index
         c = contours_sorted[value]
         
         #get the bounding rect
@@ -309,23 +296,45 @@ def adaptive_threshold_external(image_file):
         
         center = (x, y)
         rect_center_rec.append(center)
-        rect_width_rec.append(w)
+        rect_size_rec.append(w*h)
 
-    from scipy.spatial.distance import pdist
     
-    print(pdist(rect_center_rec))
+    # extarct x value from center coordinates
+    x_center = [i[0] for i in rect_center_rec]
     
-    mindist = np.min(pdist(rect_center_rec))
+
+    #######################################################################################3
+    # choose the adjacent center pair among all three centers 
+    if ((abs(x_center[0] - x_center[2]) < abs(x_center[0] - x_center[1])) or (abs(x_center[1] - x_center[2]) < abs(x_center[0] - x_center[2]))) \
+    and ((abs(x_center[0] - x_center[1]) > abs(x_center[0] - x_center[2])) or (abs(x_center[0] - x_center[1]) > abs(x_center[1] - x_center[2]))):
+            print("select objects successful...")
     
+    else:
+        
+        # compute the average distance between adjacent center pair 
+        avg_dist = sum(pdist(rect_center_rec))/len(pdist(rect_center_rec))
+        
+        # get the index of the min distance 
+        idx_min = [i for i, j in enumerate(pdist(rect_center_rec)) if j < avg_dist]
+        
+        # choose the potiential candidate from the adjacent pair
+        rect_size_rec_sel = rect_size_rec[idx_min[0]: int(idx_min[0]+2)]
+        
+        # get the index of the false contour
+        idx_delete = np.argmin(rect_size_rec_sel)
+        
+        # delete the index of the false contour
+        idx_sort.pop(idx_delete)
+        
     
-    
-    #print(idx_sort)
-    #finding closest point among the center list of the circles to the right-bottom of the image
-    #idx_closest = closest_center((0 + img_width, 0 + img_height), circle_center_coord)
-    
+    ####################################################################################3
     area_rec = []
     
     trait_img = orig
+    
+    mask = np.zeros(gray.shape, dtype = "uint8")
+    
+    
     
     for index, value in enumerate(idx_sort):
         
@@ -334,11 +343,13 @@ def adaptive_threshold_external(image_file):
             # visualize only the two external contours and its bounding box
             c = contours_sorted[value]
             
-             # compute the convex hull of the contour
+            # compute the convex hull of the contour
             hull = cv2.convexHull(c)
             
+            # compute the area of the convex hull 
             hullArea = float(cv2.contourArea(hull))
             
+            # save the convex hull area
             area_rec.append(hullArea)
             
             #get the bounding rect
@@ -349,7 +360,7 @@ def adaptive_threshold_external(image_file):
             
             #area_c_cmax = cv2.contourArea(c)
             
-            trait_img = cv2.putText(orig, "#{0}, area = {1}".format(index,hullArea), (int(x) - 10, int(y)),cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
+            trait_img = cv2.putText(orig, "#{0}".format(index), (int(x) - 10, int(y) - 20),cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
             
             # draw a green rectangle to visualize the bounding rect
             trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 4)
@@ -357,8 +368,12 @@ def adaptive_threshold_external(image_file):
             # draw convexhull in red color
             trait_img = cv2.drawContours(orig, [hull], -1, (0, 0, 255), 4)
             
-
+            mask_external = cv2.drawContours(mask, [hull], -1, (255, 255, 255), -1)
+            
+    # compute the average area of the ear objects
     external_contour_area = sum(area_rec)/len(area_rec)
+    
+
     
     #print(external_contour_area)
        
@@ -373,6 +388,15 @@ def adaptive_threshold_external(image_file):
     
     # save results
     cv2.imwrite(result_img_path, trait_img)
+    
+    
+    #define result path for labeled images
+    #result_img_path = save_path + str(filename[0:-4]) + '_mask_external.png'
+    
+    # save results
+    #cv2.imwrite(result_img_path, mask_external)
+    
+    #return 
     
     
 

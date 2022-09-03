@@ -46,6 +46,7 @@ from scipy.spatial import distance as dist
 from scipy import optimize
 from scipy import ndimage
 from scipy.interpolate import interp1d
+from scipy.spatial.distance import pdist
 
 from skan import skeleton_to_csgraph, Skeleton, summarize, draw
 
@@ -501,6 +502,191 @@ def midpoint(ptA, ptB):
 
 
 
+
+
+def adaptive_threshold_external(img):
+    
+    """compute thresh image using adaptive threshold Method
+    
+    Inputs: 
+    
+        img: image data
+
+    Returns:
+        
+        mask_external: segmentation mask for external contours
+        
+        trait_img: original image overlay with bounding rect and contours
+
+    """
+    
+    # obtain image dimension
+    img_height, img_width, n_channels = img.shape
+    
+    orig = img.copy()
+    
+    # convert the image to grayscale and blur it slightly
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # set the parameters for adoptive threshholding method
+    GaussianBlur_ksize = 5
+    blockSize = 41
+    weighted_mean = 10
+
+    # adoptive threshholding method to the masked image from mutilple_objects_seg
+    #(thresh_adaptive_threshold, maksed_img_adaptive_threshold) = adaptive_threshold(gray, GaussianBlur_ksize, blockSize, weighted_mean)
+    
+
+    
+    # blurring it . Applying Gaussian blurring with a GaussianBlur_ksize×GaussianBlur_ksize kernel 
+    # helps remove some of the high frequency edges in the image that we are not concerned with and allow us to obtain a more “clean” segmentation.
+    blurred = cv2.GaussianBlur(gray, (GaussianBlur_ksize, GaussianBlur_ksize), 0)
+
+    # adaptive method to be used. 'ADAPTIVE_THRESH_MEAN_C' or 'ADAPTIVE_THRESH_GAUSSIAN_C'
+    thresh_adaptive_threshold = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 41, 10)
+
+    # apply individual object mask
+    maksed_img_adaptive_threshold = cv2.bitwise_and(orig, orig.copy(), mask = ~thresh_adaptive_threshold)
+    
+    
+    #find contours and get the external one
+    contours, hier = cv2.findContours(thresh_adaptive_threshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # sort the contours based on area from largest to smallest
+    contours_sorted = sorted(contours, key = cv2.contourArea, reverse = True)
+    
+    #contours_sorted = contours
+    
+    #select correct contours 
+    ##########################################################################
+    rect_area_rec = []
+    
+    # save all the boundingRect area for each contour 
+    for index, c in enumerate(contours_sorted):
+        
+        #get the bounding rect
+            (x, y, w, h) = cv2.boundingRect(c)
+            
+            rect_area_rec.append(w*h)
+    
+    # sort all contours according to the boundingRect area size in descending order
+    idx_sort = [i[0] for i in sorted(enumerate(rect_area_rec), key=lambda k: k[1], reverse=True)]
+    
+    
+    # initialize parametrs for first 3 biggest boundingRect
+    rect_center_rec = []
+    rect_size_rec = []
+    
+    # loop to record the center and size of the three boundingRect
+    for index, value in enumerate(idx_sort[0:3]):
+        
+        # get the contour by index
+        c = contours_sorted[value]
+        
+        #get the bounding rect
+        (x, y, w, h) = cv2.boundingRect(c)
+        
+        center = (x, y)
+        rect_center_rec.append(center)
+        rect_size_rec.append(w*h)
+
+    
+    # extarct x value from center coordinates
+    x_center = [i[0] for i in rect_center_rec]
+    
+
+    #######################################################################################3
+    # choose the adjacent center pair among all three centers 
+    if ((abs(x_center[0] - x_center[2]) < abs(x_center[0] - x_center[1])) or (abs(x_center[1] - x_center[2]) < abs(x_center[0] - x_center[2]))) \
+    and ((abs(x_center[0] - x_center[1]) > abs(x_center[0] - x_center[2])) or (abs(x_center[0] - x_center[1]) > abs(x_center[1] - x_center[2]))):
+            print("select objects successful...")
+    
+    else:
+        
+        # compute the average distance between adjacent center pair 
+        avg_dist = sum(pdist(rect_center_rec))/len(pdist(rect_center_rec))
+        
+        # get the index of the min distance 
+        idx_min = [i for i, j in enumerate(pdist(rect_center_rec)) if j < avg_dist]
+        
+        # choose the potiential candidate from the adjacent pair
+        rect_size_rec_sel = rect_size_rec[idx_min[0]: int(idx_min[0]+2)]
+        
+        # get the index of the false contour
+        idx_delete = np.argmin(rect_size_rec_sel)
+        
+        # delete the index of the false contour
+        idx_sort.pop(idx_delete)
+        
+    
+    ####################################################################################3
+    area_rec = []
+    
+    trait_img = orig
+    
+    mask = np.zeros(gray.shape, dtype = "uint8")
+    
+    
+    
+    for index, value in enumerate(idx_sort):
+        
+        if index < 2:
+             
+            # visualize only the two external contours and its bounding box
+            c = contours_sorted[value]
+            
+            # compute the convex hull of the contour
+            hull = cv2.convexHull(c)
+            
+            # compute the area of the convex hull 
+            hullArea = float(cv2.contourArea(hull))
+            
+            # save the convex hull area
+            area_rec.append(hullArea)
+            
+            #get the bounding rect
+            (x, y, w, h) = cv2.boundingRect(c)
+            
+            # draw a rectangle to visualize the bounding rect
+            #trait_img = cv2.drawContours(orig, c, -1, (255, 255, 0), 3)
+            
+            #area_c_cmax = cv2.contourArea(c)
+            
+            trait_img = cv2.putText(orig, "#{0}".format(index), (int(x) - 10, int(y) - 20),cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
+            
+            # draw a green rectangle to visualize the bounding rect
+            trait_img = cv2.rectangle(orig, (x, y), (x+w, y+h), (255, 255, 0), 4)
+            
+            # draw convexhull in red color
+            trait_img = cv2.drawContours(orig, [hull], -1, (0, 0, 255), 4)
+            
+            mask_external = cv2.drawContours(mask, [hull], -1, (255, 255, 255), -1)
+            
+    # compute the average area of the ear objects
+    #external_contour_area = sum(area_rec)/len(area_rec)
+    
+
+ 
+    #define result path for labeled images
+    #result_img_path = save_path + str(filename[0:-4]) + '_ctr.png'
+    
+    # save results
+    #cv2.imwrite(result_img_path, trait_img)
+    
+    
+    #define result path for labeled images
+    #result_img_path = save_path + str(filename[0:-4]) + '_mask_external.png'
+    
+    # save results
+    #cv2.imwrite(result_img_path, mask_external)
+    
+    return mask_external, trait_img
+    
+
+
+
+
+
 def comp_external_contour(orig, thresh, img_overlay):
 
     """compute the parameters of the external contour of the plant object 
@@ -627,7 +813,7 @@ def comp_external_contour(orig, thresh, img_overlay):
             cnt_y.append(y)
             
 
-            print("Contour {0} shape info: Width = {1:.2f}, height= {2:.2f}, area = {3:.2f}\n".format(index+1, w, h, area_c_cmax))
+            print("Contour {0} shape info: width = {1:.2f}, height = {2:.2f}, area = {3:.2f}\n".format(index+1, w, h, area_c_cmax))
    
             
     return trait_img, cnt_area, cnt_width, cnt_height, cnt_x, cnt_y
@@ -1355,15 +1541,18 @@ def adaptive_threshold(masked_image, GaussianBlur_ksize, blockSize, weighted_mea
     """
     ori = masked_image.copy()
     
-    # convert the image to grayscale and blur it slightly
-    gray = cv2.cvtColor(masked_image, cv2.COLOR_BGR2GRAY)
-
+    if len(ori.shape)> 2:
+        # convert the image to grayscale and blur it slightly
+        gray = cv2.cvtColor(masked_image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = ori
+    
     # blurring it . Applying Gaussian blurring with a GaussianBlur_ksize×GaussianBlur_ksize kernel 
     # helps remove some of the high frequency edges in the image that we are not concerned with and allow us to obtain a more “clean” segmentation.
     blurred = cv2.GaussianBlur(gray, (GaussianBlur_ksize, GaussianBlur_ksize), 0)
 
     # adaptive method to be used. 'ADAPTIVE_THRESH_MEAN_C' or 'ADAPTIVE_THRESH_GAUSSIAN_C'
-    thresh_adaptive_threshold = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 81, 10)
+    thresh_adaptive_threshold = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, blockSize, weighted_mean)
 
     # apply individual object mask
     maksed_img_adaptive_threshold = cv2.bitwise_and(ori, ori.copy(), mask = ~thresh_adaptive_threshold)
@@ -1586,10 +1775,10 @@ def valid_kernel_mask(orig_mask, cnt_width, cnt_height, cnt_x, cnt_y, valid_kern
     for i in range(len(cnt_height)):
     
         # compute the coordinates to get the masking area
-        x_l = int(cnt_x[i] + cnt_width[i]*valid_kernel_ratio_left)
-        x_r = int(cnt_x[i] + cnt_width[i]*(1 - valid_kernel_ratio_right))
-        y_t = int(cnt_y[i] + cnt_height[i]*valid_kernel_ratio_top)
-        y_b = int(cnt_y[i] + cnt_height[i]*(1-valid_kernel_ratio_bottom))
+        x_l = int(cnt_x[i] + (cnt_width[i]-10)*valid_kernel_ratio_left)
+        x_r = int(cnt_x[i] + (cnt_width[i]-10)*(1 - valid_kernel_ratio_right))
+        y_t = int(cnt_y[i] + (cnt_height[i]-10)*valid_kernel_ratio_top)
+        y_b = int(cnt_y[i] + (cnt_height[i]-10)*(1-valid_kernel_ratio_bottom))
     
         # assign area of valid kernel 
         v_mask[y_t : y_b, x_l : x_r] = 255
@@ -1764,8 +1953,8 @@ def extract_traits(image_file):
     #print ("image brightness is {}\n".format(img_brightness)) 
     
     # compute image blurriness value to record images out of focus
-    #blurry_value = 0
-    blurry_value = detect_blur(orig)
+    blurry_value = 0
+    #blurry_value = detect_blur(orig)
     
     #print("Image blurry value: {0}\n".format(blurry_value))
     
@@ -1774,12 +1963,13 @@ def extract_traits(image_file):
     
     #source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
     
+    ###########################################################################################################
     # segment mutiple objects in image using thresh method to accquire internal contours
     (left_img, right_img, mask_seg, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig, channel = 'B')
     
     # save result
-    result_file = (save_path + base_name + '_overlay' + file_extension)
-    cv2.imwrite(result_file, img_overlay)
+    #result_file = (save_path + base_name + '_mask_seg' + file_extension)
+    #cv2.imwrite(result_file, mask_seg)
     
     # apply individual object mask
     masked_image = cv2.bitwise_and(image.copy(), image.copy(), mask = mask_seg)
@@ -1787,6 +1977,13 @@ def extract_traits(image_file):
     # save result
     result_file = (save_path + base_name + '_masked' + file_extension)
     cv2.imwrite(result_file, masked_image)
+    ##########################################################################################################3
+    # segment mutiple objects in image using adaptive threshold method to accquire external contours
+    (mask_external, trait_img) = adaptive_threshold_external(orig)
+    
+    # save result
+    #result_file = (save_path + base_name + '_mask_external' + file_extension)
+    #cv2.imwrite(result_file, mask_external)
     
     
     n_kernels_valid = 0
@@ -1795,7 +1992,6 @@ def extract_traits(image_file):
     
     n_kernels_all = 0
     
-
     ####################################################################################
     '''
     # Convert mean shift image from BRG color space to LAB space and extract B channel
@@ -1819,28 +2015,27 @@ def extract_traits(image_file):
     args_channels = args['channels']
     args_num_clusters = args['num_clusters']
     
-    #color clustering based object segmentation to accquire external contours
+    #color clustering based object segmentation to accquire another external contours
     thresh = color_cluster_seg(image.copy(), args_colorspace, args_channels, args_num_clusters)
     
     # segment mutiple objects in image using thresh method to accquire internal contours
-    #(left_img, right_img, thresh, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig, channel = 'L')
+    (left_img, right_img, thresh, img_overlay, cnt_area_internal) = mutilple_objects_seg(orig, channel = 'L')
     
     # save result
-    result_file = (save_path + base_name + '_thresh' + file_extension)
-    cv2.imwrite(result_file, thresh)
+    #result_file = (save_path + base_name + '_thresh' + file_extension)
+    #cv2.imwrite(result_file, thresh)
     
    ###############################################################################################
     #combine external contours and internal contours to compute object mask
-    combined_mask = mask_seg | thresh
+    combined_mask = mask_seg | thresh | mask_external
     
-    
+    '''
     # Taking a matrix of size 25 as the kernel
     dilate_kernel = np.ones((25,25), np.uint8)
     combined_mask = cv2.dilate(combined_mask, dilate_kernel, iterations=1)
-    
-    result_file = (save_path + base_name + '_combined_mask' + file_extension)
-    #print(filename)
-    cv2.imwrite(result_file, combined_mask)
+    '''
+    #result_file = (save_path + base_name + '_combined_mask' + file_extension)
+    #cv2.imwrite(result_file, combined_mask)
     
     # #combine external contours and internal contours 
     thresh_combined_mask = cv2.threshold(combined_mask, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
@@ -1858,11 +2053,11 @@ def extract_traits(image_file):
         img_overlay = cv2.drawContours(img_overlay, [c], -1, (0, 255, 0), 2)
     
     # save result
-    result_file = (save_path + base_name + '_overlay_combined' + file_extension)
-    cv2.imwrite(result_file, img_overlay)
+    #result_file = (save_path + base_name + '_overlay_combined' + file_extension)
+    #cv2.imwrite(result_file, img_overlay)
     
     ################################################################################################################################
-    #compute external traits
+    #compute external traits based on thresh_combined_mask
     (trait_img, cnt_area_external, cnt_width, cnt_height, cnt_x, cnt_y) = comp_external_contour(orig, thresh_combined_mask, img_overlay)
     
     # save result
@@ -1870,7 +2065,6 @@ def extract_traits(image_file):
 
     cv2.imwrite(result_file, trait_img)
     
-
     #################################################################################################################################
     #compute the area ratio of interal contour verse external contour, kernal area ratio
     area_max_external = max(cnt_area_external)
