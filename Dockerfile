@@ -59,5 +59,5 @@ RUN pip3 install numpy \
 
 
 
-
+WORKDIR /opt/smart/
 
