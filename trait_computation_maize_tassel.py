@@ -15,6 +15,8 @@ USAGE:
 
 time python3 trait_computation_maize_tassel.py -p ~/example/plant_test/seeds/test_tassel/ -ft png 
 
+time python3 trait_computation_maize_tassel.py -p ~/example/plant_test/seeds/test_tassel/ -s HSV -c 1 -ft png
+
 '''
 
 # import necessary packages
@@ -263,7 +265,120 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     return img_thresh
     
     
+
+
+def circle_detection(image):
+
+    """Detecting Circles in Images using OpenCV and Hough Circles
     
+    Inputs: 
+    
+        image: image loaded 
+
+    Returns:
+    
+        circles: detcted circles
+        
+        circle_detection_img: circle overlayed with image
+        
+        diameter_circle: diameter of detected circle
+        
+    """
+    
+    # create background image for drawing the detected circle
+    output = image.copy()
+    
+    # obtain image dimension
+    img_height, img_width, n_channels = image.shape
+    
+    #backup input image
+    circle_detection_img = image.copy()
+    
+    # change image from RGB to Gray scale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # apply blur filter 
+    blurred = cv2.medianBlur(gray, 25)
+    
+    # setup parameters for circle detection
+    
+    # This parameter is the inverse ratio of the accumulator resolution to the image resolution 
+    #(see Yuen et al. for more details). Essentially, the larger the dp gets, the smaller the accumulator array gets.
+    dp = 1.5
+    
+    #Minimum distance between the center (x, y) coordinates of detected circles. 
+    #If the minDist is too small, multiple circles in the same neighborhood as the original may be (falsely) detected. 
+    #If the minDist is too large, then some circles may not be detected at all.
+    minDist = 100
+    
+    #Gradient value used to handle edge detection in the Yuen et al. method.
+    #param1 = 30
+    
+    #accumulator threshold value for the cv2.HOUGH_GRADIENT method. 
+    #The smaller the threshold is, the more circles will be detected (including false circles). 
+    #The larger the threshold is, the more circles will potentially be returned. 
+    #param2 = 30  
+    
+    #Minimum/Maximum size of the radius (in pixels).
+    #minRadius = 80
+    #maxRadius = 120 
+    
+    # detect circles in the image
+    #circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1.2, minDist, param1=param1, param2=param2, minRadius=minRadius, maxRadius=maxRadius)
+    
+    # detect circles in the image
+    circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, dp, minDist)
+    
+    # initialize diameter of detected circle
+    diameter_circle = 0
+    
+    
+    circle_center_coord = []
+    circle_center_radius = []
+    idx_closest = 0
+    
+    
+    # convert the (x, y) coordinates and radius of the circles to integers
+    circles = np.round(circles[0, :]).astype("int")
+    
+    # loop over the (x, y) coordinates and radius of the circles
+    for (x, y, r) in circles:
+        
+        coord = (x, y)
+        
+        circle_center_coord.append(coord)
+        circle_center_radius.append(r)
+    
+    
+    # choose the left bottom circle if more than one circles are detected 
+    if len(circles) > 1:
+        
+        #finding closest point among the center list of the circles to the right-bottom of the image
+        idx_closest = closest_center((0 + img_width, 0 + img_height), circle_center_coord)
+    
+    else:
+        
+        # ensure at least some circles were found
+        if circles is not None and len(circles) > 0:
+            idx_closest = 0
+    
+    print("idx_closest = {}\n".format(idx_closest))
+    
+    # draw the circle in the output image, then draw a center
+    circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], circle_center_radius[idx_closest], (0, 255, 0), 4)
+    circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], 5, (0, 128, 255), -1)
+    
+    # create an empty mask image and fill the detected connected components
+    mask = np.zeros([img_width, img_height], dtype = np.uint8)
+    
+    # compute the diameter of coin
+    diameter_circle = circle_center_radius[idx_closest]*2
+    
+    
+    return circles, circle_detection_img, diameter_circle
+
+
+
 def percentage(part, whole):
   
     """compute percentage value
@@ -282,6 +397,29 @@ def percentage(part, whole):
     percentage = "{:.2f}".format(float(part)/float(whole))
 
     return str(percentage)
+
+
+
+def region_extracted(orig, x, y, w, h):
+    
+    """compute rect region based on left top corner coordinates and dimension of the region
+    
+    Inputs: 
+    
+        orig: image
+        
+        x, y: left top corner coordinates 
+        
+        w, h: dimension of the region
+
+    Returns:
+    
+        roi: region of interest
+        
+    """   
+    roi = orig[y:y+h, x:x+w]
+    
+    return roi
 
 
 
@@ -837,30 +975,6 @@ def marker_detect(img_ori, template, method, selection_threshold):
 
 
 
-def region_extracted(orig, x, y, w, h):
-    
-    """compute rect region based on left top corner coordinates and dimension of the region
-    
-    Inputs: 
-    
-        orig: image
-        
-        x, y: left top corner coordinates 
-        
-        w, h: dimension of the region
-
-    Returns:
-    
-        roi: region of interest
-        
-    """   
-
-    roi = orig[y:y+h, x:x+w]
-    
-    return roi
-
-
-
 def skeleton_bw(thresh):
 
     """compute skeleton from binary mask image
@@ -970,8 +1084,14 @@ def skeleton_graph(image_skeleton):
     #select end branch
     sub_branch = branch_data.loc[branch_data['branch-type'] == 1]
     
+    sub_branch_cleaned = sub_branch
+    
+    
     sub_branch_branch_distance = sub_branch["branch-distance"].tolist()
- 
+    
+    sub_branch_branch_distance_cleaned = sub_branch_branch_distance
+    
+    '''
     # remove outliers in branch distance 
     outlier_list = outlier_doubleMAD(sub_branch_branch_distance, thresh = 3.5)
     
@@ -980,7 +1100,7 @@ def skeleton_graph(image_skeleton):
     sub_branch_cleaned = sub_branch.drop(sub_branch.index[indices])
     
     sub_branch_branch_distance_cleaned = [i for j, i in enumerate(sub_branch_branch_distance) if j not in indices]
-
+    '''
     
     print("Branch graph info : {0}\n".format(sub_branch_cleaned))
     
@@ -1016,8 +1136,37 @@ def image_enhance(img):
     img_enhance = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)  
     
     return img_enhance
-    
 
+
+
+
+def adjust_gamma(image, gamma):
+
+    """Adjust the gamma value to increase the brightness of image
+    
+    Inputs: 
+    
+        image: image 
+        
+        gamma: gamma value used to adjust
+
+    Returns:
+    
+        cv2.LUT(image, table): adjusted image with gamma correction
+        
+        
+    """
+    
+    # build a lookup table mapping the pixel values [0, 255] to
+    # their adjusted gamma values
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255
+        for i in np.arange(0, 256)]).astype("uint8")
+ 
+    # apply gamma correction using the lookup table
+    return cv2.LUT(image, table)
+    
+    
 
 def extract_traits(image_file):
 
@@ -1077,6 +1226,9 @@ def extract_traits(image_file):
     # initialize all the traits output 
     tag_info = tassel_area = tassel_area_ratio = cnt_width = cnt_height = 0
     
+    n_branch = avg_branch_length = coins_width_avg = coin_size = pixel_cm_ratio = 0
+    
+     
     if (file_size > 5.0):
         print("It will take some time due to larger file size {0} MB\n".format(str(int(file_size))))
     else:
@@ -1098,62 +1250,92 @@ def extract_traits(image_file):
     args_channels = args['channels']
     args_num_clusters = args['num_clusters']
     
+    
+    
     #color clustering based object segmentation to accquire external contours
     image_mask = color_cluster_seg(image.copy(), args_colorspace, args_channels, args_num_clusters)
+    
     
     # save segmentation result
     result_file = (save_path + base_name + '_image_mask' + file_extension)
     cv2.imwrite(result_file, image_mask)
-    
 
-    ################################################################################################################################
-    #compute external traits
-    (trait_img, tassel_area, cnt_width, cnt_height, tassel_area_ratio) = comp_external_contour(image.copy(), image_mask)
+    ####################################################################
+    # check segmentation mask
+    # if mask was empty or only coin and barcode was detected, assign 0 values 
     
-    # save segmentation result
-    result_file = (save_path + base_name + '_excontour' + file_extension)
-    #print(filename)
-    cv2.imwrite(result_file, trait_img)
+    #find contours and get the external one
+    (contours, hier) = cv2.findContours(image_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
+    if len(contours) > 0:
+            
+        # sort the contours based on area from largest to smallest
+        contours_sorted = sorted(contours, key = cv2.contourArea, reverse = True)
+        
+        max_area = cv2.contourArea(contours_sorted[0])
+    else:
+        
+        max_area = 0
+        
+    #print("max_area = {}\n".format(max_area))
+    ########################################################################
     
-    #get the medial axis of the contour
-    image_skeleton, skeleton = skeleton_bw(image_mask)
+    # make sure tassel object was detected
+    if (cv2.countNonZero(image_mask) == 0) or (max_area < min_size):
+        
+        print("Mask image is empty")
+    else:
+        
+        print("Mask segmentation finished successfully!")
 
-    # save skeleton result
-    result_file = (save_path + base_name + '_skeleton' + file_extension) 
-    cv2.imwrite(result_file, img_as_ubyte(image_skeleton))
-    
-    
-    (branch_data, n_branch, branch_length) = skeleton_graph(image_skeleton)
-    
-    avg_branch_length = int(sum(branch_length)/len(branch_length))
+        
+        ################################################################################################################################
+        #compute external traits
+        (trait_img, tassel_area, cnt_width, cnt_height, tassel_area_ratio) = comp_external_contour(image.copy(), image_mask)
+        
+        # save segmentation result
+        result_file = (save_path + base_name + '_excontour' + file_extension)
+        #print(filename)
+        cv2.imwrite(result_file, trait_img)
+        
+        
+        #get the medial axis of the contour
+        image_skeleton, skeleton = skeleton_bw(image_mask)
+
+        # save skeleton result
+        result_file = (save_path + base_name + '_skeleton' + file_extension) 
+        cv2.imwrite(result_file, img_as_ubyte(image_skeleton))
+        
+        
+        (branch_data, n_branch, branch_length) = skeleton_graph(image_skeleton)
+        
+        avg_branch_length = int(sum(branch_length)/len(branch_length))
 
 
-    #img_hist = branch_data.hist(column = 'branch-distance', by = 'branch-type', bins = 100)
-    #result_file = (save_path + base_name + '_hist' + file_extension)
-    #plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
-    #plt.close()
-    
-    fig = plt.plot()
-    source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
-    #img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-distance', skeleton_colormap = 'hsv')
-    img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-type', skeleton_colormap = 'hsv')
-    
-    # save skeleton result
-    result_file = (save_path + base_name + '_skeleton_graph' + file_extension) 
-    plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0, dpi = 600)
-    plt.close()
-    
- 
-    #print("[INFO] {} branch end points found\n".format(n_branch))
-    
-    #print("[INFO] {} branch length\n".format(branch_length))
-    
-
+        #img_hist = branch_data.hist(column = 'branch-distance', by = 'branch-type', bins = 100)
+        #result_file = (save_path + base_name + '_hist' + file_extension)
+        #plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
+        #plt.close()
+        '''
+        fig = plt.plot()
+        source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
+        #img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-distance', skeleton_colormap = 'hsv')
+        img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-type', skeleton_colormap = 'hsv')
+        
+        # save skeleton result
+        result_file = (save_path + base_name + '_skeleton_graph' + file_extension) 
+        plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0, dpi = 600)
+        plt.close()
+        '''
+     
+        #print("[INFO] {} branch end points found\n".format(n_branch))
+        
+        #print("[INFO] {} branch length\n".format(branch_length))
+        
     
     
     ###################################################################################################
-    # detect coin and bracode uisng template mathcing method
+    # detect coin and barcode uisng template mathcing method
     
     # define right bottom area for coin detection
     x = int(img_width*0.5)
@@ -1161,89 +1343,64 @@ def extract_traits(image_file):
     w = int(img_width*0.5)
     h = int(img_height*0.5)
     
-    # method for template matching 
-    methods = ['cv.TM_CCOEFF', 'cv.TM_CCOEFF_NORMED', 'cv.TM_CCORR',
-        'cv.TM_CCORR_NORMED', 'cv.TM_SQDIFF', 'cv.TM_SQDIFF_NORMED']
-     
-    # detect the coin object based on the template image
-    (marker_coin_img, thresh_coin, coins_width_contour, coins_width_circle) = marker_detect(region_extracted(orig, x, y, w, h), tp_coin, methods[0], 0.8)
+    roi_image = region_extracted(orig, x, y, w, h)
     
-    # save segmentation result
-    result_file = (save_path + base_name + '_coin' + file_extension)
-    cv2.imwrite(result_file, marker_coin_img)
+    # apply gamma correction for image region with coin
+    gamma = 1.5
+    gamma = gamma if gamma > 0 else 0.1
+    enhanced_region = adjust_gamma(roi_image.copy(), gamma=gamma)
     
-    # Brazil 1 Real coin dimension is 27 × 27 mm
-    print("The width of coin in the marker image is {:.0f} × {:.0f} pixels\n".format(coins_width_contour, coins_width_circle))
+    (circles, circle_detection_img, diameter_circle) = circle_detection(enhanced_region) 
     
-    coins_width_avg = int((coins_width_contour + coins_width_circle)*0.5)
+    pixel_cm_ratio = diameter_circle/coin_size
     
-    pixel_cm_ratio = coins_width_avg/coin_size
-
+    coins_width_avg = diameter_circle
+    
+    # save result
+    result_file = (save_path + base_name + '_coin_circle' + file_extension)
+    cv2.imwrite(result_file, circle_detection_img)
+    
+    
+    print("The width of coin in the marker image is {:.0f} × {:.0f} pixels\n".format(diameter_circle, diameter_circle))
+    
+    
+    
     # define left bottom area for barcode detection
     x = 0
     y = int(img_height*0.5)
     w = int(img_width*0.5)
     h = int(img_height*0.5)
     
-    barcode_region = region_extracted(orig, x, y, w, h)
+    roi_image = region_extracted(orig, x, y, w, h)
+    
+    # method for template matching 
+    methods = ['cv.TM_CCOEFF', 'cv.TM_CCOEFF_NORMED', 'cv.TM_CCORR',
+        'cv.TM_CCORR_NORMED', 'cv.TM_SQDIFF', 'cv.TM_SQDIFF_NORMED']
+    
+    # apply gamma correction for image region with coin
+    gamma = 1.5
+    gamma = gamma if gamma > 0 else 0.1
+    enhanced_region = adjust_gamma(roi_image.copy(), gamma=gamma)
     
     # detect the barcode object based on template image
-    (marker_barcode_img, thresh_barcode, barcode_width_contour, barcode_width_circle) = marker_detect(barcode_region, tp_barcode, methods[0], 0.8)
+    (marker_barcode_img, thresh_barcode, barcode_width_contour, barcode_width_circle) = marker_detect(enhanced_region, tp_barcode, methods[0], 0.8)
     
-    # save segmentation result
+    # save result
     result_file = (save_path + base_name + '_barcode' + file_extension)
     cv2.imwrite(result_file, marker_barcode_img)
     
-    #barcode_enhance = image_enhance(marker_barcode_img)
-    
-    kernel = np.array([[0, -1, 0],
-                   [-1, 5,-1],
-                   [0, -1, 0]])
-    
-    barcode_sharp = cv2.filter2D(src=marker_barcode_img, ddepth=-1, kernel=kernel)
-    
-    # save segmentation result
-    result_file = (save_path + base_name + '_barcode_sharp' + file_extension)
-    cv2.imwrite(result_file, barcode_sharp)
+    # save result
+    #result_file = (save_path + base_name + '_barcode_mask' + file_extension)
+    #cv2.imwrite(result_file, thresh_barcode)
     
     # parse barcode image using pylibdmtx lib
-    #tag_info = barcode_detect(barcode_sharp)
-    
-    tag_info = 'Unreadable'
-    
+    tag_info = barcode_detect(marker_barcode_img)
 
-    '''
-    ################################################################################################
-    # analyze color distribution of the segmented objects
-    
-    num_clusters = 5
-    
-    #save color analysisi/quantization result
-    (rgb_colors, counts, hex_colors) = color_region(image.copy(), image_mask, save_path, num_clusters)
-    
-
-    #print("hex_colors = {} {}\n".format(hex_colors, type(hex_colors)))
-    
-    list_counts = list(counts.values())
-    
-    #list_hex_colors = list(hex_colors)
-    
-    #print(type(list_counts))
-    
-    color_ratio = []
-    
-    for value_counts, value_hex in zip(list_counts, hex_colors):
-        
-        #print(percentage(value, np.sum(list_counts)))
-        
-        color_ratio.append(percentage(value_counts, np.sum(list_counts)))
-
-    '''
     ####################################################
     
-      
+        
+
     
-    #return image_file_name, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors
     
     return image_file_name, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, coins_width_avg, coin_size, pixel_cm_ratio
     
@@ -1265,7 +1422,7 @@ if __name__ == '__main__':
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
-    ap.add_argument('-min', '--min_size', type = int, required = False, default = 10000,  help = 'min size of object to be segmented.')
+    ap.add_argument('-min', '--min_size', type = int, required = False, default = 35000,  help = 'min size of object to be segmented.')
     ap.add_argument('-cs', '--coin_size', type = int, required = False, default = 2.7,  help = 'coin size in cm')
     
     args = vars(ap.parse_args())
@@ -1337,20 +1494,20 @@ if __name__ == '__main__':
     
     result_list_cm = []
     
-    '''
+    
     #loop execute to get all traits
     for image in imgList:
         
-        #(filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio, hex_colors) = extract_traits(image)
-        #result_list.append([filename, tag_info, kernel_area, kernel_area_ratio, max_width, max_height, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
-        
-        (filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, coin_size, pixel_cm_ratio) = extract_traits(image)
+        (filename, tag_info, tassel_area, tassel_area_ratio, avg_width, avg_height, n_branch, avg_branch_length, coins_width_avg, coin_size, pixel_cm_ratio) = extract_traits(image)
 
-        result_list.append([filename, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, coin_size, pixel_cm_ratio])
+        result_list.append([filename, tag_info, tassel_area, tassel_area_ratio, avg_width, avg_height, n_branch, avg_branch_length, coins_width_avg, coin_size, pixel_cm_ratio])
         
-        for i in range(len(branch_length)):
+        result_list_cm.append([filename,tag_info,tassel_area/pow(pixel_cm_ratio,2),tassel_area_ratio,avg_width/pixel_cm_ratio,avg_height/pixel_cm_ratio,n_branch,avg_branch_length/pixel_cm_ratio,coins_width_avg/pixel_cm_ratio,coin_size,pixel_cm_ratio])
+        
+        
+        #for i in range(len(branch_length)):
             
-            result_list_cm.append([filename, str(i).zfill(2), branch_length[i]])
+            #result_list_cm.append([filename, str(i).zfill(2), branch_length[i]])
 
     '''
     ###########################################################
@@ -1388,7 +1545,7 @@ if __name__ == '__main__':
         result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10])
         
         result_list_cm.append([v0,v1,v2/pow(v10,2),v3,v4/v10,v5/v10,v6,v7/v10,v8/v10,v9,v10])
-    
+    '''
 
     #################################################################################
     #print out result on screen output as table
