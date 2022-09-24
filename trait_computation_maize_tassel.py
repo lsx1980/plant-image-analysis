@@ -362,7 +362,7 @@ def circle_detection(image):
         if circles is not None and len(circles) > 0:
             idx_closest = 0
     
-    print("idx_closest = {}\n".format(idx_closest))
+    #print("idx_closest = {}\n".format(idx_closest))
     
     # draw the circle in the output image, then draw a center
     circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], circle_center_radius[idx_closest], (0, 255, 0), 4)
@@ -1352,7 +1352,7 @@ def extract_traits(image_file):
     
     (circles, circle_detection_img, diameter_circle) = circle_detection(enhanced_region) 
     
-    print("coin_size = {}".format(coin_size))
+    #print("coin_size = {}".format(coin_size))
     
     pixel_cm_ratio = diameter_circle/coin_size
     
@@ -1599,28 +1599,28 @@ if __name__ == '__main__':
         sheet_cm.title = "trait_cm"
 
     sheet_pixel.cell(row = 1, column = 1).value = 'filename'
-    sheet_pixel.cell(row = 1, column = 2).value = 'tag_info'
-    sheet_pixel.cell(row = 1, column = 3).value = 'tassel_area'
-    sheet_pixel.cell(row = 1, column = 4).value = 'tassel_area_ratio'
-    sheet_pixel.cell(row = 1, column = 5).value = 'avg_width'
-    sheet_pixel.cell(row = 1, column = 6).value = 'avg_height'
+    sheet_pixel.cell(row = 1, column = 2).value = 'tag info'
+    sheet_pixel.cell(row = 1, column = 3).value = 'tassel area'
+    sheet_pixel.cell(row = 1, column = 4).value = 'tassel area ratio'
+    sheet_pixel.cell(row = 1, column = 5).value = 'average width'
+    sheet_pixel.cell(row = 1, column = 6).value = 'average height'
     sheet_pixel.cell(row = 1, column = 7).value = 'number of branches'
-    sheet_pixel.cell(row = 1, column = 8).value = 'avg branch length'
-    sheet_pixel.cell(row = 1, column = 9).value = 'coins_width_avg'
-    sheet_pixel.cell(row = 1, column = 10).value = 'coin_size'
-    sheet_pixel.cell(row = 1, column = 11).value = 'pixel_cm_ratio'
+    sheet_pixel.cell(row = 1, column = 8).value = 'average branch length'
+    sheet_pixel.cell(row = 1, column = 9).value = 'average coins width'
+    sheet_pixel.cell(row = 1, column = 10).value = 'coin size'
+    sheet_pixel.cell(row = 1, column = 11).value = 'pixel/cm ratio'
 
     sheet_cm.cell(row = 1, column = 1).value = 'filename'
-    sheet_cm.cell(row = 1, column = 2).value = 'tag_info'
-    sheet_cm.cell(row = 1, column = 3).value = 'tassel_area'
-    sheet_cm.cell(row = 1, column = 4).value = 'tassel_area_ratio'
-    sheet_cm.cell(row = 1, column = 5).value = 'avg_width'
-    sheet_cm.cell(row = 1, column = 6).value = 'avg_height'
+    sheet_cm.cell(row = 1, column = 2).value = 'tag info'
+    sheet_cm.cell(row = 1, column = 3).value = 'tassel area'
+    sheet_cm.cell(row = 1, column = 4).value = 'tassel area ratio'
+    sheet_cm.cell(row = 1, column = 5).value = 'average width'
+    sheet_cm.cell(row = 1, column = 6).value = 'average height'
     sheet_cm.cell(row = 1, column = 7).value = 'number of branches'
-    sheet_cm.cell(row = 1, column = 8).value = 'avg branch length'
-    sheet_cm.cell(row = 1, column = 9).value = 'coins_width_avg'
-    sheet_cm.cell(row = 1, column = 10).value = 'coin_size'
-    sheet_cm.cell(row = 1, column = 11).value = 'pixel_cm_ratio'
+    sheet_cm.cell(row = 1, column = 8).value = 'average branch length'
+    sheet_cm.cell(row = 1, column = 9).value = 'average coins width'
+    sheet_cm.cell(row = 1, column = 10).value = 'coin size'
+    sheet_cm.cell(row = 1, column = 11).value = 'pixel/cm ratio'
 
 
 
