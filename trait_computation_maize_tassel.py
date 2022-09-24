@@ -1226,7 +1226,7 @@ def extract_traits(image_file):
     # initialize all the traits output 
     tag_info = tassel_area = tassel_area_ratio = cnt_width = cnt_height = 0
     
-    n_branch = avg_branch_length = coins_width_avg = coin_size = pixel_cm_ratio = 0
+    n_branch = avg_branch_length = coins_width_avg = 0
     
      
     if (file_size > 5.0):
@@ -1283,10 +1283,10 @@ def extract_traits(image_file):
     # make sure tassel object was detected
     if (cv2.countNonZero(image_mask) == 0) or (max_area < min_size):
         
-        print("Mask image is empty")
+        print("Mask image is empty...\n")
     else:
         
-        print("Mask segmentation finished successfully!")
+        print("Mask segmentation finished successfully!\n")
 
         
         ################################################################################################################################
@@ -1352,6 +1352,8 @@ def extract_traits(image_file):
     
     (circles, circle_detection_img, diameter_circle) = circle_detection(enhanced_region) 
     
+    print("coin_size = {}".format(coin_size))
+    
     pixel_cm_ratio = diameter_circle/coin_size
     
     coins_width_avg = diameter_circle
@@ -1397,10 +1399,6 @@ def extract_traits(image_file):
     tag_info = barcode_detect(marker_barcode_img)
 
     ####################################################
-    
-        
-
-    
     
     return image_file_name, tag_info, tassel_area, tassel_area_ratio, cnt_width, cnt_height, n_branch, avg_branch_length, coins_width_avg, coin_size, pixel_cm_ratio
     
