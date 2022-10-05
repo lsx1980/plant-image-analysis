@@ -45,7 +45,7 @@ from scipy import optimize
 from scipy import ndimage
 from scipy.interpolate import interp1d
 
-from skan import skeleton_to_csgraph, Skeleton, summarize, draw
+from skan import Skeleton, summarize, draw
 
 import imutils
 from imutils import perspective
@@ -82,7 +82,6 @@ import natsort
 
 import warnings
 warnings.filterwarnings("ignore")
-
 
 
 MBFACTOR = float(1<<20)
@@ -264,7 +263,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     # return segmentation mask
     return img_thresh
     
-    
+
 
 
 def circle_detection(image):
@@ -975,6 +974,7 @@ def marker_detect(img_ori, template, method, selection_threshold):
 
 
 
+
 def skeleton_bw(thresh):
 
     """compute skeleton from binary mask image
@@ -990,6 +990,8 @@ def skeleton_bw(thresh):
         skeleton: skeleton data 
         
     """
+    
+
     # Convert mask to boolean image, rather than 0 and 255 for skimage to use it
     
     #convert an image from OpenCV to skimage
@@ -997,10 +999,12 @@ def skeleton_bw(thresh):
 
     #image_bw = img_as_bool((thresh_sk))
 
-    #skeleton = morphology.skeletonize(image_bw)
+    #skeleton = morphology.medial_axis(image_bw)
+    
+
     ##################################
     #define kernel size
-    kernel_size = 15
+    kernel_size = 20
     
     # taking a matrix of size 25 as the kernel
     kernel = np.ones((kernel_size, kernel_size), np.uint8)
@@ -1011,13 +1015,27 @@ def skeleton_bw(thresh):
     # image closing
     image_bw = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
     
+    # Image Opening to fill the holes inside contours
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    
+    image_bw = cv2.morphologyEx(image_bw, cv2.MORPH_OPEN,kernel)
+
+    
     # get the skeleton 
     skeleton = morphology.thin(image_bw)
-
+    
+   
+    #image_bw = img_as_bool((image_bw))
+    #skeleton = morphology.medial_axis(image_bw)
+    
+    #skeleton = morphology.skeletonize(image_bw)
+    #####################################
+    
+    
     # convert the skeleton image to byte 
     skeleton_img = skeleton.astype(np.uint8) * 255
-
-    return skeleton_img, skeleton
+    
+    return skeleton_img, skeleton, image_bw
 
 
 
@@ -1084,14 +1102,8 @@ def skeleton_graph(image_skeleton):
     #select end branch
     sub_branch = branch_data.loc[branch_data['branch-type'] == 1]
     
-    sub_branch_cleaned = sub_branch
-    
-    
     sub_branch_branch_distance = sub_branch["branch-distance"].tolist()
-    
-    sub_branch_branch_distance_cleaned = sub_branch_branch_distance
-    
-    '''
+ 
     # remove outliers in branch distance 
     outlier_list = outlier_doubleMAD(sub_branch_branch_distance, thresh = 3.5)
     
@@ -1100,7 +1112,7 @@ def skeleton_graph(image_skeleton):
     sub_branch_cleaned = sub_branch.drop(sub_branch.index[indices])
     
     sub_branch_branch_distance_cleaned = [i for j, i in enumerate(sub_branch_branch_distance) if j not in indices]
-    '''
+
     
     print("Branch graph info : {0}\n".format(sub_branch_cleaned))
     
@@ -1283,7 +1295,8 @@ def extract_traits(image_file):
     # make sure tassel object was detected
     if (cv2.countNonZero(image_mask) == 0) or (max_area < min_size):
         
-        print("Mask image is empty...\n")
+        print("Mask image is empty, suggest to use HSV channel...\n")
+        
     else:
         
         print("Mask segmentation finished successfully!\n")
@@ -1300,13 +1313,21 @@ def extract_traits(image_file):
         
         
         #get the medial axis of the contour
-        image_skeleton, skeleton = skeleton_bw(image_mask)
+        (image_skeleton, skeleton, image_bw) = skeleton_bw(image_mask)
 
         # save skeleton result
         result_file = (save_path + base_name + '_skeleton' + file_extension) 
         cv2.imwrite(result_file, img_as_ubyte(image_skeleton))
         
+        # save binray mask result
+        result_file = (save_path + base_name + '_image_bw' + file_extension) 
+        cv2.imwrite(result_file, img_as_ubyte(image_bw))
         
+        
+        
+        
+        
+        # convert skeleton to graph
         (branch_data, n_branch, branch_length) = skeleton_graph(image_skeleton)
         
         avg_branch_length = int(sum(branch_length)/len(branch_length))
@@ -1316,17 +1337,17 @@ def extract_traits(image_file):
         #result_file = (save_path + base_name + '_hist' + file_extension)
         #plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0)
         #plt.close()
-        '''
+        
         fig = plt.plot()
         source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
-        #img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-distance', skeleton_colormap = 'hsv')
-        img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-type', skeleton_colormap = 'hsv')
+        img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-distance', skeleton_colormap = 'hsv')
+        #img_overlay = draw.overlay_euclidean_skeleton_2d(source_image, branch_data, skeleton_color_source = 'branch-type', skeleton_colormap = 'hsv')
         
         # save skeleton result
         result_file = (save_path + base_name + '_skeleton_graph' + file_extension) 
         plt.savefig(result_file, transparent = True, bbox_inches = 'tight', pad_inches = 0, dpi = 600)
         plt.close()
-        '''
+        
      
         #print("[INFO] {} branch end points found\n".format(n_branch))
         
