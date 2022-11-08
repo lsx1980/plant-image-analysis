@@ -282,7 +282,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #print(img_thresh.dtype)
     
     
-    size_kernel = 15
+    size_kernel = 5
     
     #if mask contains mutiple non-conected parts, combine them into one. 
     contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -371,6 +371,135 @@ def percentage(part, whole):
 
 
 
+
+def circle_detection(image):
+
+    """Detecting Circles in Images using OpenCV and Hough Circles
+    
+    Inputs: 
+    
+        image: image loaded 
+
+    Returns:
+    
+        circles: detcted circles
+        
+        circle_detection_img: circle overlayed with image
+        
+        diameter_circle: diameter of detected circle
+        
+    """
+    
+    # create background image for drawing the detected circle
+    output = image.copy()
+    
+    # obtain image dimension
+    img_height, img_width, n_channels = image.shape
+    
+    #backup input image
+    circle_detection_img = image.copy()
+    
+    # change image from RGB to Gray scale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # apply blur filter 
+    blurred = cv2.medianBlur(gray, 25)
+    
+    # setup parameters for circle detection
+    
+    # This parameter is the inverse ratio of the accumulator resolution to the image resolution 
+    #(see Yuen et al. for more details). Essentially, the larger the dp gets, the smaller the accumulator array gets.
+    dp = 1.5
+    
+    #Minimum distance between the center (x, y) coordinates of detected circles. 
+    #If the minDist is too small, multiple circles in the same neighborhood as the original may be (falsely) detected. 
+    #If the minDist is too large, then some circles may not be detected at all.
+    minDist = 100
+    
+    #Gradient value used to handle edge detection in the Yuen et al. method.
+    #param1 = 30
+    
+    #accumulator threshold value for the cv2.HOUGH_GRADIENT method. 
+    #The smaller the threshold is, the more circles will be detected (including false circles). 
+    #The larger the threshold is, the more circles will potentially be returned. 
+    #param2 = 30  
+    
+    #Minimum/Maximum size of the radius (in pixels).
+    #minRadius = 80
+    #maxRadius = 120 
+    
+    # detect circles in the image
+    #circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1.2, minDist, param1=param1, param2=param2, minRadius=minRadius, maxRadius=maxRadius)
+    
+    # detect circles in the image
+    circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, dp, minDist)
+    
+    # initialize diameter of detected circle
+    diameter_circle = 0
+    
+    
+    circle_center_coord = []
+    circle_center_radius = []
+    idx_closest = 0
+    
+    
+    # convert the (x, y) coordinates and radius of the circles to integers
+    circles = np.round(circles[0, :]).astype("int")
+    
+    if len(circles) > 1:
+        
+        print("More than one circles were found!")
+        
+        idx_closest = 0
+    
+    else:
+
+        # ensure at least some circles were found
+        if circles is not None and len(circles) > 0:
+            
+            idx_closest = 0
+    
+    # loop over the (x, y) coordinates and radius of the circles
+    for (x, y, r) in circles:
+        
+        coord = (x, y)
+        
+        circle_center_coord.append(coord)
+        circle_center_radius.append(r)
+
+    if idx_closest == 0:
+    
+        print("Circle marker with radius = {} was detected!\n".format(circle_center_radius[idx_closest]))
+    '''
+    # draw the circle in the output image, then draw a center
+    circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], circle_center_radius[idx_closest], (0, 255, 0), 4)
+    circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], 5, (0, 128, 255), -1)
+
+    # compute the diameter of coin
+    diameter_circle = circle_center_radius[idx_closest]*2
+    
+    
+    tmp_mask = np.zeros([img_width, img_height], dtype=np.uint8)
+    
+    tmp_mask = cv2.circle(tmp_mask, circle_center_coord[idx_closest], circle_center_radius[idx_closest] + 5, (255, 255, 255), -1)
+    
+    tmp_mask_binary = cv2.threshold(tmp_mask, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    
+    masked_tmp = cv2.bitwise_and(image.copy(), image.copy(), mask = ~tmp_mask_binary)
+    '''
+    
+    (startX, startY) = circle_center_coord[idx_closest]
+    
+    endX = startX + int(r*1.2) + 1050
+    endY = startY + int(r*1.2) + 1050
+    
+    sticker_crop_img = output[startY:endY, startX:endX]
+    
+    
+    return circles, sticker_crop_img, diameter_circle
+
+
+
 # Detect stickers in the image
 def sticker_detect(img_ori):
     
@@ -393,10 +522,8 @@ def sticker_detect(img_ori):
    
 
     # load the image, clone it for output, and then convert it to grayscale
-    #img_ori = cv2.imread(image_file)
-    
     img_rgb = img_ori.copy()
-      
+    
     # Convert it to grayscale 
     img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY) 
       
@@ -410,13 +537,14 @@ def sticker_detect(img_ori):
     
     
     # Specify a threshold 
-    threshold = 0.8
-    
-    flag = False
+    threshold = 0.6
     
     if np.amax(res) > threshold:
         
         flag = True
+    else:
+
+        flag = False
     
     print(flag)
     
@@ -434,29 +562,30 @@ def sticker_detect(img_ori):
         
         #print(min_val, max_val, min_loc, max_loc)
         
-        '''
-        (startX, startY) = max_loc
-        endX = startX + template.shape[1] + 1050
-        endY = startY + template.shape[0] + 1050
-        '''
         
+        (startX, startY) = max_loc
+        endX = startX + template.shape[0] + 1050 + 110
+        endY = startY + template.shape[1] + 1050 + 110
+        
+        '''
         (startX, startY) = max_loc
         startX = startX - 100
         startY = startY
         
-        endX = startX + template.shape[1] + 1050 + 100
-        endY = startY + template.shape[0] + 1050
-        
+        endX = startX + template.shape[1] + int(w*0.8)
+        endY = startY + template.shape[0] + int(h*0.8)
         '''
+        
         # Draw a rectangle around the matched region. 
         for pt in zip(*loc[::-1]): 
+            
             sticker_overlay = cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,255,255), 2)
-        '''
         
-        marker_crop_img = img_rgb[startY:endY, startX:endX]
+        
+        sticker_crop_img = img_rgb[startY:endY, startX:endX]
 
 
-    return  marker_crop_img
+    return  sticker_crop_img, sticker_overlay
 
 '''
 def individual_object_seg(orig, labels, save_path, base_name, file_extension):
@@ -762,7 +891,6 @@ def leaf_traits_computation(orig, labels, save_path, base_name, file_extension):
         #cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
         contours, hierarchy = cv2.findContours(mask.copy(),cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         c = max(contours, key = cv2.contourArea)
-        
         
        
         if len(c) >= 10 :
@@ -1391,19 +1519,19 @@ def extract_traits(image_file):
         mkdir(track_save_path)
         
        
-
-    print ("results_folder: " + save_path)
+    print("results_folder: {0}\n".format(str(save_path)))
     
-    print ("track_save_path: " + track_save_path)
+    print("track_save_path:  {0}\n".format(str(track_save_path)))
     
+   
     
         
     if isbright(image_file):
     
         if (file_size > 5.0):
-            print("File size is {0} MB".format(str(int(file_size))))
+            print("File size is {0} MB\n".format(str(int(file_size))))
         else:
-            print("Plant object segmentation using automatic color clustering method... ")
+            print("Plant object segmentation using automatic color clustering method... \n")
         
         image = cv2.imread(image_file)
         
@@ -1416,16 +1544,25 @@ def extract_traits(image_file):
         args_channels = args['channels']
         args_num_clusters = args['num_clusters']
         
-        
-        (sticker_crop_img) = sticker_detect(orig)
+        '''
+        (sticker_crop_img, sticker_overlay) = sticker_detect(orig)
         
         # save segmentation result
         result_file = (marker_save_path + base_name + '.' + args['filetype'])
         #print(result_file)
+        cv2.imwrite(result_file, sticker_overlay)
+        '''
+        
+        (circles, sticker_crop_img, diameter_circle) = circle_detection(orig) 
+
+        # save result
+        result_file = (save_path + base_name + '_circle_template' + file_extension)
         cv2.imwrite(result_file, sticker_crop_img)
         
         
         orig = sticker_crop_img.copy()
+        
+        #orig = sticker_crop_img.copy()
         
         #color clustering based plant object segmentation
         thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
@@ -1433,10 +1570,7 @@ def extract_traits(image_file):
         result_file = (save_path + base_name + '_seg' + file_extension)
         #print(filename)
         cv2.imwrite(result_file, thresh)
-        
-        
-       
-        
+
         
         num_clusters = 5
         #save color quantization result
@@ -1601,10 +1735,17 @@ if __name__ == '__main__':
     global  template
     template_path = args['temp_path']
     
-    # Read the template 
-    template = cv2.imread(template_path, 0) 
-    #print(template)
-
+    if not template_path:
+        # Read the template 
+        template = cv2.imread(template_path, 0) 
+        
+        if template is None:
+            print("template image is empty!\n")
+        else:
+            print("template image loaded!\n")
+    else:
+        print("template path empty\n")
+        
 
     #print((imgList))
     #global save_path

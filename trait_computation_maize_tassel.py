@@ -1004,7 +1004,7 @@ def skeleton_bw(thresh):
 
     ##################################
     #define kernel size
-    kernel_size = 20
+    kernel_size = 15
     
     # taking a matrix of size 25 as the kernel
     kernel = np.ones((kernel_size, kernel_size), np.uint8)

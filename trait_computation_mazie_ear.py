@@ -2037,8 +2037,8 @@ def extract_traits(image_file):
     #result_file = (save_path + base_name + '_combined_mask' + file_extension)
     #cv2.imwrite(result_file, combined_mask)
     
-    # #combine external contours and internal contours 
-    thresh_combined_mask = cv2.threshold(combined_mask, 128, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    # combine external contours and internal contours 
+    thresh_combined_mask = cv2.threshold(combined_mask, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     
     # find contours in the thresholded image
     cnts = cv2.findContours(thresh_combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
