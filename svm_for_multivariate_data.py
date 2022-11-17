@@ -39,9 +39,12 @@ def multidimensional_classification(full_path):
     #df = pd.read_csv(full_path, names = ['sepal-len', 'sepal-width', 'petal-len', 'petal-width','target'])
     #data_features = ['sepal-len', 'sepal-width', 'petal-len', 'petal-width']
     
-    df = pd.read_excel(full_path, names = ['filename','tassel area', 'tassel area ratio', 'average width', 'average height', 'number of branches', 'average branch length', 'target'])
+    df = pd.read_excel(full_path, names = ['filename','tassel area', 'tassel area ratio', 'average width', 'average height', 'number of branches', 'average branch length', 'tassel_type'])
     
+
     data_features = ['tassel area', 'tassel area ratio', 'average width', 'average height', 'number of branches', 'average branch length']
+    
+    #data_features = ['max_width', 'max_height', 'number_of_branches']
 
 
     # X -> features, y -> label
@@ -52,16 +55,23 @@ def multidimensional_classification(full_path):
     X = df.loc[:, data_features].values
 
     # Extract target class ID 
-    y = df.loc[:, ['target']].values
+    y = df.loc[:, ['tassel_type']].values
+    
+    y = y.ravel()
     
     # Now using scikit-learn model_selection module, split the iris data into train/test data sets
     # keeping 40% reserved for testing purpose and 60% data will be used to train and form model.
     # dividing X, y into train and test data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, random_state = 0)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size = 0.8, random_state = 0)
+    
+    # keeping 40% reserved for testing purpose and 60% data will be used to train and form model.
+    #X_train, X_test, y_train, y_test = model_selection.train_test_split (X, y, test_size=0.8, random_state=0)
+    
 
     # training a linear SVM classifier
 
     svm_model_linear = SVC(kernel = 'linear', C = 1).fit(X_train, y_train)
+    
     svm_predictions = svm_model_linear.predict(X_test)
 
     # model accuracy for X_test  
@@ -72,6 +82,49 @@ def multidimensional_classification(full_path):
     
     print(accuracy)
     
+    
+    # Further, let’s now validate robustness of above model using K-Fold Cross validation technique
+
+    # We give cross_val_score a model, the entire iris data set and its real values, and the number of folds:
+
+    scores_res = model_selection.cross_val_score(svm_model_linear, X, y, cv=5)
+
+    # Print the accuracy of each fold (i.e. 5 as above we asked cv 5)
+    print(scores_res)
+
+    # And the mean accuracy of all 5 folds.
+    print(scores_res.mean())
+    
+    
+    
+    
+    '''
+    linear = SVC(kernel='linear', C=1, decision_function_shape='ovo').fit(X_train, y_train)
+    
+    rbf = SVC(kernel='rbf', gamma=1, C=1, decision_function_shape='ovo').fit(X_train, y_train)
+    
+    poly = SVC(kernel='poly', degree=3, C=1, decision_function_shape='ovo').fit(X_train, y_train)
+    
+    sig = SVC(kernel='sigmoid', C=1, decision_function_shape='ovo').fit(X_train, y_train)
+    
+    linear_pred = linear.predict(X_test)
+    poly_pred = poly.predict(X_test)
+    rbf_pred = rbf.predict(X_test)
+    sig_pred = sig.predict(X_test)
+
+    
+    # retrieve the accuracy and print it for all 4 kernel functions
+    accuracy_lin = linear.score(X_test, y_test)
+    accuracy_poly = poly.score(X_test, y_test)
+    accuracy_rbf = rbf.score(X_test, y_test)
+    accuracy_sig = sig.score(X_test, y_test)
+    
+    print("Accuracy Linear Kernel:", accuracy_lin)
+    print("Accuracy Polynomial Kernel:", accuracy_poly)
+    print("Accuracy Radial Basis Kernel:", accuracy_rbf)
+    print("Accuracy Sigmoid Kernel:", accuracy_sig)
+    '''
+
     '''
     in_data_for_prediction = [[4.9876, 3.348, 1.8488, 0.2], [5.3654, 2.0853, 3.4675, 1.1222], [5.890, 3.33, 5.134, 1.6]]
 
