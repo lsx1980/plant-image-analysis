@@ -1,9 +1,7 @@
 """
 Version: 1.5
 
-Summary: This code demonstrates SVM(Support Vector Machine) for classification of multi-dimensional Dataset.
-Please refer here a sample dataset of Iris flowers having multiple dimensions i.e.
-petal-length, petal-width, sepal-length, sepal-width.
+Summary: This code implemented SVM(Support Vector Machine) for classification of multi-dimensional Dataset (Tassel shape calssification)
 
 Author: suxing liu
 
@@ -11,9 +9,7 @@ Author-email: suxingliu@gmail.com
 
 USAGE
 
-    python3 svm_for_multivariate_data.py -p ~/example/cluster_ml/ -f iris.data
-
-
+    python3 svm_for_multivariate_data.py -p ~/example/cluster_ml/ -f trait_part.xlsx
 
 """
 
@@ -29,27 +25,35 @@ from sklearn.svm import SVC
 from sklearn import model_selection
 from sklearn.decomposition import PCA
 
+
+import matplotlib
+matplotlib.use('Agg')
+
 from matplotlib import pyplot as plt
+
 import numpy as np 
 
 
 def multidimensional_classification(full_path):
     
-    # Read dataset into pandas dataframe
-    #df = pd.read_csv(full_path, names = ['sepal-len', 'sepal-width', 'petal-len', 'petal-width','target'])
-    #data_features = ['sepal-len', 'sepal-width', 'petal-len', 'petal-width']
+    """SVM(Support Vector Machine) for classification of multi-dimensional Dataset
     
+    Inputs: 
+    
+        full_path: full path of the training excel file
+
+    Returns:
+        print out accuracy and confusion matrix
+        
+    """
+    
+    # Read dataset into pandas dataframe
     df = pd.read_excel(full_path, names = ['filename','tassel area', 'tassel area ratio', 'average width', 'average height', 'number of branches', 'average branch length', 'tassel_type'])
     
-
+    # assign features
     data_features = ['tassel area', 'tassel area ratio', 'average width', 'average height', 'number of branches', 'average branch length']
     
     #data_features = ['max_width', 'max_height', 'number_of_branches']
-
-
-    # X -> features, y -> label
-    #X = iris.data
-    #y = iris.target
     
     # Extract features
     X = df.loc[:, data_features].values
@@ -69,7 +73,6 @@ def multidimensional_classification(full_path):
     
 
     # training a linear SVM classifier
-
     svm_model_linear = SVC(kernel = 'linear', C = 1).fit(X_train, y_train)
     
     svm_predictions = svm_model_linear.predict(X_test)
@@ -96,7 +99,8 @@ def multidimensional_classification(full_path):
     print(scores_res.mean())
     
     
-    
+    # perform PCA analysis
+    PCA_analysis(X, y)
     
     '''
     linear = SVC(kernel='linear', C=1, decision_function_shape='ovo').fit(X_train, y_train)
@@ -135,23 +139,47 @@ def multidimensional_classification(full_path):
     print('Given third iris is of type:', p_res[2])
     '''
     
-    PCA_analysis(X, y)
     
 
-#colormap mapping
+
 def get_cmap(n, name = 'hsv'):
-    """get the color mapping""" 
-    #viridis, BrBG, hsv, copper, Spectral
-    #Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
-    #RGB color; the keyword argument name must be a standard mpl colormap name
-    return plt.cm.get_cmap(name,n+1)
+
+    """get n kinds of colors from a color palette 
+    
+    Inputs: 
+    
+        n: number of colors
+        
+        name: the color palette choosed
+        
+    Returns:
+    
+        plt.cm.get_cmap(name, n): Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
+        RGB color; the keyword argument name must be a standard mpl colormap name. 
+        
+    """   
+
+    return plt.cm.get_cmap(name,n)
     
     
     
 def PCA_analysis(X, y):
     
-    #Dimensionality Reduction using PCA (Principal Component Analysis) Here n_components = 2 means, transform into a 2-Dimensional dataset.
+    """Dimensionality Reduction using PCA (Principal Component Analysis) 
     
+    Inputs: 
+    
+        X: feature data
+        
+        y: target class ID 
+        
+    Returns:
+    
+        scatter_plot of all classes
+        
+    """   
+
+    #Use n_components = 2, transform into a 2-Dimensional dataset.
     pca = PCA(n_components=2, whiten=True).fit(X)
     
     X_pca = pca.transform(X)
@@ -159,14 +187,11 @@ def PCA_analysis(X, y):
     print('explained variance ratio:', pca.explained_variance_ratio_)
     print('Preserved Variance:', sum(pca.explained_variance_ratio_))
 
-    # Print scatter plot to view classification of the simplified dataset
-    
-    #target_names = ['Iris-setosa', 'Iris-versicolor', 'Iris-virginica']
-    
+    # assign class IDs
     target_names = ['C1', 'C2','C3','C4','C5','C6','C7','C8','C9']
     
 
-    
+    # Print scatter plot to view classification of the simplified dataset
     colors = get_cmap(len(target_names))
 
     plt.figure()
@@ -180,14 +205,17 @@ def PCA_analysis(X, y):
         plt.scatter(X_pca[target_list == t_name, 0], X_pca[target_list ==t_name, 1], color = color_rgb, label=t_name)
 
     plt.legend()
-    plt.show()
+    #plt.show()
+    
+    # save plot result
+    result_file = (current_path + 'scatter_plot.png')
+    plt.savefig(result_file)
+    
+
 
 
 
 if __name__ == '__main__':
-    
-    # loading the iris dataset
-    #iris = datasets.load_iris()
     
     # construct the argument and parse the arguments
     ap = argparse.ArgumentParser()
@@ -200,6 +228,8 @@ if __name__ == '__main__':
     current_path = args["path"]
     filename = args["filename"]
     
+    # full path to data file
     full_path = current_path + filename
-
+    
+    # classification 
     multidimensional_classification(full_path)

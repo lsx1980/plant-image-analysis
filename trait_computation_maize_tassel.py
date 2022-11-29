@@ -15,7 +15,7 @@ USAGE:
 
 time python3 trait_computation_maize_tassel.py -p ~/example/plant_test/seeds/test_tassel/ -ft png 
 
-time python3 trait_computation_maize_tassel.py -p ~/example/plant_test/seeds/test_tassel/ -s HSV -c 1 -ft png
+time python3 trait_computation_maize_tassel.py -p ~/example/plant_test/seeds/test_tassel/  -s HSV -c -ft png
 
 '''
 
@@ -205,15 +205,16 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    #thresh_cleaned = (thresh)
+    thresh_cleaned = (thresh)
     
+    '''
     # clean the border of mask image
     if np.count_nonzero(thresh) > 0:
         
         thresh_cleaned = clear_border(thresh)
     else:
         thresh_cleaned = thresh
-    
+    '''
     # get the connected Components in the mask image
     nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
 
@@ -1004,7 +1005,7 @@ def skeleton_bw(thresh):
 
     ##################################
     #define kernel size
-    kernel_size = 15
+    kernel_size = 35
     
     # taking a matrix of size 25 as the kernel
     kernel = np.ones((kernel_size, kernel_size), np.uint8)

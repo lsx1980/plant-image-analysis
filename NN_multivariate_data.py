@@ -1,7 +1,7 @@
 """
 Version: 1.5
 
-Summary: Build a Neural Network in Python (Multi-class Classification)
+Summary: Build a Neural Network (Multi-class Classification) for Tassel shape calssification
 
 Author: suxing liu
 
@@ -9,9 +9,7 @@ Author-email: suxingliu@gmail.com
 
 USAGE
 
-    python3 NN_multivariate_data.py -p ~/example/cluster_ml/ -f iris.data
-
-
+    python3 NN_multivariate_data.py -p ~/example/cluster_ml/ -f trait_part.xlsx
 
 """
 
@@ -34,15 +32,28 @@ import keras
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
 
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 
-def multidimensional_classification(full_path):
 
-    # Read dataset into pandas dataframe
-    #df = pd.read_excel(full_path, names = ['sepal-len', 'sepal-width', 'petal-len', 'petal-width', 'species'])
-    #data_features = ['sepal-len', 'sepal-width', 'petal-len', 'petal-width']
+def multidimensional_classification(full_path):
     
+    """Neural Network (Multi-class Classification) for Tassel shape calssification
+    
+    Inputs: 
+    
+        full_path: full path of the training excel file
+
+    Returns:
+    
+        print out accuracy and confusion matrix
+        
+    """
+    
+    # Read dataset into pandas dataframe
+ 
     #df = pd.read_excel(full_path, names = ['filename','tassel area', 'tassel area ratio', 'average width', 'average height', 'number of branches', 'average branch length', 'tassel_type'])
     
     df = pd.read_excel(full_path, names = ['tassel area', 'tassel area ratio', 'average width', 'average height', 'number of branches', 'average branch length', 'species'])
@@ -65,20 +76,14 @@ def multidimensional_classification(full_path):
     #Y = df['tassel_type']
     #X = df.drop(['tassel_type'], axis = 1)
 
-    print(X.shape)
-    print(Y.shape)
+    #print(X.shape)
+    #print(Y.shape)
 
     # convert to numpy arrays
     X = np.array(X)
 
     # show Y
     Y.head()
-
-    ## 0        setosa
-    ## 1     virginica
-    ## 2    versicolor
-    ## 3     virginica
-    ## 4        setosa
 
     # work with labels
     # encode class values as integers
@@ -102,7 +107,6 @@ def multidimensional_classification(full_path):
     model.compile(optimizer = 'rmsprop', loss = 'categorical_crossentropy', metrics = ['accuracy'])
               
 
-
     # early stopping callback
     # This callback will stop the training when there is no improvement in  
     # the validation loss for 10 consecutive epochs.  
@@ -110,7 +114,6 @@ def multidimensional_classification(full_path):
 
     # update the model to fit call
     history = model.fit(X, dummy_y, callbacks = [es], epochs = 8000000, batch_size = 10, shuffle = True, validation_split = 0.2, verbose = 1)
-
 
     history_dict = history.history
 
@@ -136,45 +139,27 @@ def multidimensional_classification(full_path):
     plt.ylabel('Accuracy')
     plt.legend()
 
-    plt.show()
-
-
-
+     # save plot result
+    result_file = (current_path + 'Accuracy_plot.png')
+    plt.savefig(result_file)
 
     preds = model.predict(X) # see how the model did!
     print(preds[0]) # i'm spreading that prediction across three nodes and they sum to 1
     print(np.sum(preds[0])) # sum it up! Should be 1
-    ## [9.9999988e-01 1.3509347e-07 6.7064638e-16]
-    ## 1.0
 
     # Almost a perfect prediction
     # actual is left, predicted is top
     # names can be found by inspecting Y
     matrix = confusion_matrix(dummy_y.argmax(axis = 1), preds.argmax(axis = 1))
-    matrix
-    ## array([[50,  0,  0],
-    ##        [ 0, 46,  4],
-    ##        [ 0,  1, 49]])
 
 
     # more detail on how well things were predicted
     print(classification_report(dummy_y.argmax( axis = 1), preds.argmax(axis = 1)))
-    ##               precision    recall  f1-score   support
-    ## 
-    ##            0       1.00      1.00      1.00        50
-    ##            1       0.98      0.92      0.95        50
-    ##            2       0.92      0.98      0.95        50
-    ## 
-    ##     accuracy                           0.97       150
-    ##    macro avg       0.97      0.97      0.97       150
-    ## weighted avg       0.97      0.97      0.97       150
 
 
 
 if __name__ == '__main__':
     
-    # loading the iris dataset
-    #iris = datasets.load_iris()
     
     # construct the argument and parse the arguments
     ap = argparse.ArgumentParser()
@@ -187,6 +172,8 @@ if __name__ == '__main__':
     current_path = args["path"]
     filename = args["filename"]
     
+    # full path to data file
     full_path = current_path + filename
-
+    
+     # classification 
     multidimensional_classification(full_path)
