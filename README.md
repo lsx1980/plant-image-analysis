@@ -6,6 +6,10 @@ Author: Suxing Liu
 
 ![Optional Text](../master/media/image_01.png) 
 
+![Optional Text](../master/media/Slide1.png) 
+
+![Optional Text](../master/media/Slide2.png) 
+
 Robust and parameter-free plant image segmentation and trait extraction.
 
 1. Process with plant image top view, including whole tray plant image, this tool will segment it into individual images.
@@ -27,5 +31,5 @@ docker run -v "$(pwd)":/opt/arabidopsis-rosette-analysis -w /opt/arabidopsis-ros
 ### Singularity
 
 ```bash
-singularity exec docker://computationalplantscience/arabidopsis-rosette-analysis python3 trait_extract_parallel.py -i input -o output -ft "jpg,png"
+singularity exec docker://computationalplantscience/arabidopsis-rosette-analysis python3 trait_extract_parallel_demo.py -i input -o output -ft "jpg,png"
 ```
