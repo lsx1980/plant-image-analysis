@@ -13,7 +13,7 @@ Created: 2018-09-29
 
 USAGE:
 
-time python3 trait_extract_parallel_mi.py -p ~/example/plant_test/mi_test/ -ft png -min 100 -md 5  -tp ~/example/plant_test/mi_test/marker_template/marker_template.png
+time python3 trait_extract_parallel_tara.py -p ~/example/Tara_data/test/ -ft jpg -s YCC -c 2 -min 30000
 
 '''
 
@@ -71,7 +71,8 @@ import multiprocessing
 from multiprocessing import Pool
 from contextlib import closing
 
-from pathlib import Path 
+from pathlib import Path
+
 
 from matplotlib import collections
 
@@ -371,6 +372,8 @@ def percentage(part, whole):
 
 
 
+    
+    
 
 def circle_detection(image):
 
@@ -1476,13 +1479,12 @@ def isbright(image_file):
     #return np.mean(L) < thresh
     
     return 1.0 < thresh
-
-
-
+    
 
 def remove_character_string(str_input):
     
     return str_input.replace('#', '')
+
 
 
 def hex_mean_color(color1, color2, color3, color4):
@@ -1490,6 +1492,29 @@ def hex_mean_color(color1, color2, color3, color4):
     average_value = (int(remove_character_string(color1), 16) + int(remove_character_string(color2), 16) + int(remove_character_string(color3), 16) + int(remove_character_string(color4), 16))//4
        
     return hex(average_value)
+
+
+def region_extracted(orig, x, y, w, h):
+    
+    """compute rect region based on left top corner coordinates and dimension of the region
+    
+    Inputs: 
+    
+        orig: image
+        
+        x, y: left top corner coordinates 
+        
+        w, h: dimension of the region
+
+    Returns:
+    
+        roi: region of interest
+        
+    """   
+    roi = orig[y:y+h, x:x+w]
+    
+    return roi
+
 
 
 
@@ -1527,15 +1552,17 @@ def extract_traits(image_file):
         mkdir(mkpath)
         save_path = mkpath + '/'
         
-        track_save_path = os.path.dirname(abs_path) + '/trace/'
-        mkdir(track_save_path)
+        #track_save_path = os.path.dirname(abs_path) + '/trace/'
+        #mkdir(track_save_path)
         
        
     print("results_folder: {0}\n".format(str(save_path)))
     
-    print("track_save_path:  {0}\n".format(str(track_save_path)))
+    #print("track_save_path:  {0}\n".format(str(track_save_path)))
     
-   
+    
+    ##############################
+
     
         
     if isbright(image_file):
@@ -1547,37 +1574,69 @@ def extract_traits(image_file):
         
         image = cv2.imread(image_file)
         
-        #make backup image
+        # make backup image
         orig = image.copy()
         
+        # get the dimension of the image
+        img_height, img_width, img_channels = orig.shape
+    
         source_image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
+        
+
          
         args_colorspace = args['color_space']
         args_channels = args['channels']
         args_num_clusters = args['num_clusters']
         
-        '''
-        (sticker_crop_img, sticker_overlay) = sticker_detect(orig)
+        ##########################################################################
+        #barcode detection and recognization
+        x = int(img_width*0.5)
+        y = int(0)
+        w = int(img_width*0.5)
+        h = int(img_height*0.5)
+
+        roi_image_barcode = region_extracted(orig, x, y, w, h)
         
-        # save segmentation result
-        result_file = (marker_save_path + base_name + '.' + args['filetype'])
-        #print(result_file)
-        cv2.imwrite(result_file, sticker_overlay)
-        '''
+        #tag_info = barcode_detect(roi_image)
         
-        (circles, sticker_crop_img, diameter_circle) = circle_detection(orig) 
+        # initialize the cv2 QRCode detector
+        detector = cv2.QRCodeDetector()
+        
+        # detect and decode
+        (QR_data, bbox, straight_qrcode) = detector.detectAndDecode(roi_image_barcode)
+        
+        print("QR code info: {}\n".format(QR_data))
+        
+        ##########################################################################
+        
+        #(circles, sticker_crop_img, diameter_circle) = circle_detection(orig) 
 
         # save result
-        result_file = (save_path + base_name + '_circle_template' + file_extension)
-        cv2.imwrite(result_file, sticker_crop_img)
+        #result_file = (save_path + base_name + '_circle_template' + file_extension)
+        #cv2.imwrite(result_file, sticker_crop_img)
+
+        
+        #Plant region detection
+        x = int(0)
+        y = int(0)
+        w = int(img_width*0.4)
+        h = int(img_height*1.0)
+
+        roi_image = region_extracted(orig, x, y, w, h)
+        
+        # save result
+        result_file = (save_path + base_name + '_plant_region' + file_extension)
+        cv2.imwrite(result_file, roi_image)
         
         
-        orig = sticker_crop_img.copy()
+        orig = roi_image.copy()
         
         #orig = sticker_crop_img.copy()
         
         #color clustering based plant object segmentation
         thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
+        
+        #thresh = ~thresh
         # save segmentation result
         result_file = (save_path + base_name + '_seg' + file_extension)
         #print(filename)
@@ -1674,25 +1733,24 @@ def extract_traits(image_file):
         #plt.imsave(result_file, img_as_float(labels), cmap = "Spectral")
         cv2.imwrite(result_file, labeled_img)
         
-        (avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec, box_coord_rec) = leaf_traits_computation(sticker_crop_img.copy(), labels, save_path, base_name, file_extension)
+        
+        #(avg_curv, label_trait, track_trait, leaf_index_rec, contours_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec, box_coord_rec) = leaf_traits_computation(roi_image.copy(), labels, save_path, base_name, file_extension)
         
 
         #################################################################end of validation file
+        n_leaves = int(len(np.unique(labels)))
         
-        n_leaves = int(len((leaf_index_rec)))
+        #n_leaves = int(len((leaf_index_rec)))
         
         print('number of leaves = {0}'.format(n_leaves))
         
         #save watershed result label image
-        result_file = (save_path + base_name + '_leafspec' + file_extension)
-        cv2.imwrite(result_file, label_trait)
+        #result_file = (save_path + base_name + '_leafspec' + file_extension)
+        #cv2.imwrite(result_file, label_trait)
         
         #save watershed result label image
-        result_file = (track_save_path + base_name + '_trace' + file_extension)
-        cv2.imwrite(result_file, track_trait)
-        
-        
-
+        #result_file = (track_save_path + base_name + '_trace' + file_extension)
+        #cv2.imwrite(result_file, track_trait)
         
     else:
         
@@ -1706,9 +1764,10 @@ def extract_traits(image_file):
     
     #print("hex_colors = {}".format(hex_colors))
     
-    return image_file_name, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec
+    #return image_file_name, QR_data, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec
     
-    
+    return image_file_name, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio, hex_colors
+
 
 
 
@@ -1725,7 +1784,7 @@ if __name__ == '__main__':
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 100,  help = 'min size of object to be segmented.')
-    ap.add_argument('-md', '--min_dist', type = int, required = False, default = 10,  help = 'distance threshold of watershed segmentation.')
+    ap.add_argument('-md', '--min_dist', type = int, required = False, default = 60,  help = 'distance threshold of watershed segmentation.')
     ap.add_argument("-tp", "--temp_path", required = False,  help="template image path")
     args = vars(ap.parse_args())
     
@@ -1771,40 +1830,27 @@ if __name__ == '__main__':
     #loop execute
     for image_id, image in enumerate(imgList):
         
-        if image_id > 20:
-            
-            min_distance_value = 35
+    
+        #(filename, QR_data, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec) = extract_traits(image)
         
-        elif image_id > 40:
-            
-            min_distance_value = 55
-
-            
-        (filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec) = extract_traits(image)
+        
+        (filename, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio, hex_colors) = extract_traits(image)
         
         #result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], 
+        result_list.append([filename, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], 
                             str(matplotlib.colors.to_rgb(hex_colors[0])), str(matplotlib.colors.to_rgb(hex_colors[1])), str(matplotlib.colors.to_rgb(hex_colors[2])), str(matplotlib.colors.to_rgb(hex_colors[3])),
                             hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3], hex_mean_color(hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3])])
-        
+        '''
         for i in range(len(leaf_index_rec)):
+                        #result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], leaf_color_value_rec[i][0],leaf_color_value_rec[i][1],leaf_color_value_rec[i][2],leaf_color_value_rec[i][3]])
             
-            #result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], leaf_color_value_rec[i][0],leaf_color_value_rec[i][1],leaf_color_value_rec[i][2],leaf_color_value_rec[i][3]])
-            
-            result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], 
+            result_list_leaf.append([filename, QR_data, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], 
                                     str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][0])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][1])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][2])), str(matplotlib.colors.to_rgb(leaf_color_value_rec[i][3])),
                                     str(leaf_color_value_rec[i][0]), str(leaf_color_value_rec[i][1]), str(leaf_color_value_rec[i][2]), str(leaf_color_value_rec[i][3]),
                                     hex_mean_color(leaf_color_value_rec[i][0], leaf_color_value_rec[i][1], leaf_color_value_rec[i][2], leaf_color_value_rec[i][3])])
-    '''
-    
-    #print(result_list)
-    
-    for image in imgList:
-    
-        extract_traits(image)
-    '''
-
+        '''
+    ########################################################################
     '''
     # get cpu number for parallel processing
     agents = psutil.cpu_count()   
@@ -1820,7 +1866,7 @@ if __name__ == '__main__':
         pool.terminate()
     '''
     
-    
+    #########################################################################
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
     
     print("Summary: {0} plant images were processed...\n".format(n_images))
@@ -1862,7 +1908,7 @@ if __name__ == '__main__':
         
         sheet.delete_rows(2, sheet.max_row+1) # for entire sheet
         
-        sheet_leaf = wb.create_sheet()
+        #sheet_leaf = wb.create_sheet()
         
         #sheet_leaf.delete_rows(2, sheet_leaf.max_row+1) # for entire sheet
         
@@ -1876,11 +1922,11 @@ if __name__ == '__main__':
         sheet_leaf = wb.create_sheet()
 
         sheet.cell(row = 1, column = 1).value = 'filename'
-        sheet.cell(row = 1, column = 2).value = 'leaf_area'
-        sheet.cell(row = 1, column = 3).value = 'solidity'
-        sheet.cell(row = 1, column = 4).value = 'max_width'
+        sheet.cell(row = 1, column = 2).value = 'QR_data'
+        sheet.cell(row = 1, column = 3).value = 'leaf_area'
+        sheet.cell(row = 1, column = 4).value = 'solidity'
+        sheet.cell(row = 1, column = 5).value = 'max_width'
         sheet.cell(row = 1, column = 5).value = 'max_height'
-        sheet.cell(row = 1, column = 6).value = 'curvature'
         sheet.cell(row = 1, column = 7).value = 'number_leaf'
         sheet.cell(row = 1, column = 8).value = 'color distribution cluster 1'
         sheet.cell(row = 1, column = 9).value = 'color distribution cluster 2'
@@ -1897,7 +1943,8 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 20).value = 'average HEX value'       
         
     
-        
+        '''
+        sheet_leaf.cell(row = 1, column = 1).value = 'filename'
         sheet_leaf.cell(row = 1, column = 1).value = 'filename'
         sheet_leaf.cell(row = 1, column = 2).value = 'leaf_index'
         sheet_leaf.cell(row = 1, column = 3).value = 'area'
@@ -1919,17 +1966,18 @@ if __name__ == '__main__':
         sheet_leaf.cell(row = 1, column = 19).value = 'color cluster 4 HEX value'
         sheet_leaf.cell(row = 1, column = 20).value = 'average HEX value'      
         
-        
+        '''
         
     for row in result_list:
         sheet.append(row)
    
     #for row in result_list_leaf:
         #sheet_leaf.append(row)
-        
+    
+    '''
     for row in result_list_leaf:
         sheet_leaf.append(row)
-    
+    '''
     #save the csv file
     wb.save(trait_file)
     
