@@ -54,8 +54,8 @@ RUN pip3 install numpy \
     pylibdmtx \
     psutil \
     natsort \
-    pathlib \
-    pandas 
+    pathlib 
+
 
 
 

@@ -13,7 +13,7 @@ Created: 2018-09-29
 
 USAGE:
 
-time python3 trait_extract_parallel_tara.py -p ~/example/Tara_data/test/ -ft jpg -s YCC -c 2 -min 30000
+time python3 trait_extract_parallel_tara.py -p ~/example/Tara_data/test/ -ft jpg -s YCC -c 2 -min 10000
 
 '''
 
@@ -23,6 +23,7 @@ import glob
 import utils
 
 from collections import Counter
+from collections import OrderedDict
 
 import argparse
 
@@ -79,6 +80,7 @@ from matplotlib import collections
 import matplotlib.colors
 
 
+
 MBFACTOR = float(1<<20)
 
 class ComputeCurvature:
@@ -125,6 +127,73 @@ class ComputeCurvature:
         self.r = ri.mean()
 
         return 1 / self.r  # Return the curvature
+
+
+
+class ColorLabeler:
+    def __init__(self):
+        # initialize the colors dictionary, containing the color
+        # name as the key and the RGB tuple as the value
+        colors = OrderedDict({
+            "dark skin": (115, 82, 68),
+            "light skin": (194, 150, 130),
+            "blue sky": (98, 122, 157),
+            "foliage": (87, 108, 67),
+            "blue flower": (133, 128, 177),
+            "bluish green": (103, 189, 170),
+            "orange": (214, 126, 44),
+            "purplish blue": (8, 91, 166),
+            "moderate red": (193, 90, 99),
+            "purple": (94, 60, 108),
+            "yellow green": (157, 188, 64),
+            "orange yellow": (224, 163, 46),
+            "blue": (56, 61, 150),
+            "green": (70, 148, 73),
+            "red": (175, 54, 60),
+            "yellow": (231, 199, 31),
+            "magneta": (187, 86, 149),
+            "cyan": (8, 133, 161),
+            "white": (243, 243, 242),
+            "neutral 8": (200, 200, 200),
+            "neutral 6.5": (160, 160, 160),
+            "neutral 5": (122, 122, 121),
+            "neutral 3.5": (85, 85, 85),
+            "black": (52, 52, 52)})
+        # allocate memory for the L*a*b* image, then initialize
+        # the color names list
+        self.lab = np.zeros((len(colors), 1, 3), dtype="uint8")
+        self.colorNames = []
+        # loop over the colors dictionary
+        for (i, (name, rgb)) in enumerate(colors.items()):
+            # update the L*a*b* array and the color names list
+            self.lab[i] = rgb
+            self.colorNames.append(name)
+        # convert the L*a*b* array from the RGB color space
+        # to L*a*b*
+        self.lab = cv2.cvtColor(self.lab, cv2.COLOR_RGB2LAB)
+
+    def label(self, image, c):
+            # construct a mask for the contour, then compute the
+            # average L*a*b* value for the masked region
+            mask = np.zeros(image.shape[:2], dtype="uint8")
+            cv2.drawContours(mask, [c], -1, 255, -1)
+            mask = cv2.erode(mask, None, iterations=2)
+            mean = cv2.mean(image, mask=mask)[:3]
+            # initialize the minimum distance found thus far
+            minDist = (np.inf, None)
+            # loop over the known L*a*b* color values
+            for (i, row) in enumerate(self.lab):
+                # compute the distance between the current L*a*b*
+                # color value and the mean of the image
+                d = dist.euclidean(row[0], mean)
+                # if the distance is smaller than the current distance,
+                # then update the bookkeeping variable
+                if d < minDist[0]:
+                    minDist = (d, i)
+            # return the name of the color with the smallest distance
+            return self.colorNames[minDist[1]]
+
+
 
 
 # generate foloder to store the output results
@@ -226,7 +295,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         thresh_cleaned = thresh
     
      
-    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
+    (nb_components, output, stats, centroids) = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
 
     # stats[0], centroids[0] are for the background label. ignore
     # cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT
@@ -1544,21 +1613,22 @@ def extract_traits(image_file):
         save_path = args['result']
     else:
          # save folder construction
-        mkpath = os.path.dirname(abs_path) +'/marker_detection'
-        mkdir(mkpath)
-        marker_save_path = mkpath + '/'
+        #mkpath = os.path.dirname(abs_path) +'/marker_detection'
+        #mkdir(mkpath)
+        #marker_save_path = mkpath + '/'
         
-        mkpath = os.path.dirname(abs_path) +'/' + base_name
+        mkpath = os.path.dirname(abs_path) + '/' + base_name + '/plant_result'
         mkdir(mkpath)
         save_path = mkpath + '/'
         
-        #track_save_path = os.path.dirname(abs_path) + '/trace/'
-        #mkdir(track_save_path)
+        mkpath = os.path.dirname(abs_path) + '/' + base_name + '/color_checker_result'
+        mkdir(mkpath)
+        color_checker_path = mkpath + '/'
         
        
-    print("results_folder: {0}\n".format(str(save_path)))
+    print("results_folder: {0}".format(str(save_path)))
     
-    #print("track_save_path:  {0}\n".format(str(track_save_path)))
+    print("color_checker_path:  {0}\n".format(str(color_checker_path)))
     
     
     ##############################
@@ -1589,7 +1659,7 @@ def extract_traits(image_file):
         args_num_clusters = args['num_clusters']
         
         ##########################################################################
-        #barcode detection and recognization
+        #barcode detection and recognition
         x = int(img_width*0.5)
         y = int(0)
         w = int(img_width*0.5)
@@ -1607,6 +1677,93 @@ def extract_traits(image_file):
         
         print("QR code info: {}\n".format(QR_data))
         
+        ####################################################
+        #Color checker detection
+        
+        #define color checker region
+        x = int(img_width*0.4)
+        y = int(img_height*0.5)
+        w = int(img_width*0.6)
+        h = int(img_height*0.4)
+
+        roi_image_checker = region_extracted(orig, x, y, w, h)
+        
+        # save result
+        #result_file = (save_path + base_name + '_color_checker' + file_extension)
+        #cv2.imwrite(result_file, roi_image_checker)
+        
+        
+        #orig = sticker_crop_img.copy()
+        
+        #color clustering based plant object segmentation
+        thresh_checker = color_cluster_seg(roi_image_checker.copy(), args_colorspace, args_channels, args_num_clusters)
+        
+        (nb_checker, output, stats, centroids) = cv2.connectedComponentsWithStats(thresh_checker, connectivity = 8)
+        
+        print("Number of color checkers detected: {} \n".format(nb_checker-1))
+        
+        # find contours in the thresholded image
+        cnts = cv2.findContours(thresh_checker.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        cnts = imutils.grab_contours(cnts)
+        
+        # initialize the shape detector and color labeler
+        cl = ColorLabeler()
+        
+        lab = cv2.cvtColor(roi_image_checker.copy(), cv2.COLOR_BGR2LAB)
+        
+        # loop over the contours
+        for c in cnts:
+            # compute the center of the contour
+            M = cv2.moments(c)
+            cX = int((M["m10"] / M["m00"]))
+            cY = int((M["m01"] / M["m00"]))
+            # detect the shape of the contour and label the color
+
+            color = cl.label(lab, c)
+            # multiply the contour (x, y)-coordinates by the resize ratio,
+            # then draw the contours and the name of the shape and labeled
+            # color on the image
+            c = c.astype("float")
+            c = c.astype("int")
+            text = "{}".format(color)
+            cv2.drawContours(roi_image_checker, [c], -1, (0, 255, 0), 2)
+            cv2.putText(roi_image_checker, text, (cX-80, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        
+        result_file = (color_checker_path + base_name + '_color_checker_detected' + file_extension)
+        #print(filename)
+        cv2.imwrite(result_file, roi_image_checker)
+        
+        # apply individual object mask
+        color_checker_masked = cv2.bitwise_and(roi_image_checker.copy(), roi_image_checker.copy(), mask = thresh_checker)
+        
+        #thresh = ~thresh
+        # save segmentation result
+        result_file = (color_checker_path + base_name + '_color_checker_seg' + file_extension)
+        #print(filename)
+        cv2.imwrite(result_file, color_checker_masked)
+
+        
+        num_clusters = nb_checker + 1
+        #save color quantization result
+        #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
+        (rgb_colors_checker, counts_checker, hex_colors_checker) = color_region(color_checker_masked.copy(), thresh_checker, color_checker_path, num_clusters)
+        
+        
+         #find external contour 
+        (trait_img_checker, area_checker, solidity_checker, max_width_checker, max_height_checker) = comp_external_contour(roi_image_checker.copy(), thresh_checker)
+        # save segmentation result
+        result_file = (color_checker_path + base_name + '_color_checker__excontour' + file_extension)
+        #print(filename)
+        cv2.imwrite(result_file, trait_img_checker)   
+
+        #compute the diagonal path length of each color checker
+        avg_diagonal_length = np.average([max_width_checker, max_height_checker])
+        #avg_diagonal_length = 237.0, max_width_checker = 235, max_height_checker = 239
+        print("avg_diagonal_length = {}, max_width_checker = {}, max_height_checker = {}\n".format(avg_diagonal_length, max_width_checker, max_height_checker))
+         
+        
+
         ##########################################################################
         
         #(circles, sticker_crop_img, diameter_circle) = circle_detection(orig) 
@@ -1628,6 +1785,7 @@ def extract_traits(image_file):
         result_file = (save_path + base_name + '_plant_region' + file_extension)
         cv2.imwrite(result_file, roi_image)
         
+        #roi_image = orig.copy()
         
         orig = roi_image.copy()
         
@@ -1685,7 +1843,6 @@ def extract_traits(image_file):
         
         #selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
         
-        ####################################################
 
         
         ###############################################
@@ -1752,6 +1909,9 @@ def extract_traits(image_file):
         #result_file = (track_save_path + base_name + '_trace' + file_extension)
         #cv2.imwrite(result_file, track_trait)
         
+       
+      
+        
     else:
         
         area=solidity=max_width=max_height=avg_curv=n_leaves=0
@@ -1766,7 +1926,11 @@ def extract_traits(image_file):
     
     #return image_file_name, QR_data, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec
     
-    return image_file_name, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio, hex_colors
+    longest_axis = max(max_width, max_height)
+    
+    #return image_file_name, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio, hex_colors
+    
+    return image_file_name, QR_data, area, solidity, longest_axis, n_leaves, color_ratio, hex_colors
 
 
 
@@ -1784,7 +1948,7 @@ if __name__ == '__main__':
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 100,  help = 'min size of object to be segmented.')
-    ap.add_argument('-md', '--min_dist', type = int, required = False, default = 60,  help = 'distance threshold of watershed segmentation.')
+    ap.add_argument('-md', '--min_dist', type = int, required = False, default = 50,  help = 'distance threshold of watershed segmentation.')
     ap.add_argument("-tp", "--temp_path", required = False,  help="template image path")
     args = vars(ap.parse_args())
     
@@ -1834,11 +1998,11 @@ if __name__ == '__main__':
         #(filename, QR_data, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec) = extract_traits(image)
         
         
-        (filename, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio, hex_colors) = extract_traits(image)
+        (filename, QR_data, area, solidity, longest_axis, n_leaves, color_ratio, hex_colors) = extract_traits(image)
         
         #result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        result_list.append([filename, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], 
+        result_list.append([filename, QR_data, area, solidity, longest_axis, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], 
                             str(matplotlib.colors.to_rgb(hex_colors[0])), str(matplotlib.colors.to_rgb(hex_colors[1])), str(matplotlib.colors.to_rgb(hex_colors[2])), str(matplotlib.colors.to_rgb(hex_colors[3])),
                             hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3], hex_mean_color(hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3])])
         '''
@@ -1925,22 +2089,22 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 2).value = 'QR_data'
         sheet.cell(row = 1, column = 3).value = 'leaf_area'
         sheet.cell(row = 1, column = 4).value = 'solidity'
-        sheet.cell(row = 1, column = 5).value = 'max_width'
-        sheet.cell(row = 1, column = 5).value = 'max_height'
-        sheet.cell(row = 1, column = 7).value = 'number_leaf'
-        sheet.cell(row = 1, column = 8).value = 'color distribution cluster 1'
-        sheet.cell(row = 1, column = 9).value = 'color distribution cluster 2'
-        sheet.cell(row = 1, column = 10).value = 'color distribution cluster 3'
-        sheet.cell(row = 1, column = 11).value = 'color distribution cluster 4'
-        sheet.cell(row = 1, column = 12).value = 'color cluster 1 RGB value'
-        sheet.cell(row = 1, column = 13).value = 'color cluster 2 RGB value'
-        sheet.cell(row = 1, column = 14).value = 'color cluster 3 RGB value'
-        sheet.cell(row = 1, column = 15).value = 'color cluster 4 RGB value'
-        sheet.cell(row = 1, column = 16).value = 'color cluster 1 HEX value'
-        sheet.cell(row = 1, column = 17).value = 'color cluster 2 HEX value'
-        sheet.cell(row = 1, column = 18).value = 'color cluster 3 HEX value'
-        sheet.cell(row = 1, column = 19).value = 'color cluster 4 HEX value'
-        sheet.cell(row = 1, column = 20).value = 'average HEX value'       
+        sheet.cell(row = 1, column = 5).value = 'longest_axis'
+        #sheet.cell(row = 1, column = 6).value = 'max_height'
+        sheet.cell(row = 1, column = 6).value = 'number_leaf'
+        sheet.cell(row = 1, column = 7).value = 'color distribution cluster 1'
+        sheet.cell(row = 1, column = 8).value = 'color distribution cluster 2'
+        sheet.cell(row = 1, column = 9).value = 'color distribution cluster 3'
+        sheet.cell(row = 1, column = 10).value = 'color distribution cluster 4'
+        sheet.cell(row = 1, column = 11).value = 'color cluster 1 RGB value'
+        sheet.cell(row = 1, column = 12).value = 'color cluster 2 RGB value'
+        sheet.cell(row = 1, column = 13).value = 'color cluster 3 RGB value'
+        sheet.cell(row = 1, column = 14).value = 'color cluster 4 RGB value'
+        sheet.cell(row = 1, column = 15).value = 'color cluster 1 HEX value'
+        sheet.cell(row = 1, column = 16).value = 'color cluster 2 HEX value'
+        sheet.cell(row = 1, column = 17).value = 'color cluster 3 HEX value'
+        sheet.cell(row = 1, column = 18).value = 'color cluster 4 HEX value'
+        sheet.cell(row = 1, column = 19).value = 'average HEX value'       
         
     
         '''
