@@ -232,6 +232,7 @@ def image_label(image_file):
     
     #localMax = peak_local_max(D, min_distance = 120, labels=thresh)
     
+
     #define result path for labeled images
     result_img_path = save_path_label + str(filename[0:-4]) + '_df.jpg'
     # save results
@@ -240,9 +241,13 @@ def image_label(image_file):
      
     # perform a connected component analysis on the local peaks,
     # using 8-connectivity, then appy the Watershed algorithm
+    
     markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
+    
     labels = watershed(-D, markers, mask=thresh)
-    #print("[INFO] {} unique segments found".format(len(np.unique(labels)) - 1))
+    
+    
+    print("[INFO] {} unique segments found".format(len(np.unique(labels)) - 1))
 
     #Map component labels to hue val
     label_hue = np.uint8(128*labels/np.max(labels))

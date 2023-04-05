@@ -9,7 +9,7 @@ Author: suxing liu
 
 Author-email: suxingliu@gmail.com
 
-Created: 2018-09-29
+Created: 2023-02-29
 
 USAGE:
 
@@ -1586,8 +1586,48 @@ def region_extracted(orig, x, y, w, h):
 
 
 
+# convert from RGB to LAB space
+def Lab_distance(image, mask):
+    
+    # Make backup image
+    image_rgb = image.copy()
+    
+    # apply object mask
+    masked_rgb = cv2.bitwise_and(image_rgb, image_rgb, mask = mask)
+    
+    # Convert color space to LAB space and extract L channel
+    L, A, B = cv2.split(cv2.cvtColor(masked_rgb, cv2.COLOR_BGR2LAB))
+    
+    return masked_rgb, L, A, B
+    
+    
+#computation of color_diff index
+def color_diff_index(ref_color, rgb_colors):
+    
+    #print(ref_color)
+    
+    color_diff = []
+    
+    for index, value in enumerate(rgb_colors): 
+        #print(index, value) 
+        curr_color = rgb2lab(np.uint8(np.asarray([[value]])))
+        
+        #color difference in CIE lab space
+        diff = deltaE_cie76(ref_color, curr_color)
+        
+        color_diff.append(diff)
+        
+        #print(index, value, diff) 
+    
+    color_diff_index = sum(color_diff) / len(color_diff)/100
+    
+    print("Color difference are {}: \n".format(color_diff_index)) 
+
+    return color_diff_index
 
 
+
+# compute all the traits
 def extract_traits(image_file):
 
 
@@ -1695,8 +1735,11 @@ def extract_traits(image_file):
         
         #orig = sticker_crop_img.copy()
         
+        
         #color clustering based plant object segmentation
-        thresh_checker = color_cluster_seg(roi_image_checker.copy(), args_colorspace, args_channels, args_num_clusters)
+        #thresh_checker = color_cluster_seg(roi_image_checker.copy(), args_colorspace, args_channels, args_num_clusters)
+        
+        thresh_checker = color_cluster_seg(roi_image_checker.copy(), str('lab'), str('0'), args_num_clusters)
         
         (nb_checker, output, stats, centroids) = cv2.connectedComponentsWithStats(thresh_checker, connectivity = 8)
         
@@ -1712,8 +1755,11 @@ def extract_traits(image_file):
         
         lab = cv2.cvtColor(roi_image_checker.copy(), cv2.COLOR_BGR2LAB)
         
+        
+        checker_LAB = []
+        
         # loop over the contours
-        for c in cnts:
+        for idx, c in enumerate(cnts):
             # compute the center of the contour
             M = cv2.moments(c)
             cX = int((M["m10"] / M["m00"]))
@@ -1721,6 +1767,10 @@ def extract_traits(image_file):
             # detect the shape of the contour and label the color
 
             color = cl.label(lab, c)
+            
+            if idx < 1:
+                checker_LAB.append(cl.lab)
+            
             # multiply the contour (x, y)-coordinates by the resize ratio,
             # then draw the contours and the name of the shape and labeled
             # color on the image
@@ -1729,6 +1779,8 @@ def extract_traits(image_file):
             text = "{}".format(color)
             cv2.drawContours(roi_image_checker, [c], -1, (0, 255, 0), 2)
             cv2.putText(roi_image_checker, text, (cX-80, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        
+        print("Detected color checker value in lab: {} \n".format(checker_LAB))
         
         result_file = (color_checker_path + base_name + '_color_checker_detected' + file_extension)
         #print(filename)
@@ -1801,10 +1853,15 @@ def extract_traits(image_file):
         cv2.imwrite(result_file, thresh)
 
         
-        num_clusters = 5
+        # define color cluster levels by user
+        num_clusters = 4
+        
         #save color quantization result
         #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
         (rgb_colors, counts, hex_colors) = color_region(orig, thresh, save_path, num_clusters)
+        
+        
+        
         
         
          #find external contour 
@@ -1839,9 +1896,37 @@ def extract_traits(image_file):
         #color_ratio_rec.append(color_ratio)
         #color_value_rec.append(hex_colors)
         
+
+        # get reference color from selected color checker
+        #ref_color = rgb2lab(np.uint8(np.asarray([[rgb_colors_sticker[0]]])))
         
+        ####################################################
+        #compute color difference in cie lab space and return difference value
         
-        #selected_color = rgb2lab(np.uint8(np.asarray([[rgb_colors[0]]])))
+        #color_diff_index_value = color_diff_index(ref_color, rgb_colors)
+        
+        #print("color_diff_index_value : \n",format(color_diff_index_value)) 
+        
+        '''
+        print("Color difference are : ") 
+        
+        print(selected_color)
+        
+        color_diff = []
+        
+        for index, value in enumerate(rgb_colors): 
+            #print(index, value) 
+            curr_color = rgb2lab(np.uint8(np.asarray([[value]])))
+            diff = deltaE_cie76(selected_color, curr_color)
+            
+            color_diff.append(diff)
+            
+            #print(index, value, diff) 
+        
+        temp_idex = sum(color_diff) / len(color_diff)
+        
+        print(temp_idex) 
+        '''
         
 
         
@@ -1930,7 +2015,7 @@ def extract_traits(image_file):
     
     #return image_file_name, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio, hex_colors
     
-    return image_file_name, QR_data, area, solidity, longest_axis, n_leaves, color_ratio, hex_colors
+    return image_file_name, QR_data, area, solidity, longest_axis, avg_diagonal_length, n_leaves, color_ratio, hex_colors
 
 
 
@@ -1998,13 +2083,13 @@ if __name__ == '__main__':
         #(filename, QR_data, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio, hex_colors, leaf_index_rec, area_rec, curv_rec, solidity_rec, major_axis_rec, minor_axis_rec, leaf_color_ratio_rec, leaf_color_value_rec) = extract_traits(image)
         
         
-        (filename, QR_data, area, solidity, longest_axis, n_leaves, color_ratio, hex_colors) = extract_traits(image)
+        (filename, QR_data, area, solidity, longest_axis, avg_diagonal_length, n_leaves, color_ratio, hex_colors) = extract_traits(image)
         
         #result_list.append([filename, area, solidity, max_width, max_height, avg_curv, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3]])
         
-        result_list.append([filename, QR_data, area, solidity, longest_axis, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], color_ratio[3], 
-                            str(matplotlib.colors.to_rgb(hex_colors[0])), str(matplotlib.colors.to_rgb(hex_colors[1])), str(matplotlib.colors.to_rgb(hex_colors[2])), str(matplotlib.colors.to_rgb(hex_colors[3])),
-                            hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3], hex_mean_color(hex_colors[0], hex_colors[1], hex_colors[2], hex_colors[3])])
+        result_list.append([filename, QR_data, area, solidity, longest_axis, avg_diagonal_length, n_leaves, color_ratio[0], color_ratio[1], color_ratio[2], 
+                            str(matplotlib.colors.to_rgb(hex_colors[0])), str(matplotlib.colors.to_rgb(hex_colors[1])), str(matplotlib.colors.to_rgb(hex_colors[2])), 
+                            hex_colors[0], hex_colors[1], hex_colors[2]])
         '''
         for i in range(len(leaf_index_rec)):
                         #result_list_leaf.append([filename, leaf_index_rec[i], area_rec[i], curv_rec[i], solidity_rec[i], major_axis_rec[i], minor_axis_rec[i], leaf_color_ratio_rec[i][0], leaf_color_ratio_rec[i][1], leaf_color_ratio_rec[i][2], leaf_color_ratio_rec[i][3], leaf_color_value_rec[i][0],leaf_color_value_rec[i][1],leaf_color_value_rec[i][2],leaf_color_value_rec[i][3]])
@@ -2090,21 +2175,18 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 3).value = 'leaf_area'
         sheet.cell(row = 1, column = 4).value = 'solidity'
         sheet.cell(row = 1, column = 5).value = 'longest_axis'
-        #sheet.cell(row = 1, column = 6).value = 'max_height'
-        sheet.cell(row = 1, column = 6).value = 'number_leaf'
-        sheet.cell(row = 1, column = 7).value = 'color distribution cluster 1'
-        sheet.cell(row = 1, column = 8).value = 'color distribution cluster 2'
-        sheet.cell(row = 1, column = 9).value = 'color distribution cluster 3'
-        sheet.cell(row = 1, column = 10).value = 'color distribution cluster 4'
+        sheet.cell(row = 1, column = 6).value = 'avg_diagonal_length'
+        sheet.cell(row = 1, column = 7).value = 'number_leaf'
+        sheet.cell(row = 1, column = 8).value = 'color distribution cluster 1'
+        sheet.cell(row = 1, column = 9).value = 'color distribution cluster 2'
+        sheet.cell(row = 1, column = 10).value = 'color distribution cluster 3'
         sheet.cell(row = 1, column = 11).value = 'color cluster 1 RGB value'
         sheet.cell(row = 1, column = 12).value = 'color cluster 2 RGB value'
         sheet.cell(row = 1, column = 13).value = 'color cluster 3 RGB value'
-        sheet.cell(row = 1, column = 14).value = 'color cluster 4 RGB value'
-        sheet.cell(row = 1, column = 15).value = 'color cluster 1 HEX value'
-        sheet.cell(row = 1, column = 16).value = 'color cluster 2 HEX value'
-        sheet.cell(row = 1, column = 17).value = 'color cluster 3 HEX value'
-        sheet.cell(row = 1, column = 18).value = 'color cluster 4 HEX value'
-        sheet.cell(row = 1, column = 19).value = 'average HEX value'       
+        sheet.cell(row = 1, column = 14).value = 'color cluster 1 HEX value'
+        sheet.cell(row = 1, column = 15).value = 'color cluster 2 HEX value'
+        sheet.cell(row = 1, column = 16).value = 'color cluster 3 HEX value'
+    
         
     
         '''

@@ -40,7 +40,7 @@ RUN python3 -m pip install --upgrade pip
 RUN pip3 install numpy \
     Pillow \
     scipy \
-    scikit-image \
+    scikit-image==0.19.3 \
     scikit-learn \
     matplotlib \
     pandas \
