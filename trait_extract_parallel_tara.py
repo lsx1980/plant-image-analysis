@@ -1729,26 +1729,70 @@ def extract_traits(image_file):
         roi_image_checker = region_extracted(orig, x, y, w, h)
         
         # save result
-        #result_file = (save_path + base_name + '_color_checker' + file_extension)
-        #cv2.imwrite(result_file, roi_image_checker)
-        
+       
+        orig_hsv = cv2.cvtColor(roi_image_checker, cv2.COLOR_BGR2HSV)
+    
+        gray_hsv = cv2.cvtColor(orig_hsv, cv2.COLOR_BGR2GRAY)
+    
+        thresh_checker = cv2.threshold(gray_hsv, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
         
         #orig = sticker_crop_img.copy()
         
-        
+    
         #color clustering based plant object segmentation
         #thresh_checker = color_cluster_seg(roi_image_checker.copy(), args_colorspace, args_channels, args_num_clusters)
         
-        thresh_checker = color_cluster_seg(roi_image_checker.copy(), str('lab'), str('0'), args_num_clusters)
+        #thresh_checker = color_cluster_seg(roi_image_checker.copy(), str('lab'), str('0'), args_num_clusters)
+
+
+        ####################################################################################
+            
+        # apply connected component analysis to the thresholded image
+        (numLabels, labels, stats, centroids) = cv2.connectedComponentsWithStats(thresh_checker, 4, cv2.CV_32S)
         
-        (nb_checker, output, stats, centroids) = cv2.connectedComponentsWithStats(thresh_checker, connectivity = 8)
+        # initialize an output mask 
+        mask_checker = np.zeros(gray_hsv.shape, dtype="uint8")
+
+        # loop over the number of unique connected component labels
+        for i in range(1, numLabels):
+            
+            # extract the connected component statistics and centroid for
+            # the current label
+            x = stats[i, cv2.CC_STAT_LEFT]
+            y = stats[i, cv2.CC_STAT_TOP]
+            w = stats[i, cv2.CC_STAT_WIDTH]
+            h = stats[i, cv2.CC_STAT_HEIGHT]
+            
+            area = stats[i, cv2.CC_STAT_AREA]
+            
+            (cX, cY) = centroids[i]
+            
+            # ensure the width, height, and area are all neither too small
+            # nor too big
+            keepWidth = w > 5 and w < 50
+            keepHeight = h > 45 and h < 65
+            keepArea = area > 2500 and area < 200000
+            # ensure the connected component we are examining passes all
+            # three tests
+            if keepArea:
+                # construct a mask for the current connected component and
+                # then take the bitwise OR with the mask
+                #print("[INFO] keeping connected component '{}'".format(i))
+                componentMask = (labels == i).astype("uint8") * 255
+                mask_checker = cv2.bitwise_or(mask_checker, componentMask)
+                
         
-        print("Number of color checkers detected: {} \n".format(nb_checker-1))
+         # apply individual object mask
+        color_checker_masked = cv2.bitwise_and(roi_image_checker.copy(), roi_image_checker.copy(), mask = mask_checker)
         
+        
+        
+        ################################################################################################
         # find contours in the thresholded image
-        cnts = cv2.findContours(thresh_checker.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts = cv2.findContours(mask_checker.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         cnts = imutils.grab_contours(cnts)
+        
         
         # initialize the shape detector and color labeler
         cl = ColorLabeler()
@@ -1777,33 +1821,31 @@ def extract_traits(image_file):
             c = c.astype("float")
             c = c.astype("int")
             text = "{}".format(color)
-            cv2.drawContours(roi_image_checker, [c], -1, (0, 255, 0), 2)
-            cv2.putText(roi_image_checker, text, (cX-80, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            color_checker_detected = cv2.drawContours(roi_image_checker, [c], -1, (0, 255, 0), 2)
+            color_checker_detected = cv2.putText(roi_image_checker, text, (cX-80, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
         
         print("Detected color checker value in lab: {} \n".format(checker_LAB))
+            
+
+
+        ################################################################################################
+        result_file = (color_checker_path + base_name + '_mask_checker' + file_extension)
+        #print(filename)
+        #cv2.imwrite(result_file, mask_checker)
+        
         
         result_file = (color_checker_path + base_name + '_color_checker_detected' + file_extension)
         #print(filename)
         cv2.imwrite(result_file, roi_image_checker)
         
-        # apply individual object mask
-        color_checker_masked = cv2.bitwise_and(roi_image_checker.copy(), roi_image_checker.copy(), mask = thresh_checker)
-        
         #thresh = ~thresh
         # save segmentation result
         result_file = (color_checker_path + base_name + '_color_checker_seg' + file_extension)
         #print(filename)
-        cv2.imwrite(result_file, color_checker_masked)
+        #cv2.imwrite(result_file, color_checker_masked)
 
-        
-        num_clusters = nb_checker + 1
-        #save color quantization result
-        #rgb_colors = color_quantization(image, thresh, save_path, num_clusters)
-        (rgb_colors_checker, counts_checker, hex_colors_checker) = color_region(color_checker_masked.copy(), thresh_checker, color_checker_path, num_clusters)
-        
-        
          #find external contour 
-        (trait_img_checker, area_checker, solidity_checker, max_width_checker, max_height_checker) = comp_external_contour(roi_image_checker.copy(), thresh_checker)
+        (trait_img_checker, area_checker, solidity_checker, max_width_checker, max_height_checker) = comp_external_contour(color_checker_masked.copy(), mask_checker)
         # save segmentation result
         result_file = (color_checker_path + base_name + '_color_checker__excontour' + file_extension)
         #print(filename)
@@ -1813,9 +1855,7 @@ def extract_traits(image_file):
         avg_diagonal_length = np.average([max_width_checker, max_height_checker])
         #avg_diagonal_length = 237.0, max_width_checker = 235, max_height_checker = 239
         print("avg_diagonal_length = {}, max_width_checker = {}, max_height_checker = {}\n".format(avg_diagonal_length, max_width_checker, max_height_checker))
-         
         
-
         ##########################################################################
         
         #(circles, sticker_crop_img, diameter_circle) = circle_detection(orig) 
