@@ -172,6 +172,7 @@ class ColorLabeler:
         # convert the L*a*b* array from the RGB color space
         # to L*a*b*
         self.lab = cv2.cvtColor(self.lab, cv2.COLOR_RGB2LAB)
+        #print("color_checker values:{}\n".format(self.lab))
 
     def label(self, image, c):
             # construct a mask for the contour, then compute the
@@ -201,6 +202,7 @@ class ColorLabeler:
     def label_c(self, lab_color_value):
             # initialize the minimum distance found thus far
             minDist = (np.inf, None)
+           
             # loop over the known L*a*b* color values
             for (i, row) in enumerate(self.lab):
                 # compute the distance between the current L*a*b*
@@ -1394,10 +1396,10 @@ def color_region(image, mask, save_path, num_clusters):
     cmap = get_cmap(num_clusters+1)
     
     #clrs = sns.color_palette('husl', n_colors = num_clusters)  # a list of RGB tuples
-
+    '''
     color_conversion = interp1d([0,1],[0,255])
     
-    '''
+    
     # initialize the color labeler
     cl = ColorLabeler()
 
@@ -1477,10 +1479,7 @@ def color_region(image, mask, save_path, num_clusters):
     #rgb_colors = [ordered_colors[i] for i in counts.keys()]
     
     rgb_colors = [np.array(ordered_colors[i]).reshape(1, 3) for i in counts.keys()]
-    
-    
-   
-    
+
     index_bkg = [index for index in range(len(hex_colors)) if hex_colors[index] == '#000000']
 
     #remove background color 
@@ -1880,7 +1879,7 @@ def extract_traits(image_file):
         
         
         ################################################################################################
-        # find contours in the masked chekced image and obtain the color value and name 
+        # find contours in the masked checker image and obtain the color value and name 
         cnts = cv2.findContours(mask_checker.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         cnts = imutils.grab_contours(cnts)
@@ -2063,17 +2062,35 @@ def extract_traits(image_file):
         
         for index, (ratio_value, color_value) in enumerate(zip(color_ratio, rgb_colors)): 
         
-            curr_color_lab = rgb2lab(color_value)
-                       
-            curr_color_lab_scaled = (curr_color_lab + [155, 128, 128]).flatten()
+            # validation test color value
+            #Skimage rgb2lab outputs 0≤L≤100, −127≤a≤127, −127≤b≤127 . The values are then converted to the destination data type:
+            # To convert to opencv (0~255): 8-bit images: L←L∗255/100,a←a+128,b←b+128
             
-            color_name = cl.label_c(curr_color_lab_scaled)
+            #curr_color_lab = rgb2lab([157/255.0, 188/255.0, 64/255.0])
             
-            print('Percentage = {0}, color value in lab space = {1}, color name = {2}\n'.format(ratio_value, curr_color_lab, color_name))
+            # color convertion between opencv lab data range and Skimage rgb2lab data range
+            
+            #print(type(color_value))
+            
+            #print((color_value.shape))
+            color_value_reshape = color_value.reshape((1,3))
+            
+            color_value_float = np.asarray([color_value_reshape[:, 0]/255.0, color_value_reshape[:,1]/255.0, color_value_reshape[:,2]/255.0])
+            
+            curr_color_lab = rgb2lab(color_value_float.flatten())
+            
+            curr_color_lab_scaled = np.asarray([curr_color_lab[0]*255/100.0, curr_color_lab[1] + 128.0, curr_color_lab[2] + 128.0])
+            
+            
+            print('color_value = {0}, curr_color_lab_scaled = {1}\n'.format(color_value, curr_color_lab_scaled))
+            
+            color_name = cl.label_c(curr_color_lab_scaled.flatten())
+            
+            print('Percentage = {0}, rgb_color = {1}, lab_color = {2}, color name = {3}\n'.format(ratio_value, color_value_reshape, curr_color_lab, color_name))
             
             color_name_cluster.append(color_name)
             
-            ratio_color.append(str(color_name) + ":  "  + str(float(ratio_value)*100) + "%" )
+            ratio_color.append(str(color_name) + ":  "  + str("{:.2f}".format(float(ratio_value)*100) + "%"))
         
         
         
