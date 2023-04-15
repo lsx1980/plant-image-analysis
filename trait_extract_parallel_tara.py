@@ -2053,7 +2053,8 @@ def extract_traits(image_file):
     
         #sort all lists according to sorted_idx_ratio order
         rgb_colors[:] = [rgb_colors[i] for i in sorted_idx_ratio] 
-        color_ratio[:] = [color_ratio[i] for i in sorted_idx_ratio] 
+        color_ratio[:] = [color_ratio[i] for i in sorted_idx_ratio]
+        hex_colors[:] = [hex_colors[i] for i in sorted_idx_ratio]
         
         color_name_cluster = []
         ratio_color = []
