@@ -245,12 +245,25 @@ def mkdir(path):
         return False
         
 
+
+# find the closest point wihch minimize the distance between current point and the center of image
+def closest_node(pt, pts):
+    
+    closest_index = dist.cdist([pt], pts).argmin()
+    
+    return closest_index
+
+
+
+
+
 def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     
 
     image_LAB = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     
+    cl = ColorLabeler()
     
     # Change image color space, if necessary.
     colorSpace = args_colorspace.lower()
@@ -277,9 +290,14 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         if len(image.shape) == 2:
             image.reshape(image.shape[0], image.shape[1], 1)
             
-    (width, height, n_channel) = image.shape
+    (height, width, n_channel) = image.shape
     
-
+    if n_channel > 1:
+        
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+        
  
     # Flatten the 2D image array into an MxN feature vector, where M is the number of pixels and N is the dimension (number of channels).
     reshaped = image.reshape(image.shape[0] * image.shape[1], image.shape[2])
@@ -311,7 +329,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    #thresh_cleaned = (thresh)
+    thresh_cleaned = (thresh)
     
     
     if np.count_nonzero(thresh) > 0:
@@ -323,48 +341,72 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
 
     (numLabels, labels, stats, centroids) = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
 
+    '''
     # stats[0], centroids[0] are for the background label. ignore
     # cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT
+    
+    # extract the connected component statistics for the current label
     sizes = stats[1:, cv2.CC_STAT_AREA]
-    
     Coord_left = stats[1:, cv2.CC_STAT_LEFT]
-    
     Coord_top = stats[1:, cv2.CC_STAT_TOP]
-    
     Coord_width = stats[1:, cv2.CC_STAT_WIDTH]
-    
     Coord_height = stats[1:, cv2.CC_STAT_HEIGHT]
+    Coord_centroids = np.delete(centroids,(0), axis=0)
     
-    Coord_centroids = centroids
+
     
     #print("Coord_centroids {}\n".format(centroids[1][1]))
     
     #print("[width, height] {} {}\n".format(width, height))
     
     numLabels = numLabels - 1
-    
+    '''
 
     
-    max_size = width*height*0.1
     
-    img_thresh = np.zeros([width, height], dtype=np.uint8)
+    ################################################################################################
+    
+    max_size = width*height
+    
+    # initialize an output mask 
+    mask = np.zeros(gray.shape, dtype="uint8")
+    
+    # loop over the number of unique connected component labels, skipping
+    # over the first label (as label zero is the background)
+    for i in range(1, numLabels):
+    # extract the connected component statistics for the current label
+        x = stats[i, cv2.CC_STAT_LEFT]
+        y = stats[i, cv2.CC_STAT_TOP]
+        w = stats[i, cv2.CC_STAT_WIDTH]
+        h = stats[i, cv2.CC_STAT_HEIGHT]
+        area = stats[i, cv2.CC_STAT_AREA]
     
     
-
-    #for every component in the image, keep it only if it's above min_size
-    for i in range(0, numLabels):
-
-        if (sizes[i] >= min_size):
+        # ensure the width, height, and area are all neither too small
+        # nor too big
+        keepWidth = w > 0 and w < 50000
+        keepHeight = h > 0 and h < 50000
+        keepArea = area > min_size and area < max_size
         
-            img_thresh[labels == i + 1] = 255
+        # ensure the connected component we are examining passes all three tests
+        #if all((keepWidth, keepHeight, keepArea)):
+        if keepArea:
+        # construct a mask for the current connected component and
+        # then take the bitwise OR with the mask
+            print("[INFO] keeping connected component '{}'".format(i))
+            componentMask = (labels == i).astype("uint8") * 255
+            mask = cv2.bitwise_or(mask, componentMask)
             
-            
+
+    img_thresh = mask
     
-    size_kernel = 10
+    
+    ###################################################################################################
+    size_kernel = 1
     
     #if mask contains mutiple non-conected parts, combine them into one. 
-    contours, hier = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
+    (contours, hier) = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    '''
     if len(contours) > 1:
         
         print("mask contains mutiple non-conected parts, combine them into one\n")
@@ -377,6 +419,74 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         
         img_thresh = closing
         
+    '''
+    
+    img_mask = np.zeros([height, width], dtype="uint8")
+    
+    #img_mask = np.zeros(gray.shape, dtype="uint8")
+     
+    # filter contours by color cue
+    for idx, c in enumerate(contours):
+        
+        # compute the center of the contour
+        M = cv2.moments(c)
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+    
+        (color_name, color_value) = cl.label(image_LAB, c)
+        
+        #img_thresh = cv2.putText(img_thresh, "{}".format(color_name), (int(cX), int(cY)), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (255, 0, 0), 2)
+        
+        if color_name == "foliage":
+            
+            #img_mask = cv2.drawContours(img_mask, c, -1, (255), -1)
+            img_mask = cv2.drawContours(image=img_mask, contours=[c], contourIdx=-1, color=(255,255,255), thickness=cv2.FILLED)
+            #img_mask = cv2.fillPoly(img_mask, pts = [contours], color =(255,255,255))
+            
+    img_thresh = img_mask
+
+        
+        
+    '''
+    ###################################################################################################
+    (numLabels, labels, stats, centroids) = cv2.connectedComponentsWithStats(img_thresh, connectivity = 8)
+
+    #keep the center component 
+
+    x_center = int(width // 2)
+    y_center = int(height // 2)
+    
+    Coord_centroids = np.delete(centroids,(0), axis=0)
+    
+    
+    #print("x_center, y_center = {} {}".format(x_center,y_center))
+    #print("centroids = {}".format(centroids))
+    
+    #finding closest point among the grid points list ot the M coordinates
+    idx_closest = closest_node((x_center,y_center), Coord_centroids) + 1
+    
+    print("idx_closest = {}  {}".format(idx_closest, Coord_centroids[idx_closest]))
+    
+    
+    for i in range(1, numLabels):
+        
+        (cX, cY) = (centroids[i][0], centroids[i][1])
+        
+        #print(cX, cY)
+        
+        img_thresh = cv2.putText(img_thresh, "#{}".format(i), (int(cX), int(cY)), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (255, 0, 0), 2)
+        
+    img_thresh = cv2.putText(img_thresh, "center", (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 2.8, (255, 0, 0), 2)
+    '''
+    
+    '''
+    if numLabels > 1:
+        img_thresh = np.zeros([height, width], dtype=np.uint8)
+     
+        img_thresh[labels == idx_closest] = 255
+    '''
+    
+    
     
     
     #return img_thresh
@@ -1481,17 +1591,19 @@ def color_region(image, mask, save_path, num_clusters):
     rgb_colors = [np.array(ordered_colors[i]).reshape(1, 3) for i in counts.keys()]
 
     index_bkg = [index for index in range(len(hex_colors)) if hex_colors[index] == '#000000']
-
-    #remove background color 
-    del hex_colors[index_bkg[0]]
-    del rgb_colors[index_bkg[0]]
-    
-    # Using dictionary comprehension to find list 
-    # keys having value . 
-    delete = [key for key in counts if key == index_bkg[0]] 
-  
-    # delete the key 
-    for key in delete: del counts[key] 
+   
+    if len(index_bkg) > 0:
+        
+        #remove background color 
+        del hex_colors[index_bkg[0]]
+        del rgb_colors[index_bkg[0]]
+        
+        # Using dictionary comprehension to find list 
+        # keys having value . 
+        delete = [key for key in counts if key == index_bkg[0]] 
+      
+        # delete the key 
+        for key in delete: del counts[key] 
     
     ########################################################################
     #compute color cluster ratio in percentage
@@ -1862,7 +1974,7 @@ def extract_traits(image_file):
             # nor too big
             keepWidth = w > 5 and w < 50
             keepHeight = h > 45 and h < 65
-            keepArea = area > 6200 and area < 200000
+            keepArea = area > 16200 and area < 200000
             # ensure the connected component we are examining passes all
             # three tests
             if keepArea:
@@ -1965,10 +2077,10 @@ def extract_traits(image_file):
         
         ##########################################################################
         #Plant object detection
-        x = int(img_width*0.063)
-        y = int(img_height*0.34)
-        w = int(img_width*0.20)
-        h = int(img_height*0.25)
+        x = int(img_width*0.083)
+        y = int(img_height*0.33)
+        w = int(img_width*0.30)
+        h = int(img_height*0.35)
 
         roi_image = region_extracted(orig, x, y, w, h)
         
@@ -1981,9 +2093,9 @@ def extract_traits(image_file):
         
         
         
-        #orig = remove(roi_image).copy()
+        orig = remove(roi_image).copy()
         
-        orig = roi_image.copy()
+        #orig = roi_image.copy()
         
         #color clustering based plant object segmentation
         thresh = color_cluster_seg(orig, args_colorspace, args_channels, args_num_clusters)
@@ -1992,7 +2104,7 @@ def extract_traits(image_file):
         # save segmentation result
         result_file = (save_path + base_name + '_seg' + file_extension)
         #print(filename)
-        cv2.imwrite(result_file, orig)
+        cv2.imwrite(result_file, thresh)
 
         
         # save plant image as lab color chart
@@ -2286,7 +2398,8 @@ if __name__ == '__main__':
     result_list = []
     
 
-    '''
+    
+    
     #loop execute
     for image_id, image in enumerate(imgList):
         
@@ -2331,7 +2444,7 @@ if __name__ == '__main__':
     diff_skin = list(zip(*result))[10]
     diff_foliage = list(zip(*result))[11]
     diff_purple = list(zip(*result))[12]
-
+    
     
     
     # create result list
@@ -2340,7 +2453,7 @@ if __name__ == '__main__':
         result_list.append([v0,v1,v2,v3,v4,v5,v6,v7,v8[0],v9[0],v10[0],v11[0],v12[0],v8[1],v9[1],v10[1],v11[1],v12[1],v8[2],v9[2],v10[2],v11[2],v12[2]])
         
       
-    
+    '''
     
     
     #########################################################################
