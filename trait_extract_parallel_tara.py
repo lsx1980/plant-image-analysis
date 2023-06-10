@@ -329,7 +329,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    thresh_cleaned = (thresh)
+    #thresh_cleaned = (thresh)
     
     
     if np.count_nonzero(thresh) > 0:
@@ -366,7 +366,12 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ################################################################################################
     
-    max_size = width*height
+
+    if args['max_size'] == 1000000:
+        
+        max_size = width*height
+    else:
+        max_size = args['max_size']
     
     # initialize an output mask 
     mask = np.zeros(gray.shape, dtype="uint8")
@@ -388,6 +393,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         keepHeight = h > 0 and h < 50000
         keepArea = area > min_size and area < max_size
         
+        #if all((keepWidth, keepHeight, keepArea)):
         # ensure the connected component we are examining passes all three tests
         #if all((keepWidth, keepHeight, keepArea)):
         if keepArea:
@@ -406,7 +412,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     #if mask contains mutiple non-conected parts, combine them into one. 
     (contours, hier) = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    '''
+    
     if len(contours) > 1:
         
         print("mask contains mutiple non-conected parts, combine them into one\n")
@@ -419,73 +425,85 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         
         img_thresh = closing
         
-    '''
     
-    img_mask = np.zeros([height, width], dtype="uint8")
     
-    #img_mask = np.zeros(gray.shape, dtype="uint8")
-     
-    # filter contours by color cue
-    for idx, c in enumerate(contours):
-        
-        # compute the center of the contour
-        M = cv2.moments(c)
-        cX = int(M["m10"] / M["m00"])
-        cY = int(M["m01"] / M["m00"])
+    if args["cue_color"] == 1:
     
-        (color_name, color_value) = cl.label(image_LAB, c)
+        img_mask = np.zeros([height, width], dtype="uint8")
         
-        #img_thresh = cv2.putText(img_thresh, "{}".format(color_name), (int(cX), int(cY)), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (255, 0, 0), 2)
-        
-        if color_name == "foliage":
+        #img_mask = np.zeros(gray.shape, dtype="uint8")
+         
+        # filter contours by color cue
+        for idx, c in enumerate(contours):
             
-            #img_mask = cv2.drawContours(img_mask, c, -1, (255), -1)
-            img_mask = cv2.drawContours(image=img_mask, contours=[c], contourIdx=-1, color=(255,255,255), thickness=cv2.FILLED)
-            #img_mask = cv2.fillPoly(img_mask, pts = [contours], color =(255,255,255))
+            # compute the center of the contour
+            M = cv2.moments(c)
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+        
+            (color_name, color_value) = cl.label(image_LAB, c)
             
-    img_thresh = img_mask
+            #img_thresh = cv2.putText(img_thresh, "{}".format(color_name), (int(cX), int(cY)), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (255, 0, 0), 2)
+            
+            print(color_name)
+            
+            keepColor = color_name == "foliage"  or color_name == "green" 
+            
+            #or color_name == "dark skin" or color_name == "light skin"
 
+            if keepColor:
+                
+                #img_mask = cv2.drawContours(img_mask, c, -1, (255), -1)
+                img_mask = cv2.drawContours(image=img_mask, contours=[c], contourIdx=-1, color=(255,255,255), thickness=cv2.FILLED)
+                #img_mask = cv2.fillPoly(img_mask, pts = [contours], color =(255,255,255))
+                
+        img_thresh = img_mask
+    
+    
         
-        
-    '''
+    
+    
     ###################################################################################################
-    (numLabels, labels, stats, centroids) = cv2.connectedComponentsWithStats(img_thresh, connectivity = 8)
+    # use location based selection of plant object, keep the componnent cloest to the center
+    if args["cue_loc"] == 1:
+    
+        # location based selection of plant object
+        (numLabels, labels, stats, centroids) = cv2.connectedComponentsWithStats(img_thresh, connectivity = 8)
 
-    #keep the center component 
+        #keep the center component 
 
-    x_center = int(width // 2)
-    y_center = int(height // 2)
-    
-    Coord_centroids = np.delete(centroids,(0), axis=0)
-    
-    
-    #print("x_center, y_center = {} {}".format(x_center,y_center))
-    #print("centroids = {}".format(centroids))
-    
-    #finding closest point among the grid points list ot the M coordinates
-    idx_closest = closest_node((x_center,y_center), Coord_centroids) + 1
-    
-    print("idx_closest = {}  {}".format(idx_closest, Coord_centroids[idx_closest]))
-    
-    
-    for i in range(1, numLabels):
+        x_center = int(width // 2)
+        y_center = int(height // 2)
         
-        (cX, cY) = (centroids[i][0], centroids[i][1])
+        Coord_centroids = np.delete(centroids,(0), axis=0)
         
-        #print(cX, cY)
         
-        img_thresh = cv2.putText(img_thresh, "#{}".format(i), (int(cX), int(cY)), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (255, 0, 0), 2)
+        #print("x_center, y_center = {} {}".format(x_center,y_center))
+        #print("centroids = {}".format(centroids))
         
-    img_thresh = cv2.putText(img_thresh, "center", (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 2.8, (255, 0, 0), 2)
-    '''
-    
-    '''
-    if numLabels > 1:
-        img_thresh = np.zeros([height, width], dtype=np.uint8)
-     
-        img_thresh[labels == idx_closest] = 255
-    '''
-    
+        #finding closest point among the grid points list ot the M coordinates
+        idx_closest = closest_node((x_center,y_center), Coord_centroids) + 1
+        
+        print("idx_closest = {}  {}".format(idx_closest, Coord_centroids[idx_closest]))
+        
+        
+        for i in range(1, numLabels):
+            
+            (cX, cY) = (centroids[i][0], centroids[i][1])
+            
+            #print(cX, cY)
+            
+            img_thresh = cv2.putText(img_thresh, "#{}".format(i), (int(cX), int(cY)), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (255, 0, 0), 2)
+            
+        img_thresh = cv2.putText(img_thresh, "center", (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 2.8, (255, 0, 0), 2)
+        
+        
+        
+        if numLabels > 1:
+            img_thresh = np.zeros([height, width], dtype=np.uint8)
+         
+            img_thresh[labels == idx_closest] = 255
+         
     
     
     
@@ -519,8 +537,10 @@ def skeleton_bw(thresh):
     #skeleton = morphology.skeletonize(image_bw)
     
     skeleton = morphology.thin(image_bw)
-
+    
     skeleton_img = skeleton.astype(np.uint8) * 255
+
+
 
     return skeleton_img, skeleton
 
@@ -1972,12 +1992,14 @@ def extract_traits(image_file):
             
             # ensure the width, height, and area are all neither too small
             # nor too big
-            keepWidth = w > 5 and w < 50
-            keepHeight = h > 45 and h < 65
+            keepWidth = w > 1000 and w < 1500
+            keepHeight = h > 1000 and h < 1500
             keepArea = area > 16200 and area < 200000
-            # ensure the connected component we are examining passes all
-            # three tests
-            if keepArea:
+            # ensure the connected component we are examining passes all three tests
+            #if all((keepWidth, keepArea)):
+            
+            ratio_w_h = w/h
+            if keepArea and (ratio_w_h < 2 ):
                 # construct a mask for the current connected component and
                 # then take the bitwise OR with the mask
                 #print("[INFO] keeping connected component '{}'".format(i))
@@ -2077,24 +2099,32 @@ def extract_traits(image_file):
         
         ##########################################################################
         #Plant object detection
-        x = int(img_width*0.083)
-        y = int(img_height*0.33)
-        w = int(img_width*0.30)
-        h = int(img_height*0.35)
-
+        
+        x = int(img_width*0.10)
+        y = int(img_height*0.32) #0.32
+        w = int(img_width*0.35)  #0.35
+        h = int(img_height*0.42) # 0.46
+        
+        '''
+        x = int(img_width*0.159)
+        y = int(img_height*0.42) #0.32
+        w = int(img_width*0.25)  #0.35
+        h = int(img_height*0.33) # 0.46
+        '''
         roi_image = region_extracted(orig, x, y, w, h)
         
         # save result
         result_file = (save_path + base_name + '_plant_region' + file_extension)
-        
-        #result_file = ('/home/suxing/example/Tara_data/Exp070_color_analysis/seg/' + base_name + '_plant_region' + file_extension)
-        
         cv2.imwrite(result_file, roi_image)
         
-        
-        
+        ###################################################################################
+        # PhotoRoom Remove Background API
         orig = remove(roi_image).copy()
         
+        #orig = roi_image.copy()
+        
+        
+        ######################################################################################
         #orig = roi_image.copy()
         
         #color clustering based plant object segmentation
@@ -2229,8 +2259,14 @@ def extract_traits(image_file):
         # compute the distance between the current L*a*b* color value in color checker and the mean of the plant surface image in CIE lab space
         
         #print("Detected color checker value in lab: skin = {} foliage = {} purple = {}\n".format(checker_color_value[13], checker_color_value[15], checker_color_value[8]))
-        
-        ref_color_list = [checker_color_value[13], checker_color_value[15], checker_color_value[8]]
+
+        if len(checker_color_value) < 18:
+            
+            print('Color checker detection was not complete, checker deteced = {}\n'.format(len(checker_color_value)))
+            
+            ref_color_list = [(194, 150, 130), (87, 108, 67), (94, 60, 108)]
+        else:
+            ref_color_list = [checker_color_value[13], checker_color_value[15], checker_color_value[8]]
         
         color_diff_list = []
         
@@ -2353,9 +2389,13 @@ if __name__ == '__main__':
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num-clusters', type = int, required = False, default = 2,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 100,  help = 'min size of object to be segmented.')
+    ap.add_argument('-max', '--max_size', type = int, required = False, default = 1000000,  help = 'max size of object to be segmented.')
     ap.add_argument('-md', '--min_dist', type = int, required = False, default = 50,  help = 'distance threshold of watershed segmentation.')
     ap.add_argument("-tp", "--temp_path", required = False,  help="template image path")
     ap.add_argument("-da", "--diagonal", type = float, required = False,  default = math.sqrt(2), help="diagonal line length(cm) of indiviudal color checker module")
+    ap.add_argument("-cc", "--cue_color", type = int, required = False,  default = 0, help="use color cue to detect plant object")
+    ap.add_argument("-cl", "--cue_loc", type = int, required = False,  default = 0, help="use location cue to detect plant object")
+    
     args = vars(ap.parse_args())
     
     
@@ -2364,6 +2404,8 @@ if __name__ == '__main__':
     ext = args['filetype']
     
     min_size = args['min_size']
+    
+    
     min_distance_value = args['min_dist']
     
     diagonal_line_length = args['min_dist']
