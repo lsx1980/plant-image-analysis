@@ -9,7 +9,7 @@ Author-email: suxingliu@gmail.com
 
 USAGE:
 
-python3 watershed_cv.py -p /home/suxing/example/plant_test/seeds/test/  -ft jpg
+    python3 watershed_cv.py -p /home/suxing/example/plant_test/seeds/test/  -ft jpg
 
 
 argument:
@@ -79,7 +79,7 @@ def image_label(image_file):
     #accquire image dimensions 
     #height, width, channels = image.shape
     
-    
+    print(img_channels)
    
      
     # convert the mean shift image to grayscale, then apply

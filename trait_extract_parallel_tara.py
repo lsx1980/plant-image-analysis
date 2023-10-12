@@ -2101,9 +2101,9 @@ def extract_traits(image_file):
         #Plant object detection
         
         x = int(img_width*0.10)
-        y = int(img_height*0.32) #0.32
+        y = int(img_height*0.30) #0.32
         w = int(img_width*0.35)  #0.35
-        h = int(img_height*0.42) # 0.46
+        h = int(img_height*0.44) # 0.46
         
         '''
         x = int(img_width*0.159)
