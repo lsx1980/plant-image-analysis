@@ -256,6 +256,14 @@ def closest_node(pt, pts):
 
 
 
+def plotClusters(LABELS):
+        #plotting 
+        fig = plt.figure()
+        ax = Axes3D(fig)        
+        for label, pix in zip(self.LABELS, self.IMAGE):
+            ax.scatter(pix[0], pix[1], pix[2], color = self.rgb_to_hex(self.COLORS[label]))
+        plt.show()
+
 
 
 def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
@@ -409,7 +417,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     
     ###################################################################################################
-    size_kernel = 15
+    size_kernel = 5
     
     #if mask contains mutiple disconnected parts, combine them into one. 
     (contours, hier) = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -1348,13 +1356,17 @@ def RGB2Pseudo(image_BGR):
 
 
 
-def Split_RGB(image, key):
+def channel_split(image, key):
     
     
     if image.shape[2] > 3:
         
         image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
-    
+    else:
+        
+        print("The shape of the image is",image.shape)
+        #print("The data type of the image is",image.dtype)
+
     if key == 'hsv':
         
         (H, S, V) = cv2.split(cv2.cvtColor(image, cv2.COLOR_BGR2HSV))
@@ -1377,7 +1389,7 @@ def Split_RGB(image, key):
         
         (B, G, R) = cv2.split(image)
         
-        return (R, G, B)
+        return (B, G, R)
         
     else:
         
@@ -1387,28 +1399,7 @@ def Split_RGB(image, key):
         
         
 
-    '''
-    #add blur to make it more realistic
-    #blur = cv2.GaussianBlur(gray,(1,1),0)
-    
-    #assign colormap
-    colors = scalarMap.to_rgba(gray, bytes=False)
-    
-    # save result
-    result_file = (save_path + base_name + file_extension)
-    
-   
-    #assign colormap
-    colors_L = scalarMap.to_rgba(L.copy(), bytes=False)
-    
-    colors_L = cv2.convertScaleAbs(colors_L.copy(), alpha=(255.0))
-    
-    colors_L_gray = cv2.cvtColor(colors_L, cv2.COLOR_BGR2GRAY)
-    
-    # save Lab result
-    result_file = (save_path + base_name + file_extension)
-    cv2.imwrite(result_file, colors_L_gray)
-    '''
+
     
     
 
@@ -1551,11 +1542,7 @@ def color_region(image, mask, save_path, num_clusters):
     result_img_path = save_path + 'masked.png'
     cv2.imwrite(result_img_path, masked_image_ori)
     
-    
-    
 
-    
-    
     # convert to RGB
     image_RGB = cv2.cvtColor(masked_image_ori, cv2.COLOR_BGR2RGB)
 
@@ -1721,7 +1708,6 @@ def color_region(image, mask, save_path, num_clusters):
         color_ratio.append(percentage(value_counts, np.sum(list_counts)))
 
     
-
    
     return rgb_colors, counts, hex_colors, color_ratio, segmented_image
     
@@ -1933,6 +1919,125 @@ def color_diff_index(ref_color, rgb_colors):
 
 
 
+def colorspace_transform(image_ori, colorspace):
+    
+    #########################################################################################################
+    # convert image (BGR format) into specified color space and extract required channel.
+
+    match colorspace:
+        
+        case "hsv":
+            image_converted = cv2.cvtColor(image_ori, cv2.COLOR_BGR2HSV)
+            (h, s, v) = channel_split(image_converted, colorspace)
+            return (image_converted, h, s, v)
+
+        case "ycrcb":
+            image_converted = cv2.cvtColor(image_ori, cv2.COLOR_BGR2YCrCb)
+            (Y, Cr, Cb) = channel_split(image_converted, colorspace)
+            return (image_converted, Y, Cr, Cb)
+        
+        case "ycc":
+            image_converted = cv2.cvtColor(image_ori, cv2.COLOR_BGR2YCrCb)
+            (Y, Cr, Cb) = channel_split(image_converted, colorspace)
+            return (image_converted, Y, Cr, Cb)
+            
+        case "lab":
+            image_converted = cv2.cvtColor(image_ori, cv2.COLOR_BGR2LAB)
+            (L, A, B) = channel_split(image_converted, colorspace)
+            return (image_converted, L, A, B)
+            
+        case "pseduo":
+            im_gray = cv2.cvtColor(image_ori, cv2.COLOR_BGR2GRAY)
+            image_converted = cv2.applyColorMap(im_gray, cv2.COLORMAP_JET)
+            (B, G, R) = channel_split(image_converted, 'rgb')
+            return (image_converted, R, G, B)
+            
+        case "bgr":
+            image_converted = image_ori
+            (B, G, R) = channel_split(image_converted, colorspace)
+            return (image_converted, R, G, B)
+            
+
+    
+def single_channel_analysis(clustered_image_BRG, channel_selected, mask, channel_choice):
+    
+    
+    zeros = np.zeros(clustered_image_BRG.shape[:2], dtype = "uint8")
+    
+    match channel_choice:
+        
+        case "channel_a":
+            
+            print("Analyzing channel_a ...\n")
+
+            merged = cv2.merge([zeros, zeros, channel_selected])
+            
+            channel_selected_gray = cv2.cvtColor(merged, cv2.COLOR_BGR2GRAY)
+        
+        case "channel_b":
+            
+            print("Analyzing channel_b ...\n")
+            
+            merged = cv2.merge([channel_selected, zeros, zeros])
+            
+            channel_selected_gray = cv2.cvtColor(merged, cv2.COLOR_BGR2GRAY)
+        
+        case "channel_c":
+            
+            print("Analyzing channel_c ...\n")
+            
+            merged = cv2.merge([zeros, channel_selected, zeros])
+            
+            channel_selected_gray = cv2.cvtColor(merged, cv2.COLOR_BGR2GRAY)
+            
+            
+    '''
+    # merge channels by filling with zeros 
+    
+
+    red_merged = cv2.merge([zeros, zeros, channel_a])
+
+    result_img_path = save_path + 'channel_a_merged.png'
+
+    cv2.imwrite(result_img_path, red_merged) 
+
+
+    channel_a_gray = cv2.cvtColor(red_merged, cv2.COLOR_BGR2GRAY)
+
+    #apply a Gaussian blur to the image then find the brightest region and (x, y) coordinates of the area of the image with the largest intensity value
+    masked_channel_a = cv2.bitwise_and(channel_a_gray, channel_a_gray, mask = thresh)
+
+    # Using Gaussian blur to smooth the image
+    masked_channel_a = cv2.GaussianBlur(masked_channel_a, (45,45), 0)
+    '''
+    
+    masked_channel = cv2.bitwise_and(channel_selected, channel_selected, mask = mask)
+    
+    masked_channel = cv2.GaussianBlur(masked_channel, (45,45), 0)
+
+    # find the max and min value in image
+    (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(masked_channel)
+
+
+
+    #max_value = masked_R_copy.reshape((masked_R.shape[0]*masked_R.shape[1], 1)).max(axis=0)
+
+    #min_value = masked_R_copy.reshape((masked_R.shape[0]*masked_R.shape[1], 1)).min(axis=0)
+
+    # draw a circle on the image to show the location of max value 
+    channel_detected = cv2.circle(clustered_image_BRG, maxLoc, 10, (0, 0, 255), 2)
+
+    #clustered_gray_detected = cv2.circle(channel_a_gray, maxLoc, 10, (0, 0, 255), 2)
+
+
+    print(minVal, maxVal)
+
+    return channel_detected, minVal, maxVal
+        
+    
+
+
+
 # compute all the traits
 def extract_traits(image_file):
 
@@ -2064,7 +2169,9 @@ def extract_traits(image_file):
         
         
         #########################################################################################################
-        # convert clustered_image into Pseudo color space and extract red channel. 
+        
+        
+        # convert clustered_image into specific color space and extract specific channel. 
         clustered_image_BRG = cv2.cvtColor(clustered_image, cv2.COLOR_RGB2BGR)
         
         #define result path for labeled images
@@ -2072,66 +2179,31 @@ def extract_traits(image_file):
         cv2.imwrite(result_img_path, clustered_image_BRG)
 
 
-
-        clustered_image_pseudocolor = RGB2Pseudo(clustered_image_BRG)
+        #(clustered_image_pseudocolor, channel_a, channel_b, channel_c) = colorspace_transform(clustered_image_BRG, "pseduo")
+        
+        (clustered_image_pseudocolor, channel_a, channel_b, channel_c) = colorspace_transform(clustered_image_BRG, "lab")
 
         result_img_path = save_path + 'clustered_pseudo.png'
 
         # save in lossless format to avoid colors changing
         cv2.imwrite(result_img_path, clustered_image_pseudocolor) 
+        
 
+        # analyze selected channel. 
+        (channel_detected, minVal_channel_a, maxVal_channel_a) = single_channel_analysis(clustered_image_BRG, channel_a, thresh, "channel_a")
+        
+        (channel_detected, minVal_channel_b, maxVal_channel_b) = single_channel_analysis(clustered_image_BRG, channel_b, thresh, "channel_b")
 
-        (R, G, B) = Split_RGB(clustered_image_pseudocolor, 'rgb')
+        (channel_detected, minVal_channel_c, maxVal_channel_c) = single_channel_analysis(clustered_image_BRG, channel_c, thresh, "channel_c")
+        
+        
+        #result_img_path = save_path + 'channel_detected.png'
 
-
-        zeros = np.zeros(orig.shape[:2], dtype="uint8")
-
-        red_merged = cv2.merge([zeros, zeros, R])
-
-        result_img_path = save_path + 'R_channel.png'
-
-        # save in lossless format to avoid colors changing
-        cv2.imwrite(result_img_path, R) 
-
-        result_img_path = save_path + 'R_channel_merged.png'
-
-        cv2.imwrite(result_img_path, red_merged) 
+        #cv2.imwrite(result_img_path, channel_detected) 
         
         
-        R = cv2.cvtColor(red_merged, cv2.COLOR_BGR2GRAY)
         
-        #apply a Gaussian blur to the image then find the brightest region and (x, y) coordinates of the area of the image with the largest intensity value
-        #clustered_gray = cv2.GaussianBlur(gray, (args["radius"], args["radius"]), 0)
-        
-        masked_R = cv2.bitwise_and(R, R, mask = thresh)
-        
-        # Using Gaussian blur to smooth the image.
-        masked_R = cv2.GaussianBlur(masked_R, (45,45), 0)
-        
-        (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(masked_R)
-        
-        masked_R_copy = masked_R.copy()
-        
-        
-        max_value = masked_R_copy.reshape((masked_R.shape[0]*masked_R.shape[1], 1)).max(axis=0)
-        
-        min_value = masked_R_copy.reshape((masked_R.shape[0]*masked_R.shape[1], 1)).min(axis=0)
-        
-       
-        clustered_gray_detected = cv2.circle(clustered_image_BRG, maxLoc, 10, (0, 0, 255), 2)
-        
-        #clustered_gray_detected = cv2.circle(clustered_image_BRG, minLoc, 10, (255, 0, 0), 0)
-        
-        print(minVal, maxVal)
-        
-        print(min_value, max_value)
-        
-        result_img_path = save_path + 'R_channel_detected.png'
-
-        cv2.imwrite(result_img_path, clustered_gray_detected) 
-        
-        
-        (rgb_colors_R, counts_R, hex_colors_R, color_ratio_R, clustered_image_R) = color_region(red_merged, thresh, save_path, num_clusters)
+        #(rgb_colors_R, counts_R, hex_colors_R, color_ratio_R, clustered_image_R) = color_region(red_merged, thresh, save_path, num_clusters)
         
         
         ###############################################################################################################
@@ -2236,6 +2308,10 @@ def extract_traits(image_file):
         #define result path for labeled images
         result_img_path = save_path + 'pie_color.png'
         plt.savefig(result_img_path)
+        plt.close()
+        
+        
+
 
         #######################################################################
         
@@ -2341,7 +2417,7 @@ def extract_traits(image_file):
         
     else:
         
-        area=solidity=max_width=max_height=avg_curv=n_leaves=0
+        area = solidity = max_width = max_height = avg_curv = n_leaves = 0
         
     #print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
     
@@ -2358,13 +2434,13 @@ def extract_traits(image_file):
     #cm_pixel_ratio = diagonal_line_length/avg_diagonal_length
     
     #return image_file_name, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio, hex_colors
+    
     QR_data = 'empty'
+    
     avg_diagonal_length = cm_pixel_ratio = 0
     
-
     
-    return image_file_name, QR_data, area, solidity, longest_axis, n_leaves, hex_colors, color_ratio, diff_level_1, diff_level_2, diff_level_3
-    
+    return image_file_name, QR_data, area, solidity, longest_axis, n_leaves, hex_colors, color_ratio, diff_level_1, diff_level_2, diff_level_3, maxVal_channel_a, maxVal_channel_b, maxVal_channel_c
 
 
 
@@ -2462,19 +2538,20 @@ if __name__ == '__main__':
     result_list = []
     
 
-    
     '''
+    
     #loop execute
     for image_id, image in enumerate(imgList):
         
 
-        (filename, QR_data, area, solidity, longest_axis, n_leaves, hex_colors, color_ratio, diff_level_1, diff_level_2, diff_level_3) = extract_traits(image)
+        (filename, QR_data, area, solidity, longest_axis, n_leaves, hex_colors, color_ratio, diff_level_1, diff_level_2, diff_level_3, color_diff_max) = extract_traits(image)
         
         
         result_list.append([filename, QR_data, area, solidity, longest_axis, n_leaves, 
                             hex_colors[0], color_ratio[0], diff_level_1[0], diff_level_2[0], diff_level_3[0],
                             hex_colors[1], color_ratio[1], diff_level_1[1], diff_level_2[1], diff_level_3[1],
-                            hex_colors[2], color_ratio[2], diff_level_1[2], diff_level_2[2], diff_level_3[2]])
+                            hex_colors[2], color_ratio[2], diff_level_1[2], diff_level_2[2], diff_level_3[2],
+                            color_diff_max])
     
     
     '''
@@ -2506,17 +2583,18 @@ if __name__ == '__main__':
     diff_level_1 = list(zip(*result))[8]
     diff_level_2 = list(zip(*result))[9]
     diff_level_3 = list(zip(*result))[10]
+    color_diff_a = list(zip(*result))[11]
+    color_diff_b = list(zip(*result))[12]
+    color_diff_c = list(zip(*result))[13]
     
     
     
     # create result list
-    for i, (v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10) in enumerate(zip(filename, QR_data, area, solidity, longest_axis, n_leaves, hex_colors, color_ratio, diff_level_1, diff_level_2, diff_level_3)):
+    for i, (v0,v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,v13) in enumerate(zip(filename, QR_data, area, solidity, longest_axis, n_leaves, hex_colors, color_ratio, diff_level_1, diff_level_2, diff_level_3, color_diff_a, color_diff_b, color_diff_c)):
 
-        result_list.append([v0,v1,v2,v3,v4,v5,v6[0],v7[0],v8[0],v9[0],v10[0],v6[1],v7[1],v8[1],v9[1],v10[1],v6[2],v7[2],v8[2],v9[2],v10[2]])
+        result_list.append([v0,v1,v2,v3,v4,v5,v6[0],v7[0],v8[0],v9[0],v10[0],v6[1],v7[1],v8[1],v9[1],v10[1],v6[2],v7[2],v8[2],v9[2],v10[2], v11,v12,v13])
         
       
-    
-    
     
     #########################################################################
     #trait_file = (os.path.dirname(os.path.abspath(file_path)) + '/' + 'trait.xlsx')
@@ -2584,6 +2662,10 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 19).value = 'color_cluster_3_diff_level_1'
         sheet.cell(row = 1, column = 20).value = 'color_cluster_3_diff_level_2'
         sheet.cell(row = 1, column = 21).value = 'color_cluster_3_diff_level_3'
+        sheet.cell(row = 1, column = 22).value = 'color_diff_a'
+        sheet.cell(row = 1, column = 23).value = 'color_diff_b'
+        sheet.cell(row = 1, column = 24).value = 'color_diff_c'
+
 
 
         
