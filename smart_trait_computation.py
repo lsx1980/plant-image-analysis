@@ -247,6 +247,130 @@ def mkdir(path):
         
 
 
+
+def marker_detect(img_ori, template_tag, method, selection_threshold):
+    
+    """Detect marker in the image
+    
+    Inputs: 
+    
+        img_ori: image contains the marker region
+        
+        template: preload marker template image
+        
+        method: method used to compute template matching
+        
+        selection_threshold: thresh value for accept the template matching result
+
+    Returns:
+    
+        marker_img: matching region image with marker object  
+        
+        thresh: mask image of the marker region
+        
+        coins_width_contour: computed width result based on contour of the object 
+        
+        coins_width_circle: computed width result based on min circle of the object 
+        
+    """   
+    
+    # load the image, clone it for output
+    img_rgb = img_ori.copy()
+      
+    # convert it to grayscale 
+    img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY) 
+      
+    # store width and height of template in w and h 
+    #w, h = _tag.shape[::-1] 
+      
+    # Perform match operations. 
+    #res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
+    
+    # Perform template matching operations. 
+    res_tag = cv2.matchTemplate(img_gray, template_tag, cv2.TM_CCOEFF)
+ 
+    loc_tag = np.where( res_tag >= selection_threshold)  
+     
+    #res_ruler = cv2.matchTemplate(img_gray, template_ruler, cv2.TM_CCOEFF)
+    #loc_ruler = np.where( res_ruler >= selection_threshold)   
+    
+    if len(loc_tag):
+        
+        # unwarp the template mathcing result
+        (y_tag,x_tag) = np.unravel_index(res_tag.argmax(), res_tag.shape)
+        
+        # get the template matching region coordinates
+        (min_val_tag, max_val_tag, min_loc_tag, max_loc_tag) = cv2.minMaxLoc(res_tag)
+
+        (startX_tag, startY_tag) = max_loc_tag
+        endX_tag = startX_tag + template_tag.shape[1]
+        endY_tag = startY_tag + template_tag.shape[0]
+        '''
+        # unwarp the template mathcing result
+        (y_ruler,x_ruler) = np.unravel_index(res_ruler.argmax(), res_ruler.shape)
+        
+        # get the template matching region coordinates
+        (min_val_ruler, max_val_ruler, min_loc_ruler, max_loc_ruler) = cv2.minMaxLoc(res_ruler)
+
+        (startX_ruler, startY_ruler) = max_loc_ruler
+        endX_ruler = startX_ruler + template_ruler.shape[1]
+        endY_ruler = startY_ruler + template_ruler.shape[0]
+        '''
+        # get the sub image with matching region
+        #marker_img = img_ori[startY:endY, startX:endX]
+        
+        marker_img = img_ori
+        marker_overlay = marker_img
+
+        # load the marker image, convert it to grayscale
+        marker_img_gray = cv2.cvtColor(marker_img, cv2.COLOR_BGR2GRAY) 
+
+        # load the image and perform pyramid mean shift filtering to aid the thresholding step
+        shifted = cv2.pyrMeanShiftFiltering(marker_img, 21, 51)
+        
+        # convert the mean shift image to grayscale, then apply Otsu's thresholding
+        gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        
+        thresh[startY_tag:endY_tag, startX_tag:endX_tag] = 0
+        
+        #thresh[startY_ruler:endY_ruler, startX_ruler:endX_ruler] = 0
+        
+        
+        # detect contours in the mask and grab the largest one
+        cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        cnts = imutils.grab_contours(cnts)
+        
+        largest_cnt = max(cnts, key=cv2.contourArea)
+        
+        #print("[INFO] {} unique contours found in marker_img\n".format(len(cnts)))
+        
+        # compute the radius of the detected coin
+        # calculate the center of the contour
+        M = cv2.moments(largest_cnt )
+        x = int(M["m10"] / M["m00"])
+        y = int(M["m01"] / M["m00"])
+
+        # calculate the radius of the contour from area (I suppose it's a circle)
+        area = cv2.contourArea(largest_cnt)
+        radius = np.sqrt(area/math.pi)
+        coins_width_contour = 2* radius
+    
+        # draw a circle enclosing the object
+        ((x, y), radius) = cv2.minEnclosingCircle(largest_cnt) 
+        coins_width_circle = 2* radius
+    
+    else:
+        
+        print("no matching template was found\n")
+
+    return  marker_img, thresh, coins_width_contour, coins_width_circle
+
+
+
+
+
 # find the closest point wihch minimize the distance between current point and the center of image
 def closest_node(pt, pts):
     
@@ -338,15 +462,14 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     ret, thresh = cv2.threshold(kmeansImage,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
-    #thresh_cleaned = (thresh)
-    
-    
-    if np.count_nonzero(thresh) > 0:
+    if args['clear_border'] == 1:
         
-        thresh_cleaned = clear_border(thresh)
+        if np.count_nonzero(thresh) > 0:
+            
+            thresh_cleaned = clear_border(thresh)
     else:
         thresh_cleaned = thresh
-    
+
 
     (numLabels, labels, stats, centroids) = cv2.connectedComponentsWithStats(thresh_cleaned, connectivity = 8)
 
@@ -422,6 +545,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     #if mask contains mutiple disconnected parts, combine them into one. 
     (contours, hier) = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
+    
     if len(contours) > 1:
         
         print("mask contains mutiple disconnected parts, combine them into one\n")
@@ -433,8 +557,8 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
         closing = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
         
         img_thresh = closing
-        
     
+
     
     if args["cue_color"] == 1:
     
@@ -516,10 +640,10 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     
     
-    #return img_thresh
+
     return img_thresh
     
-    #return thresh_cleaned
+
     
 
 def medial_axis_image(thresh):
@@ -751,11 +875,15 @@ def circle_detection(image):
         if idx_closest == 0:
 
             print("Circle marker with radius = {} was detected!\n".format(circle_center_radius[idx_closest]))
+            
+            diameter_circle = int(circle_center_radius[idx_closest]*2)
+            
+            radius_circle = int(circle_center_radius[idx_closest])
         
         '''
         # draw the circle in the output image, then draw a center
         circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], circle_center_radius[idx_closest], (0, 255, 0), 4)
-        circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], 5, (0, 128, 255), -1)
+        circle_detection_img = cv2.circle(output, circle_center_coord[idx_closest], radius_circle, (0, 128, 255), -1)
 
         # compute the diameter of coin
         diameter_circle = circle_center_radius[idx_closest]*2
@@ -767,17 +895,48 @@ def circle_detection(image):
 
         tmp_mask_binary = cv2.threshold(tmp_mask, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
 
-        masked_tmp = cv2.bitwise_and(image.copy(), image.copy(), mask = ~tmp_mask_binary)
+        #masked_tmp = cv2.bitwise_and(image.copy(), image.copy(), mask = ~tmp_mask_binary)
         '''
 
         (startX, startY) = circle_center_coord[idx_closest]
-
-        endX = startX + int(r*1.2) + 1050
-        endY = startY + int(r*1.2) + 1050
-
-        #sticker_crop_img = output[startY:endY, startX:endX]
         
-        sticker_crop_img = output
+        startX = startX - int(r*1)
+        startY = startY- int(r*1)
+        
+        endX = startX + int(r*2)
+        endY = startY + int(r*2)
+        
+        
+        circle_region = output[startY:endY, startX:endX]
+        
+        coin_seg = remove(circle_region).copy()
+        
+        coin_seg = cv2.cvtColor(coin_seg, cv2.COLOR_BGR2GRAY)
+        
+        (ret, thresh_coin_seg) = cv2.threshold(coin_seg, 0,255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+        
+        
+        #thresh_coin_seg = circle_region
+        
+        
+ 
+        circle_mask = np.zeros(gray.shape, dtype="uint8")
+        
+        circle_mask[startY:endY, startX:endX] = thresh_coin_seg
+        
+        #circle_mask = cv2.circle(circle_mask, circle_center_coord[idx_closest], int(radius_circle), (255, 255, 255), -1)
+        
+
+        
+        
+        sticker_crop_mask = np.zeros(gray.shape, dtype="uint8")
+        
+        sticker_crop_mask[0:img_height, 0:startX] = 1
+        
+        #apply the mask to get the segmentation of plant
+        sticker_crop_img = cv2.bitwise_and(output, output, mask = sticker_crop_mask)
+        
+        
     
     else:
         
@@ -787,7 +946,7 @@ def circle_detection(image):
         
         diameter_circle = 0
     
-    return circles, sticker_crop_img, diameter_circle
+    return circles, sticker_crop_img, diameter_circle, thresh_coin_seg, circle_mask
 
 
 
@@ -981,7 +1140,7 @@ def watershed_seg_marker(orig, thresh, min_distance_value, img_marker):
 '''
 
 
-def comp_external_contour(orig,thresh):
+def comp_external_contour(orig, thresh):
     
     #find contours and get the external one
     contours, hier = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -2029,8 +2188,7 @@ def single_channel_analysis(clustered_image_BRG, channel_selected, mask, channel
 
     #clustered_gray_detected = cv2.circle(channel_a_gray, maxLoc, 10, (0, 0, 255), 2)
 
-
-    print(minVal, maxVal)
+    print("The color channel: {}, min and max intensity values {}, {}".format(channel_selected, minVal, maxVal))
 
     return channel_detected, minVal, maxVal
         
@@ -2076,9 +2234,7 @@ def extract_traits(image_file):
         mkdir(mkpath)
         save_path = mkpath + '/'
         
-        #mkpath = os.path.dirname(abs_path) + '/' + base_name + '/color_checker_result'
-        #mkdir(mkpath)
-        #color_checker_path = mkpath + '/'
+
         
        
     print("results_folder: {0}".format(str(save_path)))
@@ -2087,14 +2243,17 @@ def extract_traits(image_file):
     
     
     ##############################
-    idx = int(base_name[8: 10])%17
+    #idx = int(base_name[8: 10])%17
+    idx = int(base_name[0: 3])%17
             
     factor = [1.181495864, 1.363683228, 1.363683228, 1.49651627, 1.614676833, 1.181495864, 1, 1.181495864, 1.540152071, 1.748127292, 
                 1.768126872, 1.292934128, 1.292934128, 1.292934128, 1.608808253]
 
 
-
-
+    max_width = max_height =0
+    
+    area = solidity = longest_axis = n_leaves = hex_colors = color_ratio = diff_level_1 = diff_level_2 = diff_level_3 = maxVal_channel_a = maxVal_channel_b = maxVal_channel_c = 0
+    
     if isbright(image_file):
     
         if (file_size > 5.0):
@@ -2119,21 +2278,107 @@ def extract_traits(image_file):
         args_num_clusters = args['num_clusters']
         
         
+        '''
+        # method for template matching 
+        methods = ['cv.TM_CCOEFF', 'cv.TM_CCOEFF_NORMED', 'cv.TM_CCORR', 'cv.TM_CCORR_NORMED', 'cv.TM_SQDIFF', 'cv.TM_SQDIFF_NORMED']
+        
+        (marker_tag_img, thresh_tag, tag_width_contour, tag_width_circle) = marker_detect(orig, tp_tag, methods[0], 0.8)
+        
+        
+        # save result
+        result_file = (save_path + base_name + '_tag_mask' + file_extension)
+        cv2.imwrite(result_file, thresh_tag)
+        
+        
+        
+        #apply the mask to get the segmentation of plant
+        orig = cv2.bitwise_and(orig, orig, mask = thresh_tag)
 
+        # save result
+        result_file = (save_path + base_name + '_masked_ori' + file_extension)
+        cv2.imwrite(result_file, orig)
+        '''
+        
+        (circles, sticker_crop_img, diameter_circle, thresh_coin_seg, circle_mask) = circle_detection(orig) 
+        
+
+        # save result
+        result_file = (save_path + base_name + '_circle_detected' + file_extension)
+        #cv2.imwrite(result_file, sticker_crop_img)
+        
+         # save result
+        result_file = (save_path + base_name + '_circle_mask' + file_extension)
+        #cv2.imwrite(result_file, circle_mask)
+        
+        
+        
+        roi_image = sticker_crop_img.copy()
+        
+        
+
+        
+        
+        '''
         ##########################################################################
         #Plant object detection
-
-        
-        x = int(img_width*0.159)
+        x = int(img_width*0.0)
         y = int(img_height*0.0) #0.32
-        w = int(img_width*0.65)  #0.35
+        w = int(img_width*1.0)  #0.35
         h = int(img_height*1) # 0.46
         
+        #w = int(img_width*1.0)  #0.35
+
         roi_image = region_extracted(orig, x, y, w, h)
+        
         
         # save result
         result_file = (save_path + base_name + '_plant_region' + file_extension)
         cv2.imwrite(result_file, roi_image)
+        
+        
+        ##########################################################################
+        #coin object detection
+        x = int(img_width*0.90)
+        y = int(img_height*0.0) #0.32
+        w = int(img_width*0.10)  #0.35
+        h = int(img_height*1) # 0.46
+
+        roi_image_coin = region_extracted(orig, x, y, w, h)
+        
+        
+
+        # save result
+        #result_file = (save_path + base_name + '_coin_region' + file_extension)
+        #cv2.imwrite(result_file, roi_image_coin)
+        
+        coin_seg = remove(roi_image_coin).copy()
+        
+        coin_seg = cv2.cvtColor(coin_seg, cv2.COLOR_BGR2GRAY)
+        
+        (ret, thresh_coin_seg) = cv2.threshold(coin_seg, 0,255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+        
+        result_file = (save_path + base_name + '_coin_region' + file_extension)
+        cv2.imwrite(result_file, thresh_coin_seg)
+        
+        
+        ######################################################################
+        #barcode object detection
+        x = int(img_width*0.0) #0.16
+        y = int(img_height*0.0) #0.32
+        w = int(img_width*0.16)  #0.35
+        h = int(img_height*1) # 0.46
+        
+        
+        #w = int(img_width*1.0)  #0.35
+
+        roi_image_barcode = region_extracted(orig, x, y, w, h)
+        
+        roi_image_barcode = cv2.cvtColor(roi_image_barcode, cv2.COLOR_BGR2GRAY)
+
+        bracode_mask = np.zeros(roi_image_barcode.shape, dtype="uint8")
+        
+        '''
+        
         
         ###################################################################################
         # PhotoRoom Remove Background API
@@ -2141,9 +2386,13 @@ def extract_traits(image_file):
         
         #orig = roi_image.copy()
         if orig.shape[2] > 3:
-        
             orig = cv2.cvtColor(orig, cv2.COLOR_RGBA2RGB)
         
+        # save result
+        result_file = (save_path + base_name + '_ai_seg' + file_extension)
+        cv2.imwrite(result_file, orig)
+        
+
         ######################################################################################
         #orig = roi_image.copy()
         
@@ -2152,14 +2401,39 @@ def extract_traits(image_file):
         
         #thresh = ~thresh
         # save segmentation result
+        #result_file = (save_path + base_name + '_seg' + file_extension)
+        #print(filename)
+        #cv2.imwrite(result_file, thresh)
+        
+        
+        seg_mask = thresh + circle_mask
+        
         result_file = (save_path + base_name + '_seg' + file_extension)
         #print(filename)
-        cv2.imwrite(result_file, thresh)
-
+        cv2.imwrite(result_file, seg_mask)
         
+        #seg_mask = np.zeros(gray.shape, dtype="uint8")
+        
+        #seg_mask[startY:endY, startX:endX] = thresh_coin_seg
+        
+        
+        '''
+        #################################################################################
+        seg_hconcat = cv2.hconcat([thresh, thresh_coin_seg])
+        
+        #seg_hconcat = cv2.hconcat([bracode_mask, seg_hconcat])
+        # save segmentation result
+        result_file = (save_path + base_name + 'seg_hconcat' + file_extension)
+        cv2.imwrite(result_file, seg_hconcat)
+        
+        print("thresh.shape is {}, coin_seg.shape is {}, seg_hconcat.shape is {}\n".format(thresh.shape, thresh_coin_seg.shape, seg_hconcat.shape))
+        '''
+        
+        '''
+        ############################################################################################################
+        ############################################################################################################
         # save plant image as lab color chart
-        
-        
+
         # define color cluster levels by user
         num_clusters = 4
         
@@ -2197,9 +2471,9 @@ def extract_traits(image_file):
         (channel_detected, minVal_channel_c, maxVal_channel_c) = single_channel_analysis(clustered_image_BRG, channel_c, thresh, "channel_c")
         
         
-        #result_img_path = save_path + 'channel_detected.png'
+        result_img_path = save_path + 'channel_detected.png'
 
-        #cv2.imwrite(result_img_path, channel_detected) 
+        cv2.imwrite(result_img_path, channel_detected) 
         
         
         
@@ -2414,11 +2688,8 @@ def extract_traits(image_file):
         #result_file = (track_save_path + base_name + '_trace' + file_extension)
         #cv2.imwrite(result_file, track_trait)
         
-        
-    else:
-        
-        area = solidity = max_width = max_height = avg_curv = n_leaves = 0
-        
+        '''
+
     #print("[INFO] {} n_leaves found\n".format(len(np.unique(labels)) - 1))
     
     #Path("/tmp/d/a.dat").name
@@ -2437,7 +2708,7 @@ def extract_traits(image_file):
     
     QR_data = 'empty'
     
-    avg_diagonal_length = cm_pixel_ratio = 0
+    #avg_diagonal_length = cm_pixel_ratio = 0
     
     
     return image_file_name, QR_data, area, solidity, longest_axis, n_leaves, hex_colors, color_ratio, diff_level_1, diff_level_2, diff_level_3, maxVal_channel_a, maxVal_channel_b, maxVal_channel_c
@@ -2459,10 +2730,11 @@ if __name__ == '__main__':
     ap.add_argument('-min', '--min_size', type = int, required = False, default = 100,  help = 'min size of object to be segmented.')
     ap.add_argument('-max', '--max_size', type = int, required = False, default = 1000000,  help = 'max size of object to be segmented.')
     ap.add_argument('-md', '--min_dist', type = int, required = False, default = 55,  help = 'distance threshold of watershed segmentation.')
-    ap.add_argument("-tp", "--temp_path", required = False,  help = "template image path")
-    ap.add_argument("-da", "--diagonal", type = float, required = False,  default = math.sqrt(2), help="diagonal line length(cm) of indiviudal color checker module")
-    ap.add_argument("-cc", "--cue_color", type = int, required = False,  default = 0, help="use color cue to detect plant object")
-    ap.add_argument("-cl", "--cue_loc", type = int, required = False,  default = 0, help="use location cue to detect plant object")
+    ap.add_argument('-tag', '--tag', required = False,  default ='/marker_template/tag.jpg',  help = "tag file name")
+    ap.add_argument("-da", "--diagonal", type = float, required = False,  default = math.sqrt(2), help = "diagonal line length(cm) of indiviudal color checker module")
+    ap.add_argument("-cc", "--cue_color", type = int, required = False,  default = 0, help = "use color cue to detect plant object")
+    ap.add_argument("-cl", "--cue_loc", type = int, required = False,  default = 0, help = "use location cue to detect plant object")
+    ap.add_argument("-cb", "--clear_border", type = int, required = False,  default = 0, help = "clear border of the plant object segmentation mask, default 0, enable 1")
     
     args = vars(ap.parse_args())
     
@@ -2477,6 +2749,10 @@ if __name__ == '__main__':
     min_distance_value = args['min_dist']
     
     diagonal_line_length = args['min_dist']
+    
+    tag_path_default = args["tag"]
+    
+    
 
     #accquire image file list
     filetype = '*.' + ext
@@ -2485,48 +2761,29 @@ if __name__ == '__main__':
     #accquire image file list
     imgList = sorted(glob.glob(image_file_path))
     
-    global  template
     
-    template_path = args['temp_path']
     
-    isExist = 0
-    
-    if not template_path:
-        
-        template_path = file_path + 'template/'
-        
-        if os.path.exists(template_path):
-      
-            print("Default template_path: {}\n".format(template_path))
-            
-            template_file_list = [ fi for fi in os.listdir(template_path) if not fi.endswith(filetype) ]
-            
-            template_file = template_path + template_file_list[0]
-            
-            isExist = 1
-            
-        else:
-            print("Default template_path was not found!\n")
-    else:
-        
-        print("Loading template_path : {}\n".format(template_path))
-        
-        if os.path.exists(template_path):
-        
-            template_file = template_path
-            
-            isExist = 1
-    
+    global  tp_tag
 
-        if isExist == 1:
-            
-            template = cv2.imread(template_file) 
-            
-            print("Loading template_file : {}\n".format(template_file))
-        else:
-            print("template image is empty!\n")
+    #setup marker path to load template
+    tag_path = file_path + tag_path_default
     
     
+    try:
+        # check to see if file is readable
+        with open(tag_path) as tempFile:
+
+            # Read the template 
+            tp_tag = cv2.imread(tag_path, 0)
+            print("Tag template {} was loaded successfully...\n".format(tag_path))
+            
+    except IOError as err:
+        
+        print("Error reading the tag file {0}: {1}".format(tag_path_default, err))
+        exit(0)
+    
+    
+   
 
 
 
@@ -2538,23 +2795,23 @@ if __name__ == '__main__':
     result_list = []
     
 
-    '''
+    
     
     #loop execute
     for image_id, image in enumerate(imgList):
         
 
-        (filename, QR_data, area, solidity, longest_axis, n_leaves, hex_colors, color_ratio, diff_level_1, diff_level_2, diff_level_3, color_diff_max) = extract_traits(image)
+        (filename, QR_data, area, solidity, longest_axis, n_leaves, hex_colors, color_ratio, diff_level_1, diff_level_2, diff_level_3, color_diff_a, color_diff_b, color_diff_c) = extract_traits(image)
         
-        
+    '''
         result_list.append([filename, QR_data, area, solidity, longest_axis, n_leaves, 
                             hex_colors[0], color_ratio[0], diff_level_1[0], diff_level_2[0], diff_level_3[0],
                             hex_colors[1], color_ratio[1], diff_level_1[1], diff_level_2[1], diff_level_3[1],
                             hex_colors[2], color_ratio[2], diff_level_1[2], diff_level_2[2], diff_level_3[2],
-                            color_diff_max])
+                            color_diff_a, color_diff_b, color_diff_c])
     
     
-    '''
+    
     ########################################################################
     
     # get cpu number for parallel processing
@@ -2679,7 +2936,7 @@ if __name__ == '__main__':
     #save the csv file
     wb.save(trait_file)
     
-    
+    '''
     
 
     

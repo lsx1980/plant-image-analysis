@@ -13,7 +13,7 @@
 #python3 trait_computation_maize_tassel.py -p /images/ -ft png
 
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 LABEL maintainer='Suxing Liu, Wes Bonelli'
 
@@ -26,7 +26,6 @@ RUN DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y \
     python3-setuptools \
     python3-pip \
     python3 \
-    python3-numexpr \
     libgl1-mesa-glx \
     libsm6 \
     libxext6 \
@@ -36,12 +35,11 @@ RUN DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y \
 
 RUN python3 -m pip install --upgrade pip
 
-#RUN pip3 install --upgrade pip 
 RUN pip3 install numpy \
     Pillow \
     scipy \
     scikit-image==0.19.3 \
-    scikit-learn \
+    scikit-learn\
     matplotlib \
     pandas \
     pytest \
@@ -54,10 +52,18 @@ RUN pip3 install numpy \
     pylibdmtx \
     psutil \
     natsort \
-    pathlib 
+    pathlib \
+    kmeans1d \
+    rembg
 
 
-
+RUN chmod -R a+rwx /opt/smart/
 
 WORKDIR /opt/smart/
+
+
+
+
+
+
 

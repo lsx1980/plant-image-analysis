@@ -9,7 +9,7 @@ Author-email: suxingliu@gmail.com
 
 USAGE:
 
-python3 gamma_correction.py -p /home/suxingliu/model-scan/test-image/ -ft jpg 
+python3 gamma_correction.py -p /home/suxingliu/model-scan/test-image/ -ft jpg -gv 0.7
 
 
 argument:
@@ -122,10 +122,10 @@ def gamma_correction(image_file):
     
     #image = cv2.resize(image, (0,0), fx = scale_factor, fy = scale_factor) 
     
-    gamma = 1.0
+    gamma = args["gamma_value"]
     
     # apply gamma correction and show the images
-    gamma = gamma if gamma > 0 else 0.1
+    #gamma = gamma if gamma > 0 else 0.1
     
     adjusted = adjust_gamma(image, gamma=gamma)
     
@@ -143,6 +143,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-p", "--path", required = True,    help = "path to image file")
     ap.add_argument("-ft", "--filetype", required = False,  default = 'jpg',  help = "image filetype")
+    ap.add_argument("-gv", "--gamma_value", type = float, required = False,  default = 0.7,  help = "image filetype")
     args = vars(ap.parse_args())
 
     # setting path to model file
