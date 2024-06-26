@@ -489,7 +489,7 @@ def color_cluster_seg(image, args_colorspace, args_channels, args_num_clusters):
     
     
     ###################################################################################################
-    size_kernel = 1
+    size_kernel = 5
     
     #if mask contains mutiple non-connected parts, combine them into one. 
     (contours, hier) = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -779,9 +779,9 @@ def circle_detection(image):
     
     # setup parameters for circle detection
     
-    # This parameter is the inverse ratio of the accumulator resolution to the image resolution 
+    # This parameter is the inverse ratio of the accumulator resolution to the image resolution default 1.5
     #(see Yuen et al. for more details). Essentially, the larger the dp gets, the smaller the accumulator array gets.
-    dp = 1.5
+    dp = 1.0
     
     #Minimum distance between the center (x, y) coordinates of detected circles. 
     #If the minDist is too small, multiple circles in the same neighborhood as the original may be (falsely) detected. 
@@ -849,11 +849,11 @@ def circle_detection(image):
             # draw the circle in the output image, then draw a center
             circle_detection_img = cv2.circle(circle_detection_img, circle_center_coord[idx_closest], circle_center_radius[idx_closest], (0, 255, 0), 4)
             circle_detection_img = cv2.circle(circle_detection_img, circle_center_coord[idx_closest], 5, (0, 128, 255), -1)
-
+            '''
             
             # compute the diameter of coin
             diameter_circle = circle_center_radius[idx_closest]*2
-            '''
+            
         
             # mask the detected circle with black color
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -886,13 +886,13 @@ def circle_detection(image):
             ###################################################
             
             # crop ROI region based on the location of circle marker
-            offset = 1150
+            offset = 1250
             
             endX = startX + int(r*1.2) + offset
             endY = startY + int(r*1.2) + offset
             
-            sx = startX -r*2 if startX -r*2 > 0 else 0
-            sy = startY -r*2 if startY -r*2 > 0 else 0
+            sx = startX -r*4 if startX -r*4 > 0 else 0
+            sy = startY -r*4 if startY -r*4 > 0 else 0
 
             ROI_region = masked_tmp[sy:endY, sx:endX]
         
@@ -908,7 +908,7 @@ def circle_detection(image):
         
         diameter_circle = 0
     
-    return circles, ROI_region, circle_detection_img
+    return diameter_circle, ROI_region, circle_detection_img
 
 
 '''
@@ -988,7 +988,7 @@ def comp_external_contour(orig, thresh):
     
     thresh_merged = thresh
     
-    if len(contours) > 1:
+    if len(contours) > 3:
         
         #####################################################################################
         print("Merging contours...\n")
@@ -1393,7 +1393,10 @@ def RGB2FLOAT(color):
 def get_cmap(n, name = 'hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
-    return plt.cm.get_cmap(name, n)
+    return plt.get_cmap(name, n)
+    
+    #import matplotlib.cm
+    #return matplotlib.cm.get_cmap(name, n)
     
 
 
@@ -1709,7 +1712,7 @@ def extract_traits(image_file, result_path):
     (b_bright, b_value) = isbright(image_file)
     
     # initilize parameters
-    area=solidity=max_width=max_height=avg_curv=n_leaves=avg_diagonal_length= 0
+    area=solidity=max_width=max_height=avg_curv=n_leaves=diameter_circle= 0
         
 
     ################################################################################
@@ -1737,7 +1740,7 @@ def extract_traits(image_file, result_path):
 
     ##################################################################################
     # circle marker detection
-    (circles, ROI_region, circle_detection_img) = circle_detection(orig) 
+    (diameter_circle, ROI_region, circle_detection_img) = circle_detection(orig) 
 
     # save result
     result_file = (save_path + base_name + '_circle_template' + file_extension)
@@ -2145,15 +2148,14 @@ def extract_traits(image_file, result_path):
     
     longest_axis = max(max_width, max_height)
     
-    avg_diagonal_length = 1
     
-    cm_pixel_ratio = diagonal_line_length/avg_diagonal_length
+    #cm_pixel_ratio = diagonal_line_length/avg_diagonal_length
     
-    #return image_file_name, QR_data, area, solidity, max_width, max_height, n_leaves, color_ratio, hex_colors
+    cm_pixel_ratio = diameter_circle
     
-    return image_file_name, b_value, area, solidity, longest_axis, avg_diagonal_length, cm_pixel_ratio, n_leaves, hex_colors, color_ratio, color_diff_list
     
-    #return image_file_name, QR_data, area, solidity, longest_axis, avg_diagonal_length, cm_pixel_ratio, n_leaves, hex_colors, color_ratio, diff_green_1, diff_green_2, diff_green_3 
+    return image_file_name, b_value, area, solidity, longest_axis, diameter_circle, cm_pixel_ratio, n_leaves, hex_colors, color_ratio, color_diff_list
+    
     
 
     
@@ -2168,7 +2170,7 @@ if __name__ == '__main__':
     ap.add_argument("-ft", "--filetype", dest = "filetype", type = str, required = False, default='jpg,png', help = "Image filetype")
     ap.add_argument("-o", "--output_path", dest = "output_path", type = str, required = False,    help = "result path")
     ap.add_argument('-s', '--color_space', dest = "color_space", type = str, required = False, default ='lab', help='Color space to use: BGR, HSV, Lab, YCrCb (YCC)')
-    ap.add_argument('-c', '--channels', dest = "channels", type = str, required = False, default='1', help='Channel indices to use for clustering, where 0 is the first channel,' 
+    ap.add_argument('-c', '--channels', dest = "channels", type = str, required = False, default='2', help='Channel indices to use for clustering, where 0 is the first channel,' 
                                                                        + ' 1 is the second channel, etc. E.g., if BGR color space is used, "02" ' 
                                                                        + 'selects channels B and R. (default "all")')
     ap.add_argument('-n', '--num_clusters', dest = "num_clusters", type = int, required = False, default = 4,  help = 'Number of clusters for K-means clustering (default 2, min 2).')
@@ -2266,10 +2268,10 @@ if __name__ == '__main__':
     for image_id, image in enumerate(imgList):
         
 
-        (filename, b_value, area, solidity, longest_axis, avg_diagonal_length, cm_pixel_ratio, n_leaves, hex_colors, color_ratio, color_diff_list) = extract_traits(image, file_path)
+        (filename, b_value, area, solidity, longest_axis, diameter_circle, cm_pixel_ratio, n_leaves, hex_colors, color_ratio, color_diff_list) = extract_traits(image, file_path)
         
         
-        result_list.append([filename, b_value, area, solidity, longest_axis, avg_diagonal_length, cm_pixel_ratio, n_leaves, 
+        result_list.append([filename, b_value, area, solidity, longest_axis, diameter_circle, cm_pixel_ratio, n_leaves, 
                             hex_colors[0], color_ratio[0], color_diff_list[0], 
                             hex_colors[1], color_ratio[1], color_diff_list[1], 
                             hex_colors[2], color_ratio[2], color_diff_list[2]])
@@ -2368,7 +2370,7 @@ if __name__ == '__main__':
         sheet.cell(row = 1, column = 3).value = 'leaf_area'
         sheet.cell(row = 1, column = 4).value = 'solidity'
         sheet.cell(row = 1, column = 5).value = 'longest_axis'
-        sheet.cell(row = 1, column = 6).value = 'avg_diagonal_length_pixel'
+        sheet.cell(row = 1, column = 6).value = 'diameter_circle'
         sheet.cell(row = 1, column = 7).value = 'cm_pixel_ratio'
         sheet.cell(row = 1, column = 8).value = 'number_leaf'
         sheet.cell(row = 1, column = 9).value = 'color_cluster_1_hex_value'
