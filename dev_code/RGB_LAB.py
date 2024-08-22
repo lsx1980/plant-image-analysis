@@ -9,7 +9,7 @@ Author-email: suxingliu@gmail.com
 
 USAGE
 
-python3 RGB_LAB.py -p ~/example/ -ft jpg
+	python3 RGB_LAB.py -p ~/example/ -ft jpg
 
 
 argument:
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     
      # make the folder to store the results
     #parent_path = os.path.abspath(os.path.join(file_path, os.pardir))
-    mkpath = file_path + '/' + str('output')
+    mkpath = file_path + '/' + str('L_space')
     mkdir(mkpath)
     save_path = mkpath + '/'
     
